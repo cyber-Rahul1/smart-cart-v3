@@ -1,0 +1,169 @@
+{
+  "app_name": "GathrCart",
+  "personality": "1 iOS-Native Clean structure with 4 Tactile / Playful warmth and pastel accents",
+  "personality_one_liner": "A neat, clean, and highly scannable commerce experience grounded in warm pastel tones and inviting food-first photography.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#1A1A1A",
+    "surfaceSecondary": "#F9F9F9",
+    "onSurfaceSecondary": "#4A4A4A",
+    "surfaceTertiary": "#F0F0F0",
+    "onSurfaceTertiary": "#2D2D2D",
+    "surfaceInverse": "#222222",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#FC8019",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#FC8019",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#FFA85C",
+    "onBrandSecondary": "#1A1A1A",
+    "brandTertiary": "#FFF0E5",
+    "onBrandTertiary": "#FC8019",
+    "success": "#28A745",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FFC107",
+    "onWarning": "#1A1A1A",
+    "error": "#DC3545",
+    "onError": "#FFFFFF",
+    "info": "#17A2B8",
+    "onInfo": "#FFFFFF",
+    "border": "#EBEBEB",
+    "borderStrong": "#D6D6D6",
+    "divider": "#F0F0F0",
+    "muted": "#7A7A7A"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical breathing room for scanning items rapidly, tight grouping within product cards.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Bottom tab bar (when content scrolls behind it)",
+      "Pinned filter rows in food listing",
+      "Floating action buttons for group cart actions"
+    ],
+    "dont's": [
+      "Form fields",
+      "List rows",
+      "Every button"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "purpose": "Primary discovery hub driving user intent to food, groceries, and shared community orders.",
+      "states": {
+        "loading": "Centered brand-colored spinner with a subtle bouncing icon.",
+        "empty": "Not applicable for Home unless location is unsupported (show 'We are not here yet' illustration).",
+        "error": "Readable network error message + Retry button."
+      },
+      "layout": "Sticky header with location selector and search bar. Below header: Grid of quick-access icons (Food, Groceries, Group Order, Community). Horizontal carousels for 'Trending Near Me' and promotional pastel-tinted cards. Use `brandTertiary` background for highlighted offers."
+    },
+    {
+      "name": "Group_Cart",
+      "purpose": "A collaborative split-bill cart for roommates/bachelors to order together with a scheduled cutoff time.",
+      "states": {
+        "loading": "Skeleton rows of cart items and member avatars.",
+        "empty": "Illustration of friends sharing a meal + 'Start a group order' primary CTA.",
+        "error": "Failed to sync cart error + Retry button."
+      },
+      "layout": "Top section: Countdown timer and list of participant avatars. Middle section: Drag-and-drop itemized list showing who claimed what (avatars next to items). Bottom: Sticky CTA displaying total group amount and individual 'Your Share' amount to proceed."
+    },
+    {
+      "name": "Community_Basket",
+      "purpose": "Apartment community bulk order screen showing consolidated orders broken down by flat numbers.",
+      "states": {
+        "loading": "Skeleton boxes of flats.",
+        "empty": "Empty basket illustration + 'Start your community order' CTA.",
+        "error": "Could not fetch community details + Retry button."
+      },
+      "layout": "Header with Apartment name and total items. List of grouped accordion cards (each card represents a flat). Expanding a flat shows their specific items. Sticky bottom bar with 'Close Community Order' CTA."
+    },
+    {
+      "name": "Reels_Feed",
+      "purpose": "Full-screen vertical scrolling feed for discovering local businesses and food via short-form video.",
+      "states": {
+        "loading": "Dark placeholder with a loading spinner.",
+        "empty": "No videos nearby illustration.",
+        "error": "Failed to load feed + Retry button."
+      },
+      "layout": "Full-screen video player (safe area respected for overlays). Right-side vertical floating action bar (Like, Share, Store profile). Bottom overlay with glassmorphism containing 'Add to Cart' or 'View Menu' CTA."
+    },
+    {
+      "name": "Cart_Checkout",
+      "purpose": "Standard e-commerce checkout flow verifying items, applying offers, and selecting address.",
+      "states": {
+        "loading": "Loading skeleton for bill details.",
+        "empty": "Empty cart icon with 'Your cart is feeling lonely' text and a CTA to browse food.",
+        "error": "Payment failed error + Retry button."
+      },
+      "layout": "Vertical list: Items summary, Bill details (Subtotal, taxes, delivery fee), Apply coupon section, Address selector, and a sticky bottom CTA to Pay."
+    }
+  ],
+  "images": {
+    "hero_food": {
+      "url": "https://images.pexels.com/photos/18367330/pexels-photo-18367330.jpeg",
+      "alt": "Delicious burger and fries for food delivery hero card"
+    },
+    "hero_grocery": {
+      "url": "https://images.unsplash.com/photo-1579113800032-c38bd7635818?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMG9yZ2FuaWMlMjB2ZWdldGFibGVzJTIwZ3JvY2VyeSUyMGJhc2tldHxlbnwwfHx8fDE3OTM5NTkxMDh8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Fresh organic vegetables basket for grocery hero card"
+    },
+    "group_order_empty": {
+      "url": "https://images.unsplash.com/photo-1547573854-74d2a71d0826?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxmcmllbmRzJTIwc2hhcmluZyUyMG1lYWwlMjBwYXJ0eSUyMGZsYXRsYXl8ZW58MHx8fHwxNzkzOTU5MTA4fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Friends sharing a meal for group order empty state"
+    },
+    "community_cover": {
+      "url": "https://images.unsplash.com/photo-1515263487990-61b07816b324?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBjb21wbGV4JTIwY29tbXVuaXR5JTIwZXh0ZXJpb3J8ZW58MHx8fHwxNzkzOTU5MTA4fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern apartment complex for community basket header"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the '1 iOS-Native Clean' structure with '4 Tactile/Playful' pastel warmth. Use Swiggy-like clean UI elements: plenty of whitespace, highly scannable item cards, and pastel accent backgrounds (`brandTertiary`) for promotional cards.",
+    "Implement a 4-tab bottom navigation: Home, Reels, Cart, Account. Use Phosphor icons (outlined for inactive, filled for active).",
+    "For the Group Cart screen, implement a clear visual hierarchy differentiating 'Total Group Amount' and 'Your Share'. Use sticky bottom sheets for CTAs.",
+    "Ensure all interactive elements (buttons, cards) have minimum 44x44pt touch targets.",
+    "Use `expo-image` with gradient scrims overlay when rendering text directly on top of images (e.g., hero_food, community_cover).",
+    "Avoid standard AI-looking generic blue/purple palettes. Stick strictly to the defined warm orange/peach (`brand`, `brandTertiary`) palette.",
+    "Follow structured layouts observed in competitive apps like Swiggy, using clear location and search intent elements at the top of the Home layout."
+  ]
+}

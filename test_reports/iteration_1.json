@@ -1,0 +1,53 @@
+{
+  "summary": "First full test run of GathrCart Milestone 1 (customer app). Backend: 17 pytest tests run against the public URL (the existing smoke test plus 16 new tests in test_gathrcart_extended.py). 15 passed, 2 failed: a cancelled order comes back to life when its payment completes (HIGH), and a malformed webhook returns 500. These all work: OTP, refresh rotation with replay revoking the whole token family, logout revoke, forged and valid payment signatures, webhook HMAC with duplicate-event idempotency, order privacy (404 for other users on GET/cancel/reorder/advance/initiate/demo-complete), delivery OTP, cancel + refund, reorder, group permissions (403), and community flat orders with delivery plan. Frontend (375x667 mobile web): every requested flow passes end to end. That covers OTP login with the DEV banner tap-to-fill, profile name and Home (6 tiles, offers, trending, new, nearby, all navigating correctly), food/grocery/new listings, seller ADD stepper, the replace-cart sheet, search, cart (GATHR50 takes ₹583 to ₹533, schedule chips, address picker), place order, pay failure then retry success, order Confirmed, demo advance, OTP sheet (wrong OTP shows 'Incorrect delivery OTP', right OTP gives Delivered), reorder sheet to cart, cancel & refund, group create/invite/join/shared cart via seller?gc=, member UI (no finalize/close; steppers only on own items), owner finalize and pay with shares, community register/join/basket via seller?bk=, flat counts only, close giving separate flat orders with package labels and delivery plan, Notifications, Referrals, Reels feed (like, view menu), Account, logout, silent token refresh. No page errors. Deprecated packages detected: none (no expo-av, expo-barcode-scanner or expo-background-fetch). SafeAreaView issues detected: none.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/payments/{pid}/demo-complete, /api/payments/verify, /api/payments/webhook (services/payments.py:53 apply_success)", "issue": "A cancelled order comes back to life. Steps: checkout, initiate payment, cancel the order (allowed while pending_payment), then complete the existing payment. The order flips from cancelled to confirmed/paid. Stock is also decremented, a commission is recorded and a 'confirmed' notification is sent. apply_success never checks the order status, and cancel never voids the open payment. Fix: in cancel(), mark open 'created' payments as voided. In apply_success, if the order is cancelled, refund automatically or skip the confirm.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/payments/webhook", "issue": "A correctly signed body missing event_id/type, or one that is not JSON, returns 500 (KeyError/JSONDecodeError at payments.py:118-122). It should validate with a Pydantic model and return 400."},
+      {"endpoint": "services/payments.py:13", "issue": "The webhook/payment HMAC key is derived from JWT_SECRET. It should use a separate env secret (e.g. PAYMENT_WEBHOOK_SECRET) so it can rotate independently and is ready for Razorpay."},
+      {"endpoint": "POST /api/payments/verify", "issue": "No ownership check (any authenticated user can verify any provider_order_id). The signature still protects it, but add user_id scoping."},
+      {"endpoint": "services/payments.py:59-60 apply_success", "issue": "Stock is decremented at capture time without a guard ($inc with no stock >= qty filter), so concurrent orders can push stock negative."},
+      {"endpoint": "services/pricing.py:36-43 coupons", "issue": "No per-user or usage limits. GATHR50 can be reused on every order. ROOMIES20 is advertised as 'group orders' but works on individual carts too."},
+      {"endpoint": "/app/backend/tests/test_smoke.py:5", "issue": "Hardcoded default BASE 'http://localhost:8001/api'. It should come only from env, with no default."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Cart > address picker > Add new address", "issue": "It opens the Saved addresses screen. After saving, the user stays there instead of returning to the cart and has to tap back manually.", "affected_testIDs": ["address-picker-add-button", "address-save-button"]}
+    ],
+    "design_issues": [
+      {"screen": "Global Stepper (src/ui.tsx:175,179)", "issues": ["The dec/inc Pressables are 30x36px with no hitSlop, below the 44x44 touch target minimum. Add hitSlop or enlarge them."]},
+      {"screen": "Group cart bottom bar (app/group-cart/[id].tsx)", "issues": ["At 375px width the 'Add items' and 'Close cart' labels wrap onto 2 lines inside the buttons. Use shorter labels, icons, or a 2-row layout."]},
+      {"screen": "Order detail / Basket / Group", "issues": ["Destructive actions run on a single tap with no confirmation: 'Cancel & refund' (app/orders/[id].tsx:150) and 'Close basket' (closes for every flat and creates orders). Add a confirm sheet."]},
+      {"screen": "Community basket / flat order", "issues": ["Says '1 items' instead of '1 item' in the flat chips.", "Flat order 'Delivering to' reads 'Flat · Flat A101' (redundant label)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_smoke.py", "/app/backend/tests/test_gathrcart_extended.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "HIGH: Stop payment capture from reviving cancelled orders (services/payments.py apply_success + services/orders.py cancel). Void open payments on cancel, and refund automatically if the capture arrives after cancel.",
+    "Validate the webhook payload (Pydantic) so malformed signed events return 400, not 500.",
+    "Use a separate PAYMENT_WEBHOOK_SECRET env var instead of deriving it from JWT_SECRET.",
+    "Raise Stepper +/- touch targets to at least 44px (hitSlop) in src/ui.tsx.",
+    "Add confirmation sheets for Cancel & refund and Close basket.",
+    "Return to the cart after adding an address from the cart's address picker.",
+    "Fix the group cart bottom-bar label wrapping, the '1 items' plural and 'Flat · Flat X'.",
+    "Optional: coupon usage limits; restrict ROOMIES20 to group orders; atomic stock guard at capture."
+  ],
+  "critical_code_review_comments": [
+    "The payment state machine has no order-status guard (cancelled -> confirmed is possible).",
+    "The webhook trusts the event shape after the signature check, with no schema validation.",
+    "Frontend token refresh is single-flight (api.ts refreshing promise). Verified that a bogus access token plus a valid refresh token silently rotates and keeps the user signed in.",
+    "All screens use RN components with testIDs. No HTML elements or className found. The Sheet uses KeyboardAvoidingView. The login screen has no KAV; verify on a device that the OTP input is not hidden by the keyboard."
+  ],
+  "updated_files": ["/app/backend/tests/test_gathrcart_extended.py (new)"],
+  "success_rate": {"backend": "88% (15/17)", "frontend": "100% of requested flows functional; minor design issues"},
+  "seed_data_creation": "Created TEST_ users (random +9191-+9197 phones), addresses, orders, groups, group carts, communities ('TEST_ ...') and baskets via the API/UI. No delete endpoints exist for users/communities/groups, so nothing was cleaned up. No seed data was modified, except product stock changes from paid test orders.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run backend tests with: export EXPO_PUBLIC_BACKEND_URL=<frontend/.env value> JWT_SECRET=<backend/.env> API=$EXPO_PUBLIC_BACKEND_URL/api; pytest /app/backend/tests -q (pytest.ini enables xdist). For UI, inject auth: localStorage.setItem('auth_token', JSON.stringify(token)) and refresh_token the same way. The values must be JSON-stringified. Stepper testIDs are <prefix>-add/-inc/-dec/-qty. Tab testIDs: tab-index, tab-reels, tab-cart, tab-account.",
+  "rca_of_issue": "Cancelled-then-paid: orders.cancel() only sets status=cancelled for unpaid orders and leaves the 'created' payment doc open. payments.demo_complete/verify/webhook then call apply_success, which unconditionally sets status=confirmed and payment_status=paid. Reproduce with TestCancelledThenPaid in test_gathrcart_extended.py."
+}
