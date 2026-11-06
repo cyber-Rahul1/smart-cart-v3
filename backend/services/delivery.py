@@ -57,6 +57,9 @@ async def demo_advance(oid: str, body: AdvanceIn, user=Depends(current_user)):
     if o["status"] not in FLOW or o["status"] == "delivered":
         raise HTTPException(400, "Order cannot be advanced" if o["payment_status"] == "paid" else "Order is not paid yet")
     nxt = FLOW[FLOW.index(o["status"]) + 1]
+    shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1})
+    if shop and shop.get("owner_id") and o["status"] in ("confirmed", "preparing"):
+        raise HTTPException(400, "Waiting for the shop to accept and pack this order")
     update: dict = {"status": nxt}
     if nxt == "out_for_delivery" and not o.get("rider"):
         update["rider"] = await assign_rider(o)

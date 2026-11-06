@@ -7,6 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from core import APP_ENV, REFRESH_DAYS, clean, current_user, db, digest, iso, make_access, new_id, now, parse_iso, short_code
 
@@ -16,7 +17,7 @@ PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 
 class PhoneIn(BaseModel):
     phone: str
-    role: Literal["customer", "seller", "rider", "admin"] = "customer"
+    role: Literal["customer", "seller"] = "customer"  # self-registration only; rider/admin are granted server-side
 
 
 class VerifyIn(PhoneIn):
@@ -87,10 +88,17 @@ async def verify_otp(body: VerifyIn):
     user = await db.users.find_one({"phone": phone}, {"_id": 0})
     is_new = user is None
     if is_new:
-        # New accounts are always customers; elevated roles are granted server-side by admins.
-        user = {"id": new_id(), "phone": phone, "role": "customer", "name": "", "referral_code": short_code("GC"),
+        # Role is write-once at first verification; it never changes through login.
+        user = {"id": new_id(), "phone": phone, "role": body.role, "name": "", "referral_code": short_code("GC"),
                 "referred_by": None, "delivery_credits": 0, "restricted": False, "created_at": iso(now())}
-        await db.users.insert_one(dict(user))
+        try:
+            await db.users.insert_one(dict(user))
+        except DuplicateKeyError:
+            user = await db.users.find_one({"phone": phone}, {"_id": 0})
+            is_new = False
+    if user["role"] != body.role:
+        kind = "business partner" if user["role"] == "seller" else user["role"]
+        raise HTTPException(409, f"This number is registered as a {kind} account. Use a different number here.")
     await db.users.update_one({"id": user["id"]}, {"$set": {"last_login_at": iso(now())}})
     pair = await issue_pair(user)
     return {**pair, "user": user, "is_new": is_new or not user.get("name")}

@@ -11,7 +11,7 @@ import requests
 
 BASE = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") + "/api"
 JWT_SECRET = os.environ["JWT_SECRET"]
-DEMO_KEY = (JWT_SECRET + ":demo-pay").encode()
+DEMO_KEY = os.environ["PAYMENT_WEBHOOK_SECRET"].encode()  # payments now sign with their own secret
 
 
 def phone():

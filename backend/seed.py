@@ -65,6 +65,7 @@ async def seed():
             "id": "fees", "delivery_base": 20, "delivery_per_km": 6, "free_delivery_threshold": 499, "convenience_fee": 5,
             "commission_pct": 15, "community_delivery_discount": 0.6,
             "radius_km": {"food": 5, "grocery": 5, "scheduled_food": 8, "scheduled_grocery": 10, "community": 10}})
+    await db.platform_config.update_one({"id": "fees", "seller_auto_approve": {"$exists": False}}, {"$set": {"seller_auto_approve": False}})
     for (sid, name, cat, btype, cuisine, img, rating, dist, eta, is_new, offer, min_order) in SELLERS:
         doc = {"id": sid, "name": name, "category": cat, "business_type": btype, "cuisine": cuisine, "image": IMG[img], "rating": rating,
                "distance_km": dist, "eta_min": eta + int(dist * 4), "prep_time_min": eta, "is_new": is_new, "offer": offer, "min_order": min_order,

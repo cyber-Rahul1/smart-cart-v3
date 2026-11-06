@@ -49,6 +49,7 @@ const light = {
   borderStrong: "#D6D6D6",
   divider: "#F0F0F0",
   scrim: "rgba(0,0,0,0.45)",
+  inverseTint: "rgba(255,255,255,0.08)",
 };
 
 export type ThemeColors = typeof light;

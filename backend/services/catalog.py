@@ -47,7 +47,8 @@ async def seller_detail(sid: str):
 async def search(q: str = Query(min_length=1, max_length=50)):
     sellers = await db.sellers.find({**PUBLIC, "$or": [{"name": {"$regex": q, "$options": "i"}},
                                                        {"cuisine": {"$regex": q, "$options": "i"}}]}, {"_id": 0}).limit(20).to_list(20)
-    products = await db.products.find({"name": {"$regex": q, "$options": "i"}}, {"_id": 0}).limit(30).to_list(30)
+    live_ids = [s["id"] for s in await db.sellers.find(PUBLIC, {"_id": 0, "id": 1}).to_list(1000)]
+    products = await db.products.find({"name": {"$regex": q, "$options": "i"}, "seller_id": {"$in": live_ids}}, {"_id": 0}).limit(30).to_list(30)
     names = {s["id"]: s["name"] for s in await db.sellers.find({"id": {"$in": [p["seller_id"] for p in products]}}, {"_id": 0}).to_list(100)}
     for p in products:
         p["seller_name"] = names.get(p["seller_id"], "")

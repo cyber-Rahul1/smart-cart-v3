@@ -73,6 +73,8 @@ export default function OrderDetail() {
           {o.scheduled_for ? <Text style={s.sub}>Scheduled for {when(o.scheduled_for)}</Text> : null}
           {o.payment_status === "failed" ? <Text testID="order-payment-failed" style={{ color: colors.error, fontWeight: "700" }}>Last payment attempt failed — order is not paid.</Text> : null}
           {o.payment_status === "refunded" ? <Text style={{ color: colors.success, fontWeight: "700" }}>Refund processed to original payment method</Text> : null}
+          {o.status === "cancelled" && o.reject_note ? <Text testID="order-reject-note" style={s.sub}>Shop couldn&apos;t take this order: {o.reject_note}</Text> : null}
+          {o.seller_managed && o.status === "confirmed" ? <Text style={s.sub}>Waiting for {o.seller_name} to accept your order…</Text> : null}
           {stepIdx >= 0 ? (
             <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
               {STEPS.map((st, i) => (
@@ -141,9 +143,9 @@ export default function OrderDetail() {
 
         {o.status === "pending_payment" && o.is_payer ? <Button testID="order-pay-button" title={`Pay ${rupee(o.bill.total)}`} loading={busy === "pay"} onPress={pay} /> : null}
         {o.status === "pending_payment" && !o.is_payer ? <Text style={s.sub}>Waiting for the payer to complete payment.</Text> : null}
-        {o.payment_status === "paid" && o.status !== "delivered" ? (
+        {o.payment_status === "paid" && o.status !== "delivered" && o.status !== "cancelled" && (!o.seller_managed || ["ready_for_pickup", "out_for_delivery"].includes(o.status)) ? (
           <View style={s.demo}>
-            <Text style={s.demoText}>DEMO · Seller & rider apps arrive in later milestones. Simulate the next step:</Text>
+            <Text style={s.demoText}>DEMO · The Rider app arrives in a later milestone. Simulate the next delivery step:</Text>
             <Button testID="order-demo-advance-button" variant="secondary" small title={o.status === "out_for_delivery" ? "Rider: verify OTP & deliver" : `Move to "${STATUS_LABEL[STEPS[stepIdx + 1]]}"`} loading={busy === "adv"} onPress={advance} />
           </View>
         ) : null}

@@ -18,6 +18,7 @@ export default function TabsLayout() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
   if (!loading && !user) return <Redirect href="/login" />;
+  if (user?.role === "seller") return <Redirect href="/partner" />;
 
   if (usesNativeTabs) {
     return (

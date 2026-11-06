@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="2" failures="0" skipped="0" tests="4" time="74.415" timestamp="2026-11-06T10:58:20.633424+00:00" hostname="agent-env-70343229-56f2-431a-a565-4ae6eec61d37"><testcase classname="" name="tests.test_gathrcart_extended" time="0.000"><error message="collection failure">tests/test_gathrcart_extended.py:13: in &lt;module&gt;
+    JWT_SECRET = os.environ["JWT_SECRET"]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+&lt;frozen os&gt;:679: in __getitem__
+    ???
+E   KeyError: 'JWT_SECRET'</error><error message="collection failure">tests/test_gathrcart_extended.py:13: in &lt;module&gt;
+    JWT_SECRET = os.environ["JWT_SECRET"]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+&lt;frozen os&gt;:679: in __getitem__
+    ???
+E   KeyError: 'JWT_SECRET'</error></testcase><testcase classname="tests.test_smoke" name="test_flow" time="74.074" /><testcase classname="tests.test_seller" name="test_seller_flow" time="72.737" /></testsuite></testsuites>

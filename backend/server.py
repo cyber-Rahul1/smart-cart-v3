@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from core import client, db, iso, notify, now
 from seed import seed
-from services import cart, catalog, community, customer, delivery, group_ordering, identity, orders, payments
+from services import cart, catalog, community, customer, delivery, group_ordering, identity, orders, payments, seller
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("gathrcart")
@@ -23,8 +23,11 @@ INDEXES: dict[str, list[IndexModel]] = {
     "refresh_sessions": [IndexModel([("token_hash", ASCENDING)], unique=True, name="th"), IndexModel([("family", ASCENDING)], name="fam")],
     "addresses": [IndexModel([("user_id", ASCENDING)], name="uid")],
     "sellers": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("category", ASCENDING), ("distance_km", ASCENDING)], name="cat"),
-                IndexModel([("location", "2dsphere")], name="geo")],
+                IndexModel([("location", "2dsphere")], name="geo"), IndexModel([("owner_id", ASCENDING)], name="owner", unique=True,
+                                                                             partialFilterExpression={"owner_id": {"$type": "string"}})],
     "products": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("seller_id", ASCENDING)], name="sid")],
+    "orders": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("member_ids", ASCENDING), ("created_at", DESCENDING)], name="mem"),
+               IndexModel([("seller_id", ASCENDING), ("status", ASCENDING)], name="seller_status")],
     "carts": [IndexModel([("user_id", ASCENDING)], unique=True, name="uid")],
     "groups": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("invite_code", ASCENDING)], unique=True, name="code"),
                IndexModel([("members.user_id", ASCENDING)], name="mem")],
@@ -32,7 +35,6 @@ INDEXES: dict[str, list[IndexModel]] = {
     "communities": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("invite_code", ASCENDING)], unique=True, name="code")],
     "residents": [IndexModel([("community_id", ASCENDING), ("user_id", ASCENDING)], unique=True, name="cu")],
     "baskets": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("status", ASCENDING), ("closes_at", ASCENDING)], name="sched")],
-    "orders": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("member_ids", ASCENDING), ("created_at", DESCENDING)], name="mem")],
     "payments": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("provider_order_id", ASCENDING)], unique=True, name="poid")],
     "webhook_events": [IndexModel([("event_id", ASCENDING)], unique=True, name="eid")],
     "notifications": [IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)], name="uc")],
@@ -97,7 +99,7 @@ async def api_health():
                                          "payments", "delivery", "notifications", "promotions", "referral"]}
 
 
-for module in (identity, customer, catalog, cart, orders, payments, delivery, group_ordering, community):
+for module in (identity, customer, catalog, cart, orders, payments, delivery, group_ordering, community, seller):
     app.include_router(module.router)
 
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])

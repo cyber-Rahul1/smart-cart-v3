@@ -13,7 +13,8 @@ import { Button, Input, useToast } from "@/src/ui";
 const HERO = "https://images.pexels.com/photos/18367330/pexels-photo-18367330.jpeg?auto=compress&w=900";
 
 export default function Login() {
-  const params = useLocalSearchParams<{ step?: string }>();
+  const params = useLocalSearchParams<{ step?: string; partner?: string }>();
+  const [partner, setPartner] = useState(params.partner === "1");
   const [step, setStep] = useState<"phone" | "otp" | "profile">(params.step === "profile" ? "profile" : "phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -36,7 +37,7 @@ export default function Login() {
     if (!/^[6-9]\d{9}$/.test(phone)) return setErr("Enter a valid 10-digit mobile number");
     setBusy(true);
     try {
-      const r = await api<{ dev_code?: string }>("/auth/otp/request", { method: "POST", body: { phone: full }, auth: false });
+      const r = await api<{ dev_code?: string }>("/auth/otp/request", { method: "POST", body: { phone: full, role: partner ? "seller" : "customer" }, auth: false });
       setDevCode(r.dev_code ?? null);
       setStep("otp");
       setTimeout(() => otpRef.current?.focus(), 300);
@@ -53,10 +54,11 @@ export default function Login() {
     setBusy(true);
     try {
       const r = await api<{ access_token: string; refresh_token: string; user: User; is_new: boolean }>("/auth/otp/verify", {
-        method: "POST", body: { phone: full, code }, auth: false,
+        method: "POST", body: { phone: full, code, role: partner ? "seller" : "customer" }, auth: false,
       });
       await signIn(r, r.user);
-      if (r.is_new) setStep("profile");
+      if (r.user.role === "seller") router.replace("/partner");
+      else if (r.is_new) setStep("profile");
       else router.replace("/(tabs)");
     } catch (e: any) {
       setErr(e.message);
@@ -98,8 +100,8 @@ export default function Login() {
         <View style={s.card}>
           {step === "phone" && (
             <>
-              <Text style={s.title}>Log in or sign up</Text>
-              <Text style={s.sub}>Groceries, food & shared carts from shops near you</Text>
+              <Text style={s.title}>{partner ? "GathrCart Partner login" : "Log in or sign up"}</Text>
+              <Text style={s.sub}>{partner ? "For shopkeepers & cloud kitchens — manage menu, orders and packing" : "Groceries, food & shared carts from shops near you"}</Text>
               <View style={s.phoneRow}>
                 <View style={s.cc}><Text style={s.ccText}>+91</Text></View>
                 <TextInput
@@ -116,6 +118,8 @@ export default function Login() {
               </View>
               {err ? <Text testID="login-error" style={s.err}>{err}</Text> : null}
               <Button testID="login-send-otp-button" title="Continue" onPress={requestOtp} loading={busy} />
+              <Button testID="login-partner-toggle" variant="ghost" icon={partner ? "person-outline" : "storefront-outline"}
+                title={partner ? "Ordering food? Customer login" : "Own a shop or kitchen? Partner login"} onPress={() => { setPartner(!partner); setErr(null); }} />
             </>
           )}
 

@@ -18,5 +18,5 @@ export type Order = {
   items: Line[]; bill: Bill; address: Address | null; scheduled_for: string | null; status: string; payment_status: string; delivery_otp?: string;
   rider: { name: string; phone: string; vehicle: string } | null; history: { status: string; at: string }[]; created_at: string; is_payer: boolean;
   group_name?: string; cart_name?: string; shares?: { user_id: string; name: string; amount: number }[]; flat?: string; community_name?: string;
-  package_id?: string; package_label?: { community: string; flat: string; package_id: string; items: string[]; handling: string };
+  package_id?: string; seller_managed?: boolean; reject_note?: string; package_label?: { community: string; flat: string; package_id: string; items: string[]; handling: string };
 };

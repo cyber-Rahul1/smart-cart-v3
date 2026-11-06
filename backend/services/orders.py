@@ -6,7 +6,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from core import current_user, db, iso, new_id, notify, now, parse_iso, short_code
+from core import current_user, db, iso, new_id, notify, now, parse_iso, require, short_code
 from services.cart import cart_view
 from services.pricing import resolve_items
 
@@ -47,7 +47,7 @@ async def create_order(*, payer_id: str, member_ids: list[str], seller: dict, ki
         "id": new_id(), "order_no": short_code("GC-"), "user_id": payer_id, "member_ids": list(dict.fromkeys(member_ids)),
         "seller_id": seller["id"], "seller_name": seller["name"], "seller_image": seller.get("image"), "seller_category": seller["category"],
         "kind": kind, "ref_id": ref_id, "items": items, "bill": bill, "address": address, "scheduled_for": scheduled_for,
-        "status": "pending_payment", "payment_status": "pending", "payment_id": None,
+        "status": "pending_payment", "payment_status": "pending", "payment_id": None, "seller_managed": bool(seller.get("owner_id")),
         "delivery_otp": f"{secrets.randbelow(10000):04d}", "rider": None,
         "history": [{"status": "pending_payment", "at": iso(now())}], "created_at": iso(now()), **(extra or {}),
     }
@@ -66,7 +66,7 @@ def visible(order: dict, user: dict) -> dict:
 
 
 @router.post("/checkout")
-async def checkout(body: CheckoutIn, user=Depends(current_user)):
+async def checkout(body: CheckoutIn, user=Depends(require("customer"))):
     address = await db.addresses.find_one({"id": body.address_id, "user_id": user["id"]}, {"_id": 0})
     if not address:
         raise HTTPException(400, "Select a delivery address")
@@ -77,6 +77,8 @@ async def checkout(body: CheckoutIn, user=Depends(current_user)):
         raise HTTPException(409, "Some items are unavailable; update your cart")
     if not view["bill"] or view["bill"].get("error"):
         raise HTTPException(400, (view["bill"] or {}).get("error", "Cannot price cart"))
+    if not view["seller"].get("approved"):
+        raise HTTPException(400, "This shop is not available")
     if not view["seller"].get("open", True):
         raise HTTPException(400, "Shop is closed right now")
     order = await create_order(payer_id=user["id"], member_ids=[user["id"]], seller=view["seller"], kind="individual",
@@ -105,6 +107,23 @@ async def restore_stock(order: dict):
         await db.products.update_one({"id": i["product_id"]}, {"$inc": {"stock": i["qty"]}})
 
 
+async def cancel_order_doc(o: dict, reason: str = "customer") -> None:
+    """Cancel an order; refunds if it was paid. Shared by customer cancel and seller reject."""
+    oid = o["id"]
+    update = {"status": "cancelled", "cancel_reason": reason}
+    await db.payments.update_one({"order_id": oid, "status": {"$in": ["created", "failed"]}}, {"$set": {"status": "cancelled"}})
+    if o["payment_status"] == "paid":
+        await db.refunds.insert_one({"id": new_id(), "order_id": oid, "payment_id": o["payment_id"], "amount": o["bill"]["total"],
+                                     "status": "processed", "provider": "demo", "reason": reason, "created_at": iso(now())})
+        await db.payments.update_one({"id": o["payment_id"]}, {"$set": {"status": "refunded"}})
+        update["payment_status"] = "refunded"
+        await restore_stock(o)
+    await db.orders.update_one({"id": oid}, {"$set": update, "$push": {"history": {"status": "cancelled", "at": iso(now())}}})
+    who = "by the shop" if reason == "seller_rejected" else ""
+    await notify(o["member_ids"], "Order cancelled",
+                 f"{o['order_no']} was cancelled {who}".strip() + (" — refund initiated" if o["payment_status"] == "paid" else ""), "order", oid)
+
+
 @router.post("/{oid}/cancel")
 async def cancel(oid: str, user=Depends(current_user)):
     o = await db.orders.find_one({"id": oid, "user_id": user["id"]}, {"_id": 0})
@@ -112,18 +131,7 @@ async def cancel(oid: str, user=Depends(current_user)):
         raise HTTPException(404, "Order not found")
     if o["status"] not in ("pending_payment", "confirmed"):
         raise HTTPException(400, "Order can no longer be cancelled")
-    update = {"status": "cancelled"}
-    await db.payments.update_one({"order_id": oid, "status": {"$in": ["created", "failed"]}}, {"$set": {"status": "cancelled"}})
-    if o["payment_status"] == "paid":
-        refund = {"id": new_id(), "order_id": oid, "payment_id": o["payment_id"], "amount": o["bill"]["total"],
-                  "status": "processed", "provider": "demo", "created_at": iso(now())}
-        await db.refunds.insert_one(refund)
-        await db.payments.update_one({"id": o["payment_id"]}, {"$set": {"status": "refunded"}})
-        update["payment_status"] = "refunded"
-        await restore_stock(o)
-    await db.orders.update_one({"id": oid}, {"$set": update, "$push": {"history": {"status": "cancelled", "at": iso(now())}}})
-    await notify(o["member_ids"], "Order cancelled",
-                 f"{o['order_no']} was cancelled" + (" — refund initiated" if o["payment_status"] == "paid" else ""), "order", oid)
+    await cancel_order_doc(o)
     return await order_detail(oid, user)
 
 

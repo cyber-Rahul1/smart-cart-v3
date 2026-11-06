@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="11" time="81.614" timestamp="2026-11-06T11:02:03.559590+00:00" hostname="agent-env-70343229-56f2-431a-a565-4ae6eec61d37"><testcase classname="tests.test_seller_extended.TestOnboarding" name="test_fssai_must_be_14_digits" time="1.154" /><testcase classname="tests.test_seller_extended.TestOnboarding" name="test_bad_image_key" time="0.400" /><testcase classname="tests.test_seller_extended.TestOnboarding" name="test_seller_without_shop_gets_404" time="0.393" /><testcase classname="tests.test_seller_extended.TestPendingGate" name="test_pending_shop_hidden_and_not_orderable" time="69.435"><failure message="AssertionError: pending shop product addable to cart: 200&#10;assert 200 &gt;= 400&#10; +  where 200 = &lt;Response [200]&gt;.status_code">tests/test_seller_extended.py:64: in test_pending_shop_hidden_and_not_orderable
+    assert r.status_code &gt;= 400, f"pending shop product addable to cart: {r.status_code}"
+E   AssertionError: pending shop product addable to cart: 200
+E   assert 200 &gt;= 400
+E    +  where 200 = &lt;Response [200]&gt;.status_code</failure></testcase><testcase classname="tests.test_seller_extended.TestPendingGate" name="test_search_hides_pending" time="0.121"><failure message="assert ('30a16058-1e...78449735f628' not in &quot;{'sellers':..._Kitchen'}]}&quot;&#10;  &#10;  '30a16058-1ed9-43a2-af19-78449735f628' is contained here:&#10;  ?                                      ^^^^^^^^^^^^^^^&#10;[+4 more lines; full report in element text]">tests/test_seller_extended.py:68: in test_search_hides_pending
+    assert ctx["p1"]["id"] not in str(r) and ctx["shop"]["id"] not in str(r)
+E   assert ('30a16058-1e...78449735f628' not in "{'sellers':..._Kitchen'}]}"
+E     
+E     '30a16058-1ed9-43a2-af19-78449735f628' is contained here:
+E     ?                                      ^^^^^^^^^^^^^^^
+E       {'sellers': [], 'products': [{'id': '30a16058-1ed9-43a2-af19-78449735f628', 'seller_id': '80cd5267-b3bf-428e-a407-617d6fe92aee', 'name': 'TEST_Biryani', 'price': 250.0, 'category': 'Biryani', 'veg': True, 'stock': 50, 'available': True, 'description': '', 'weight_kg': 0.5, 'image': 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&amp;q=70', 'created_at': '2026-11-06T11:02:06.059102+00:00', 'seller_name': 'TEST_Kitchen'}]}
+E     ?                      ...
+E     
+E     ...Full output truncated, use '-vv' to show)</failure></testcase><testcase classname="tests.test_seller_extended.TestShopAndMenu" name="test_approve_and_settings" time="0.632" /><testcase classname="tests.test_seller_extended.TestShopAndMenu" name="test_edit_availability_delete" time="0.621" /><testcase classname="tests.test_seller_extended.TestShopAndMenu" name="test_closed_shop_not_orderable" time="0.931"><failure message="AssertionError: closed shop product addable: 200&#10;assert 200 &gt;= 400&#10; +  where 200 = &lt;Response [200]&gt;.status_code">tests/test_seller_extended.py:99: in test_closed_shop_not_orderable
+    assert r.status_code &gt;= 400, f"closed shop product addable: {r.status_code}"
+E   AssertionError: closed shop product addable: 200
+E   assert 200 &gt;= 400
+E    +  where 200 = &lt;Response [200]&gt;.status_code</failure></testcase><testcase classname="tests.test_seller_extended.TestLifecycle" name="test_ready_then_rider_and_otp" time="3.432" /><testcase classname="tests.test_seller_extended.TestCommunityBatch" name="test_batch" time="4.256" /><testcase classname="tests.test_seller_extended.TestIsolation" name="test_seller_cannot_use_customer_cart" time="0.123"><failure message="AssertionError: seller can use customer cart: 200&#10;assert 200 == 403&#10; +  where 200 = &lt;Response [200]&gt;.status_code">tests/test_seller_extended.py:173: in test_seller_cannot_use_customer_cart
+    assert r.status_code == 403, f"seller can use customer cart: {r.status_code}"
+E   AssertionError: seller can use customer cart: 200
+E   assert 200 == 403
+E    +  where 200 = &lt;Response [200]&gt;.status_code</failure></testcase></testsuite></testsuites>

@@ -76,6 +76,10 @@ async def apply_success(payment: dict, provider_payment_id: str):
         await db.users.update_one({"id": o["user_id"], "delivery_credits": {"$gt": 0}}, {"$inc": {"delivery_credits": -1}})
     await db.sellers.update_one({"id": o["seller_id"]}, {"$inc": {"trend_score": 1, "orders_count": 1}})
     await notify(o["member_ids"], "Order confirmed", f"{o['seller_name']} received your order {o['order_no']}", "order", o["id"])
+    shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1})
+    if shop and shop.get("owner_id"):
+        label = f"Flat {o['flat']} · {o.get('community_name')}" if o["kind"] == "community_flat" else o["kind"].title()
+        await notify([shop["owner_id"]], "New order", f"{o['order_no']} · {label} · ₹{o['bill']['subtotal']}", "seller_order", o["id"])
     # Referral qualification: referee's first paid order rewards the referrer with a delivery credit.
     ref = await db.referrals.find_one({"referee_id": o["user_id"], "status": "pending"})
     if ref and o["bill"]["subtotal"] >= 149:

@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from core import current_user, db, iso, now
+from core import current_user, db, iso, now, require
 from services.pricing import compute_bill, resolve_items
 
 router = APIRouter(prefix="/api/cart", tags=["cart"])
@@ -52,10 +52,15 @@ async def quote(body: QuoteIn, user=Depends(current_user)):
 
 
 @router.post("/items")
-async def set_item(body: CartItemIn, user=Depends(current_user)):
+async def set_item(body: CartItemIn, user=Depends(require("customer"))):
     p = await db.products.find_one({"id": body.product_id}, {"_id": 0})
     if not p:
         raise HTTPException(404, "Product not found")
+    shop = await db.sellers.find_one({"id": p["seller_id"]}, {"_id": 0, "approved": 1, "open": 1})
+    if not shop or not shop.get("approved"):
+        raise HTTPException(404, "Product not found")
+    if body.qty > 0 and not shop.get("open", True):
+        raise HTTPException(400, "This shop is closed right now")
     if body.qty > 0 and (not p["available"] or p["stock"] < body.qty):
         raise HTTPException(400, f"Only {p['stock']} left" if p["available"] else "Item unavailable")
     cart = await load_cart(user["id"])

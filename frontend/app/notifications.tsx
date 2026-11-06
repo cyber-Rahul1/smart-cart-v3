@@ -23,7 +23,7 @@ export default function Notifications() {
 
   const open = (n: N) => {
     if (!n.ref) return;
-    const map: Record<string, string> = { order: `/orders/${n.ref}`, group: `/groups/${n.ref}`, group_cart: `/group-cart/${n.ref}`, basket: `/basket/${n.ref}`, community: `/community/${n.ref}` };
+    const map: Record<string, string> = { order: `/orders/${n.ref}`, group: `/groups/${n.ref}`, group_cart: `/group-cart/${n.ref}`, basket: `/basket/${n.ref}`, community: `/community/${n.ref}`, seller_order: `/partner/order/${n.ref}`, seller_shop: "/partner/shop" };
     if (map[n.type]) router.push(map[n.type] as any);
   };
 
