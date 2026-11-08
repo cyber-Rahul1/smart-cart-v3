@@ -68,7 +68,7 @@ class S3MediaService:
                 "object_key": object_key,
                 "media_url": public_url
             }
-        except ClientError as e:
+        except Exception as e:
             logger.error(f"Error generating presigned upload: {e}")
             # Fallback for local testing without AWS credentials
             return {

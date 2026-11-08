@@ -34,7 +34,8 @@ dist
 .env.*
 *.db
 *.sqlite
-*.sqlite3
+backend/uploads/
+uploads/
 
 *token.json*
 *credentials.json*
