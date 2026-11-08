@@ -39,7 +39,7 @@ export function OsmMap({ ref, ...p }: OsmMapProps & { ref?: Ref<OsmMapHandle> })
 
   return (
     <View style={{ flex: 1, overflow: "hidden" }} testID={p.testID}>
-      <WebView ref={web} originWhitelist={["*"]} source={{ html, baseUrl: "https://gathrcart.app/" }} onMessage={onMessage} style={{ flex: 1, backgroundColor: colors.surfaceTertiary }}
+      <WebView<{}> ref={web} originWhitelist={["*"]} source={{ html, baseUrl: "https://gathrcart.app/" }} onMessage={onMessage} style={{ flex: 1, backgroundColor: colors.surfaceTertiary }}
         javaScriptEnabled domStorageEnabled scrollEnabled={false} />
       {p.picker ? <CenterPin /> : null}
     </View>
