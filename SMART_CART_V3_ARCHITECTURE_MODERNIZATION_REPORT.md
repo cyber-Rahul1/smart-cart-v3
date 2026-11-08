@@ -217,3 +217,27 @@ ea769bf feat(services): add Razorpay verification, S3 CloudFront media storage, 
   - Event retrieval: `GET /api/notifications` -> `200 OK`
 - **Regression Suite**:
   - All 45 backend regression tests pass (`45 passed, 1 warning in 6.32s`).
+
+
+---
+
+## 6. Frontend TypeScript Resolution, Razorpay SDK & Android Build Audit
+
+### A. Frontend TypeScript Resolution
+- Executed `npx tsc --noEmit` and resolved all blocking TypeScript compiler errors without resorting to `any` or disabling strict checking:
+  1. **StyleSheet Types**: Fixed `makeStyles` in `frontend/src/theme.ts` to utilize standard `ViewStyle | TextStyle | ImageStyle` constraints compatible with modern React Native 0.88.
+  2. **TextInput Ref Instance**: Resolved `otpRef` in `frontend/app/login.tsx` to use `TextInputInstance` from React Native types.
+  3. **TanStack Query Refetch Functions**: Wrapped `onRefresh={() => q.refetch()}` into void lambdas `() => { q.refetch(); }` in `frontend/app/admin/(tabs)/index.tsx`, `frontend/app/orders/index.tsx`, and `frontend/app/rider/(tabs)/active.tsx`.
+- **Validation**: `npx tsc --noEmit` exited cleanly with exit code `0`.
+
+### B. Razorpay Native SDK & Expo Prebuild Compatibility
+- Verified `react-native-razorpay@3.0.0` installation in Expo SDK 58 / React Native 0.88.
+- Successfully ran `npx expo prebuild --platform android --clean --no-install`. The Android native module scaffolding, settings.gradle, and Gradle wrapper 9.4.1 initialized cleanly.
+- Gradle daemon initialized with OpenJDK 17.0.20.1 and Android SDK tools. Full offline local compilation is ready; EAS cloud builds configured via `frontend/eas.json`.
+
+### C. Razorpay Python Client Enhancement
+- Installed and integrated the official `razorpay` Python SDK (`razorpay>=2.0.1`) into `backend/services/razorpay_provider.py`.
+- Implemented dual-mode operation:
+  - **Live API mode**: When `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are provided (non-mock), invokes official Razorpay API endpoints for order generation, payment signature verification (`utility.verify_payment_signature`), and refund execution (`payment.refund`).
+  - **Deterministic Test Mode**: When credentials are unset or mock, safely verifies HMAC SHA256 signatures server-side and prevents unexpected network failures during testing.
+- **Regression Verification**: Ran all 45 backend tests; all 45 passed (`45 passed, 1 warning in 7.35s`).
