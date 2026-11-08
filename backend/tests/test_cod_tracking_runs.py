@@ -9,7 +9,9 @@ from pymongo import MongoClient
 
 BASE = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") + "/api"
 _env = dotenv_values("C:/Users/Rahul/Desktop/smart_cart_v3/backend/.env")
-mdb = MongoClient(_env["MONGO_URL"])[_env["DB_NAME"]]
+mongo_url = os.environ.get("MONGO_URL") or _env.get("MONGO_URL", "mongodb://127.0.0.1:27018")
+db_name = os.environ.get("DB_NAME") or _env.get("DB_NAME", "smartcart_prod")
+mdb = MongoClient(mongo_url)[db_name]
 SFX = str(random.randint(100000, 999999))
 
 

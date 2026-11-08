@@ -25,7 +25,7 @@ services:
       - POSTGRES_URL=postgresql+psycopg2://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
-      - APP_ENV=production
+      - APP_ENV=dev
       - PAYMENT_WEBHOOK_SECRET=prod_webhook_secret_key_98765
       - ADMIN_PHONES=+919999900000
     depends_on:
@@ -42,6 +42,10 @@ services:
     ports:
       - "8002:8002"
     environment:
+        - RAZORPAY_ENVIRONMENT=test
+        - RAZORPAY_KEY_ID=
+        - RAZORPAY_KEY_SECRET=
+        - RAZORPAY_WEBHOOK_SECRET=d92a0cd52716c21ac2084a753610d323fca21c48
       - POSTGRES_URL=postgresql+psycopg2://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
       - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-rzp_test_placeholder}
@@ -68,11 +72,25 @@ services:
       - mongodb
     restart: always
 
+  worker-service:
+    build:
+      context: ./backend
+      dockerfile: services_standalone/worker_service/Dockerfile
+    container_name: smartcart_worker_service
+    environment:
+      - POSTGRES_URL=postgresql+psycopg2://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
+      - REDIS_URL=redis://redis:6379/0
+      - APP_ENV=dev
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+
   mongodb:
     image: mongo:7.0
     container_name: smartcart_mongodb
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     restart: always
@@ -94,7 +112,7 @@ services:
     image: redis:7-alpine
     container_name: smartcart_redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     restart: always
 
 volumes:

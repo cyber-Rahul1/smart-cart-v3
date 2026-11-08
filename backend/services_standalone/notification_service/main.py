@@ -35,6 +35,8 @@ class SendNotificationIn(BaseModel):
 
 @app.get("/health")
 @app.head("/health")
+@app.get("/api/notifications/health")
+@app.head("/api/notifications/health")
 async def health():
     return {"status": "ok", "service": "notification-service"}
 

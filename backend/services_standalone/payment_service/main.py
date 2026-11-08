@@ -61,6 +61,8 @@ class RefundIn(BaseModel):
 
 @app.get("/health")
 @app.head("/health")
+@app.get("/api/payments/health")
+@app.head("/api/payments/health")
 async def health():
     return {"status": "ok", "service": "payment-service"}
 

@@ -34,7 +34,7 @@ class DevOtpProvider:
     """Swap with TwilioVerifyProvider (send/check) in production; endpoints stay unchanged."""
 
     async def send(self, phone: str, code: str) -> dict:
-        return {"dev_code": code} if APP_ENV == "dev" else {}
+        return {"dev_code": code} if APP_ENV in ("dev", "test") else {}
 
 
 provider = DevOtpProvider()
