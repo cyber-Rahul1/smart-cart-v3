@@ -1,0 +1,66 @@
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: smartcart_gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smartcart_backend
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=smartcart_prod
+      - POSTGRES_URL=postgresql://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
+      - APP_ENV=production
+      - PAYMENT_WEBHOOK_SECRET=prod_webhook_secret_key_98765
+      - ADMIN_PHONES=+919999900000
+    depends_on:
+      - mongodb
+      - postgres
+      - redis
+    restart: always
+
+  mongodb:
+    image: mongo:7.0
+    container_name: smartcart_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartcart_postgres
+    environment:
+      POSTGRES_USER: smartcart_user
+      POSTGRES_PASSWORD: secure_pg_pass
+      POSTGRES_DB: smartcart_relational
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartcart_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+volumes:
+  mongo_data:
+  postgres_data:
