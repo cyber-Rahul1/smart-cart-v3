@@ -10,6 +10,9 @@ from pydantic import BaseModel
 
 from core import APP_ENV, current_user, db, iso, new_id, notify, now, short_code
 
+from database.service import record_payment_and_ledger, sync_order_to_relational
+from services.razorpay_provider import razorpay_client
+
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 DEMO_KEY = os.environ["PAYMENT_WEBHOOK_SECRET"].encode()
 # Demo online checkout is preview-only; the live app offers cash on delivery until a real gateway is connected.
@@ -85,6 +88,12 @@ async def apply_success(payment: dict, provider_payment_id: str):
                                        {"$set": {"status": "captured", "provider_payment_id": provider_payment_id, "captured_at": iso(now())}})
     if not res.modified_count:
         return  # duplicate event, already processed
+    # Sync to relational DB and create double-entry ledger record
+    try:
+        updated_payment = await db.payments.find_one({"id": payment["id"]}, {"_id": 0})
+        record_payment_and_ledger(updated_payment, order)
+    except Exception as exc:
+        pass  # keep async resilience
     if await confirm_order(order, payment["id"], "paid"):
         await reward_referral(order)
 
@@ -106,6 +115,11 @@ async def confirm_order(o: dict, payment_id: str, payment_status: str) -> bool:
     await db.sellers.update_one({"id": o["seller_id"]}, {"$inc": {"trend_score": 1, "orders_count": 1}})
     how = " · cash on delivery" if payment_status == "cod" else ""
     await notify(o["member_ids"], "Order confirmed", f"{o['seller_name']} received your order {o['order_no']}{how}", "order", o["id"])
+    # Sync order to relational database with ACID validation
+    try:
+        sync_order_to_relational(o)
+    except Exception:
+        pass
     shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1})
     if shop and shop.get("owner_id"):
         label = f"Flat {o['flat']} · {o.get('community_name')}" if o["kind"] == "community_flat" else o["kind"].title()

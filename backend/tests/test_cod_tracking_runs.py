@@ -8,7 +8,7 @@ from dotenv import dotenv_values
 from pymongo import MongoClient
 
 BASE = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") + "/api"
-_env = dotenv_values("/app/backend/.env")
+_env = dotenv_values("C:/Users/Rahul/Desktop/smart_cart_v3/backend/.env")
 mdb = MongoClient(_env["MONGO_URL"])[_env["DB_NAME"]]
 SFX = str(random.randint(100000, 999999))
 

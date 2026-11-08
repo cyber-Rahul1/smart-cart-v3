@@ -30,7 +30,11 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
 
 *token.json*
 *credentials.json*
