@@ -80,7 +80,10 @@ async def upload(file: UploadFile = File(...), user=Depends(require("seller"))):
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning("Remote proxy upload failed, using resilient local storage: %s", exc)
+        if os.environ.get("APP_ENV") == "production":
+            logger.error("Media upload failed in production: %s", exc)
+            raise HTTPException(502, "Media storage service unavailable")
+        logger.warning("Remote proxy upload failed in dev/test, using resilient local storage: %s", exc)
         local_dir = os.path.join(os.path.dirname(__file__), "..", "uploads", user["id"])
         os.makedirs(local_dir, exist_ok=True)
         local_file_path = os.path.join(local_dir, f"{fid}.{TYPES[ctype]}")
