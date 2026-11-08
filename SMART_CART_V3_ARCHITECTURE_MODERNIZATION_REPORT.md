@@ -1,4 +1,4 @@
-# SMART CART V3 (GATHRCART) — ARCHITECTURE MODERNIZATION & PRODUCTION READINESS REPORT
+# SMART CART V3 (GATHRCART) â€” ARCHITECTURE MODERNIZATION & PRODUCTION READINESS REPORT
 
 **Final Status:** ALL VERIFICATION DOMAINS AUDITED & CLASSIFIED  
 **Backend Regression Suite:** 45/45 PASSED (100% SUCCESS)  
@@ -39,7 +39,7 @@ All architectural modernizations have been applied to the working repository wit
 | **8. Terraform Validation** | Infrastructure | **IMPLEMENTED AND VERIFIED** | Executed `terraform fmt -check`, `terraform init -backend=false`, and `terraform validate` using official `hashicorp/terraform:latest` container: `Success! The configuration is valid.` |
 | **9. Android Play Store & EAS Readiness** | Mobile | **IMPLEMENTED AND VERIFIED (CONFIGURED) / BLOCKED (CLOUD BUILD)** | Configured `frontend/eas.json` for Android App Bundle (`.aab`) builds on internal/production tracks. Dependencies checked via `npx expo install --check`. Live cloud EAS compilation is **BLOCKED** (requires authenticated Expo account). |
 | **10. Authentication & Security Hardening** | Security | **IMPLEMENTED AND VERIFIED** | Verified token expiration enforcement (`ExpiredSignatureError`), HS256 algorithm whitelisting, high-entropy 48-byte URL-safe refresh tokens, role checks (`current_user`, `require('admin')`), and rate-limited OTP challenges. |
-| **11. Full Regression Test Suite** | Testing | **IMPLEMENTED AND VERIFIED** | `.\venv\Scripts\python.exe -m pytest -n 0 tests/` → **45 passed in 7.07s (Exit Code: 0)** against live PostgreSQL & Redis. |
+| **11. Full Regression Test Suite** | Testing | **IMPLEMENTED AND VERIFIED** | `.\venv\Scripts\python.exe -m pytest -n 0 tests/` â†’ **45 passed in 7.07s (Exit Code: 0)** against live PostgreSQL & Redis. |
 | **12. Git Working Tree State** | Version Control | **IMPLEMENTED AND VERIFIED** | Clean working tree; all modernization commits preserved and tracked. |
 
 ---
@@ -319,3 +319,57 @@ ea769bf feat(services): add Razorpay verification, S3 CloudFront media storage, 
 - Full Backend Test Suite: `45 passed, 1 warning in 6.64s` (100% pass rate).
 - Frontend TypeScript Typecheck: `npx tsc --noEmit` exited cleanly with exit code `0`.
 - Git tree clean; no uncommitted changes.
+
+---
+
+## 9. Docker Microservices Deployment, Gateway Health & Android Emulator Live Verification
+
+### A. Docker Desktop & Engine Status
+- **Docker Desktop Version**: 4.98.0
+- **Docker Engine Version**: 29.9.2 (WSL2 Linux Kernel 6.6.87.2)
+- **Active Docker Context**: desktop-linux
+- **Host Port Conflict Resolution**:
+  - Re-mapped external host bindings to avoid colliding with local Windows services (mongod on 27017, memurai on 6379):
+    - MongoDB: host port 27018:27017
+    - Redis: host port 6380:6379
+    - PostgreSQL: host port 5432:5432
+    - NGINX Gateway: host port 80:80
+    - Core API: host port 8001:8001
+    - Payment Service: host port 8002:8002
+    - Notification Service: host port 8003:8003
+
+### B. Live Container Verification Matrix
+All 8 containers are running and healthy:
+
+| Container Name | Service | Image | Status | Direct URL | NGINX Gateway URL |
+|---|---|---|---|---|---|
+| smartcart_gateway | API Gateway | 
+ginx:alpine | Up | http://localhost:80 | http://localhost:80 |
+| smartcart_core_api | Core Marketplace API | smart_cart_v3-core-api:latest | Up (healthy) | http://localhost:8001/health | http://localhost:80/health |
+| smartcart_payment_service | Payment Microservice | smart_cart_v3-payment-service:latest | Up (healthy) | http://localhost:8002/health | http://localhost:80/api/payments/health |
+| smartcart_notification_service | Notification Microservice | smart_cart_v3-notification-service:latest | Up (healthy) | http://localhost:8003/health | http://localhost:80/api/notifications/health |
+| smartcart_worker_service | Background Worker | smart_cart_v3-worker-service:latest | Up | Internal worker | N/A |
+| smartcart_postgres | Relational Store | postgres:16-alpine | Up | localhost:5432 | N/A |
+| smartcart_mongodb | Document Store | mongo:7.0 | Up | localhost:27018 | N/A |
+| smartcart_redis | Cache & PubSub | edis:7-alpine | Up | localhost:6380 | N/A |
+
+### C. Live Health Check Responses
+- **Direct Endpoints**:
+  - http://localhost:8001/health -> {"status": "ok"}
+  - http://localhost:8002/health -> {"status": "ok", "service": "payment-service"}
+  - http://localhost:8003/health -> {"status": "ok", "service": "notification-service"}
+- **NGINX Gateway Routed Endpoints**:
+  - http://localhost:80/health -> {"status": "ok"}
+  - http://localhost:80/api/payments/health -> {"status": "ok", "service": "payment-service"}
+  - http://localhost:80/api/notifications/health -> {"status": "ok", "service": "notification-service"}
+
+### D. Android Native Emulator Online
+- **Active Emulator**: emulator-5554 running Pixel_8_Pro (system image ndroid-37.1 google_apis_playstore_ps16k x86_64).
+- **Boot Status**: sys.boot_completed = 1.
+- **Physical Display Resolution**: 1344x2992.
+- **Prebuild Scaffold**: Native Android directory initialized with eact-native-razorpay@3.0.0 bridge.
+
+### E. Regression Testing & Type Safety
+- **Backend Test Suite**: Passed 45 passed, 1 warning in 8.38s (100% pass rate against live Docker services).
+- **Frontend TypeScript Check**: 
+px tsc --noEmit exited cleanly with code  .
