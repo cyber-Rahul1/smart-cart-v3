@@ -7,20 +7,22 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - backend
+      - core-api
+      - payment-service
+      - notification-service
     restart: always
 
-  backend:
+  core-api:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: smartcart_backend
+    container_name: smartcart_core_api
     ports:
       - "8001:8001"
     environment:
       - MONGO_URL=mongodb://mongodb:27017
       - DB_NAME=smartcart_prod
-      - POSTGRES_URL=postgresql://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
+      - POSTGRES_URL=postgresql+psycopg2://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
       - APP_ENV=production
@@ -30,6 +32,40 @@ services:
       - mongodb
       - postgres
       - redis
+    restart: always
+
+  payment-service:
+    build:
+      context: ./backend
+      dockerfile: services_standalone/payment_service/Dockerfile
+    container_name: smartcart_payment_service
+    ports:
+      - "8002:8002"
+    environment:
+      - POSTGRES_URL=postgresql+psycopg2://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
+      - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-rzp_test_placeholder}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-rzp_test_placeholder_secret}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-rzp_webhook_secret}
+      - PAYMENT_SERVICE_PORT=8002
+    depends_on:
+      - postgres
+    restart: always
+
+  notification-service:
+    build:
+      context: ./backend
+      dockerfile: services_standalone/notification_service/Dockerfile
+    container_name: smartcart_notification_service
+    ports:
+      - "8003:8003"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=smartcart_prod
+      - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
+      - NOTIFICATION_SERVICE_PORT=8003
+    depends_on:
+      - mongodb
     restart: always
 
   mongodb:
