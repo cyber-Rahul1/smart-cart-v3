@@ -111,7 +111,7 @@ async def apply_success(payment: dict, provider_payment_id: str):
         if res.modified_count:
             await db.refunds.insert_one({"id": new_id(), "order_id": order["id"], "payment_id": payment["id"], "amount": payment["amount"],
                                          "status": "processed", "provider": "demo", "reason": "order_cancelled", "created_at": iso(now())})
-        raise HTTPException(409, "Order was cancelled — payment refunded")
+        raise HTTPException(409, "Order was cancelled â€” payment refunded")
     res = await db.payments.update_one({"id": payment["id"], "status": {"$nin": ["captured", "cancelled", "refunded"]}},
                                        {"$set": {"status": "captured", "provider_payment_id": provider_payment_id, "captured_at": iso(now())}})
     if not res.modified_count:
@@ -141,7 +141,7 @@ async def confirm_order(o: dict, payment_id: str, payment_status: str) -> bool:
     if o["bill"].get("credit_used"):
         await db.users.update_one({"id": o["user_id"], "delivery_credits": {"$gt": 0}}, {"$inc": {"delivery_credits": -1}})
     await db.sellers.update_one({"id": o["seller_id"]}, {"$inc": {"trend_score": 1, "orders_count": 1}})
-    how = " · cash on delivery" if payment_status == "cod" else ""
+    how = " Â· cash on delivery" if payment_status == "cod" else ""
     await notify(o["member_ids"], "Order confirmed", f"{o['seller_name']} received your order {o['order_no']}{how}", "order", o["id"])
     # Sync order to relational database with ACID validation
     try:
@@ -150,8 +150,8 @@ async def confirm_order(o: dict, payment_id: str, payment_status: str) -> bool:
         pass
     shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1})
     if shop and shop.get("owner_id"):
-        label = f"Flat {o['flat']} · {o.get('community_name')}" if o["kind"] == "community_flat" else o["kind"].title()
-        await notify([shop["owner_id"]], "New order", f"{o['order_no']} · {label} · ₹{o['bill']['subtotal']}", "seller_order", o["id"])
+        label = f"Flat {o['flat']} Â· {o.get('community_name')}" if o["kind"] == "community_flat" else o["kind"].title()
+        await notify([shop["owner_id"]], "New order", f"{o['order_no']} Â· {label} Â· â‚¹{o['bill']['subtotal']}", "seller_order", o["id"])
     return True
 
 
@@ -172,13 +172,13 @@ async def cash_on_delivery(body: CodIn, user=Depends(current_user)):
     if o["status"] != "pending_payment":
         raise HTTPException(400, "This order is already confirmed" if o["status"] != "cancelled" else "Order cancelled")
     if o["bill"]["total"] > COD_LIMIT:
-        raise HTTPException(400, f"Cash on delivery is available for orders up to ₹{COD_LIMIT}")
+        raise HTTPException(400, f"Cash on delivery is available for orders up to â‚¹{COD_LIMIT}")
     p = {"id": new_id(), "order_id": o["id"], "user_id": user["id"], "amount": o["bill"]["total"], "currency": "INR",
          "provider": "cod", "provider_order_id": f"cod_{new_id()}", "status": "pending_collection", "attempts": [], "created_at": iso(now())}
     await db.payments.insert_one(dict(p))
     if not await confirm_order(o, p["id"], "cod"):
         await db.payments.delete_one({"id": p["id"]})
-        raise HTTPException(409, "Order status changed — refresh and try again")
+        raise HTTPException(409, "Order status changed â€” refresh and try again")
     # Any unfinished online attempt is void now; completing it later triggers an automatic refund.
     await db.payments.update_many({"order_id": o["id"], "status": {"$in": ["created", "failed"]}}, {"$set": {"status": "cancelled"}})
     return await db.orders.find_one({"id": o["id"]}, {"_id": 0, "delivery_otp": 0})
@@ -222,7 +222,7 @@ async def demo_complete(pid: str, body: DemoCompleteIn, user=Depends(current_use
         await db.payments.update_one({"id": pid}, {"$set": {"status": "failed"},
                                      "$push": {"attempts": {"result": "failed", "at": iso(now())}}})
         await db.orders.update_one({"id": p["order_id"]}, {"$set": {"payment_status": "failed"}})
-        raise HTTPException(402, "Payment failed. Your order is not paid — please retry.")
+        raise HTTPException(402, "Payment failed. Your order is not paid â€” please retry.")
     ppid = short_code("pay_demo_")
     payment = await verify_and_apply(VerifyIn(provider_order_id=p["provider_order_id"], provider_payment_id=ppid,
                                               signature=sign(p["provider_order_id"], ppid)))

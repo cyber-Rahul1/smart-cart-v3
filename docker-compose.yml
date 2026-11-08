@@ -42,15 +42,12 @@ services:
     ports:
       - "8002:8002"
     environment:
-        - RAZORPAY_ENVIRONMENT=test
-        - RAZORPAY_KEY_ID=
-        - RAZORPAY_KEY_SECRET=
-        - RAZORPAY_WEBHOOK_SECRET=d92a0cd52716c21ac2084a753610d323fca21c48
       - POSTGRES_URL=postgresql+psycopg2://smartcart_user:secure_pg_pass@postgres:5432/smartcart_relational
       - JWT_SECRET=prod_super_secure_jwt_secret_smartcart_32_chars
-      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-rzp_test_placeholder}
-      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-rzp_test_placeholder_secret}
-      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-rzp_webhook_secret}
+      - RAZORPAY_ENVIRONMENT=${RAZORPAY_ENVIRONMENT:-test}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-d92a0cd52716c21ac2084a753610d323fca21c48}
       - PAYMENT_SERVICE_PORT=8002
     depends_on:
       - postgres
