@@ -104,3 +104,87 @@ tests\test_smoke.py .                                                    [100%]
 
 ======================== 45 passed, 1 warning in 7.07s ========================
 ```
+# Selective Microservices, Razorpay Test Mode & Final Integration Verification
+
+## 1. Selective Microservices Architecture
+
+### A. Core Marketplace API (Retained as Modular Monolith)
+- **Included Domains**: Identity & Auth, Customer Management, Seller & Shop Management, Product Catalog & Search, Inventory, Personal Shopping Carts, Community Shopping, Group Ordering, Pricing & Delivery Calculations, Order Management, Rider Assignment, Admin Operations.
+- **Rationale**: These domains are tightly bound by transactional consistency, shared database reads, and high-velocity queries. Keeping them together avoids distributed transaction complexity and unnecessary network hops.
+
+### B. Extracted Microservices & Standalone Services
+1. **Payment Microservice** (`backend/services_standalone/payment_service/`):
+   - **Entry Point**: `backend/services_standalone/payment_service/main.py` (Port `8002`)
+   - **Dockerfile**: `backend/services_standalone/payment_service/Dockerfile`
+   - **Responsibilities**: Razorpay order creation, payment signature verification, webhook processing, refund processing, and exclusive ownership of the transactional `payments_relational` and `financial_ledger` tables.
+2. **Notification Microservice** (`backend/services_standalone/notification_service/`):
+   - **Entry Point**: `backend/services_standalone/notification_service/main.py` (Port `8003`)
+   - **Dockerfile**: `backend/services_standalone/notification_service/Dockerfile`
+   - **Responsibilities**: Idempotent dispatch of push/in-app notifications and background queue consumption.
+3. **Background Worker Service** (`backend/services_standalone/worker_service/`):
+   - **Entry Point**: `backend/services_standalone/worker_service/main.py`
+   - **Responsibilities**: Asynchronous outbox processing, scheduled deadline enforcement, and SQS event relay.
+
+### C. NGINX Gateway & Routing Layer
+- Structured in `nginx/nginx.conf` with dedicated upstream routes:
+  - `/api/payments/*` -> `payment_microservice:8002`
+  - `/api/notifications/*` -> `notification_microservice:8003`
+  - `/api/*` -> `core_marketplace:8001`
+- Includes rate-limiting (`10r/s`), connection limits (`10`), security headers, and `X-Correlation-ID` tracing.
+
+---
+
+## 2. Complete Razorpay Test Mode Integration
+
+### A. Architecture & Data Flow
+1. **Order Creation**: Client requests checkout -> Backend calculates authoritative price in integer paise -> Payment Service creates Razorpay order (`order_xxx`).
+2. **Client Native Checkout**: Integrated via `frontend/src/utils/razorpay.ts` supporting `react-native-razorpay` with simulation fallback for web/testing.
+3. **Server-Side Verification**: Signature validated via HMAC-SHA256 (`razorpay_order_id|razorpay_payment_id`).
+4. **Webhook Processing**: Validates raw request body with `RAZORPAY_WEBHOOK_SECRET` and deduplicates against prior events.
+5. **Double-Entry Financial Ledger**: Atomically writes balancing debits (`gateway_receivable`) and credits (`seller_payable` 90%, `platform_revenue` 10%).
+
+### B. Configuration Requirements
+To run live against your own Razorpay test account, configure in `backend/.env`:
+```env
+RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_HERE
+RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET_HERE
+RAZORPAY_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET_HERE
+```
+*When credentials are not set, deterministic test mode handles signature verification safely without external network failures.*
+
+---
+
+## 3. Comprehensive Verification & Classification Matrix
+
+| Domain | Status | Verification Summary |
+| :--- | :--- | :--- |
+| **Modular Core API** | **IMPLEMENTED AND VERIFIED** | Retained 14 core marketplace domains under FastAPI; all 45 regression tests passed cleanly. |
+| **Payment Microservice** | **IMPLEMENTED AND VERIFIED** | Extracted standalone service on port 8002 with dedicated Dockerfile, healthcheck, and isolated relational ledger ownership. |
+| **Notification Microservice** | **IMPLEMENTED AND VERIFIED** | Extracted standalone service on port 8003 with dedicated Dockerfile and idempotent dispatch. |
+| **Background Worker Service** | **IMPLEMENTED AND VERIFIED** | Standalone worker polling transactional outbox and relaying events to SQS. |
+| **NGINX Gateway** | **IMPLEMENTED AND VERIFIED** | Validated via `nginx -t` in official `nginx:alpine` container with 3 distinct microservice upstreams. |
+| **PostgreSQL 16 Engine** | **IMPLEMENTED AND VERIFIED** | Validated against isolated live container on port 5439 via `psycopg2`. Verified ACID transactions, 10 concurrent threads, and balanced ledger. |
+| **Redis 7 Caching** | **IMPLEMENTED AND VERIFIED** | Validated against isolated live container on port 6389 (`ping`, `set`, `get`, `delete`). |
+| **Terraform AWS IaC** | **IMPLEMENTED AND VERIFIED** | Formatted and validated via official `hashicorp/terraform:latest` (`fmt -check`, `init`, `validate`). Provider locked in `.terraform.lock.hcl`. |
+| **Razorpay Verification** | **IMPLEMENTED AND VERIFIED (TEST MODE)** | HMAC-SHA256 order signature verification and webhook verification tested and verified. Live gateway payment is **BLOCKED** pending user-supplied Razorpay keys. |
+| **S3 Media Storage** | **IMPLEMENTED AND VERIFIED (LOCAL) / BLOCKED (AWS)** | Presigned post generator and MIME validation verified. Production guard blocks ephemeral storage. Live S3 upload **BLOCKED** pending AWS credentials. |
+| **Android EAS Build** | **IMPLEMENTED AND VERIFIED (CONFIGURED) / BLOCKED (CLOUD)** | Build profiles in `eas.json` configured. Cloud compilation **BLOCKED** pending EAS account authentication. |
+
+---
+
+## 4. Modernization Git Commits
+
+```
+b7e7c5c feat(microservices): extract standalone Payment and Notification microservices with NGINX routing and Razorpay checkout bridge
+b0e9ef1 docs: document live postgresql, live redis, nginx and terraform verification
+a60c94f feat(infra): format and validate terraform AWS architecture with provider locks
+aa72fc0 docs: finalize architecture modernization report with explicit pass/fail/blocked classifications
+8c6fc22 fix(security): restrict local media upload fallback strictly to development and testing environments
+5d4e505 docs: update modernization report with 100% test pass verification and ledger audit proof
+a8e1dfc fix(media): add resilient local fallback for media upload and S3 presigned generation
+cd51f67 docs: add comprehensive architecture modernization and production readiness report
+52fd778 feat(mobile): add Expo EAS configuration for Google Play Store Android app bundle builds
+552c3e3 feat(infra): add NGINX gateway, Docker packaging, Terraform AWS architecture, and GitHub Actions CI/CD
+ea769bf feat(services): add Razorpay verification, S3 CloudFront media storage, and SQS/Redis async services
+4d8fd4e feat(database): integrate hybrid PostgreSQL relational engine with financial ledger and outbox pattern
+```
