@@ -32,37 +32,37 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = { Name = "smartcart-vpc-${var.environment}" }
+  tags                 = { Name = "smartcart-vpc-${var.environment}" }
 }
 
 resource "aws_subnet" "public_1" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "${var.aws_region}a"
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
-  tags = { Name = "smartcart-pub-subnet-1" }
+  tags                    = { Name = "smartcart-pub-subnet-1" }
 }
 
 resource "aws_subnet" "public_2" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "${var.aws_region}b"
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.aws_region}b"
   map_public_ip_on_launch = true
-  tags = { Name = "smartcart-pub-subnet-2" }
+  tags                    = { Name = "smartcart-pub-subnet-2" }
 }
 
 resource "aws_subnet" "private_1" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.10.0/24"
   availability_zone = "${var.aws_region}a"
-  tags = { Name = "smartcart-priv-subnet-1" }
+  tags              = { Name = "smartcart-priv-subnet-1" }
 }
 
 resource "aws_subnet" "private_2" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.20.0/24"
   availability_zone = "${var.aws_region}b"
-  tags = { Name = "smartcart-priv-subnet-2" }
+  tags              = { Name = "smartcart-priv-subnet-2" }
 }
 
 # --- Application Load Balancer ---
@@ -133,18 +133,18 @@ resource "aws_db_subnet_group" "rds" {
 }
 
 resource "aws_db_instance" "postgres" {
-  identifier             = "smartcart-postgres-${var.environment}"
-  allocated_storage      = 20
-  max_allocated_storage  = 100
-  engine                 = "postgres"
-  engine_version         = "16.1"
-  instance_class         = "db.t4g.micro"
-  db_name                = "smartcart_relational"
-  username               = "smartcart_admin"
-  password               = "ChangeMeInProdSecretsManager123!"
-  db_subnet_group_name   = aws_db_subnet_group.rds.name
-  skip_final_snapshot    = true
-  storage_encrypted      = true
+  identifier            = "smartcart-postgres-${var.environment}"
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  engine                = "postgres"
+  engine_version        = "16.1"
+  instance_class        = "db.t4g.micro"
+  db_name               = "smartcart_relational"
+  username              = "smartcart_admin"
+  password              = "ChangeMeInProdSecretsManager123!"
+  db_subnet_group_name  = aws_db_subnet_group.rds.name
+  skip_final_snapshot   = true
+  storage_encrypted     = true
 }
 
 # --- ECS Cluster & Fargate Task ---
