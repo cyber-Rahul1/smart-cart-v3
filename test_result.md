@@ -101,3 +101,5 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Iteration 5 (main agent)
+New features to test: cash on delivery, demo-online-in-preview-only, map-based address picking (OpenStreetMap/Leaflet + Nominatim proxy /api/geo/*), live rider tracking (rider GPS ping + customer map w/ ETA), community order split into rider runs by weight + item count + package count.

@@ -8,10 +8,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
-from core import current_user, db, iso, new_id, notify, now, short_code
+from core import APP_ENV, current_user, db, iso, new_id, notify, now, short_code
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 DEMO_KEY = os.environ["PAYMENT_WEBHOOK_SECRET"].encode()
+# Demo online checkout is preview-only; the live app offers cash on delivery until a real gateway is connected.
+DEMO_ONLINE = APP_ENV == "dev"
+COD_LIMIT = 3000
 
 
 def sign(provider_order_id: str, provider_payment_id: str) -> str:
@@ -26,6 +29,20 @@ class DemoCompleteIn(BaseModel):
     outcome: Literal["success", "failure"]
 
 
+class CodIn(BaseModel):
+    order_id: str
+
+
+def require_demo():
+    if not DEMO_ONLINE:
+        raise HTTPException(503, "Online payment is coming soon. Please choose cash on delivery.")
+
+
+@router.get("/methods")
+async def methods(user=Depends(current_user)):
+    return {"online": DEMO_ONLINE, "online_mode": "demo" if DEMO_ONLINE else "unavailable", "cod": True, "cod_limit": COD_LIMIT}
+
+
 class VerifyIn(BaseModel):
     provider_order_id: str
     provider_payment_id: str
@@ -34,6 +51,7 @@ class VerifyIn(BaseModel):
 
 @router.post("/initiate")
 async def initiate(body: InitiateIn, user=Depends(current_user)):
+    require_demo()
     o = await db.orders.find_one({"id": body.order_id, "user_id": user["id"]}, {"_id": 0})
     if not o:
         raise HTTPException(404, "Order not found")
@@ -41,6 +59,8 @@ async def initiate(body: InitiateIn, user=Depends(current_user)):
         raise HTTPException(400, "Order already paid")
     if o["status"] == "cancelled":
         raise HTTPException(400, "Order cancelled")
+    if o["status"] != "pending_payment":
+        raise HTTPException(400, "This order is already confirmed")
     existing = await db.payments.find_one({"order_id": o["id"], "status": "created"}, {"_id": 0})
     if existing:  # idempotent initiation
         return existing
@@ -65,27 +85,70 @@ async def apply_success(payment: dict, provider_payment_id: str):
                                        {"$set": {"status": "captured", "provider_payment_id": provider_payment_id, "captured_at": iso(now())}})
     if not res.modified_count:
         return  # duplicate event, already processed
-    o = order
+    if await confirm_order(order, payment["id"], "paid"):
+        await reward_referral(order)
+
+
+async def confirm_order(o: dict, payment_id: str, payment_status: str) -> bool:
+    """Shared by online capture and cash on delivery: reserve stock, confirm, book commission, alert the shop."""
+    res = await db.orders.update_one({"id": o["id"], "status": "pending_payment"},
+                                     {"$set": {"payment_status": payment_status, "status": "confirmed", "payment_id": payment_id,
+                                               "payment_method": "cod" if payment_status == "cod" else "online"},
+                                      "$push": {"history": {"status": "confirmed", "at": iso(now())}}})
+    if not res.modified_count:
+        return False
     for i in o["items"]:
         await db.products.update_one({"id": i["product_id"]}, [{"$set": {"stock": {"$max": [0, {"$subtract": ["$stock", i["qty"]]}]}}}])
-    await db.orders.update_one({"id": o["id"]}, {"$set": {"payment_status": "paid", "status": "confirmed", "payment_id": payment["id"]},
-                                                 "$push": {"history": {"status": "confirmed", "at": iso(now())}}})
     await db.commissions.insert_one({"id": new_id(), "order_id": o["id"], "seller_id": o["seller_id"], "amount": o["bill"]["commission"],
                                      "created_at": iso(now())})
     if o["bill"].get("credit_used"):
         await db.users.update_one({"id": o["user_id"], "delivery_credits": {"$gt": 0}}, {"$inc": {"delivery_credits": -1}})
     await db.sellers.update_one({"id": o["seller_id"]}, {"$inc": {"trend_score": 1, "orders_count": 1}})
-    await notify(o["member_ids"], "Order confirmed", f"{o['seller_name']} received your order {o['order_no']}", "order", o["id"])
+    how = " · cash on delivery" if payment_status == "cod" else ""
+    await notify(o["member_ids"], "Order confirmed", f"{o['seller_name']} received your order {o['order_no']}{how}", "order", o["id"])
     shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1})
     if shop and shop.get("owner_id"):
         label = f"Flat {o['flat']} · {o.get('community_name')}" if o["kind"] == "community_flat" else o["kind"].title()
         await notify([shop["owner_id"]], "New order", f"{o['order_no']} · {label} · ₹{o['bill']['subtotal']}", "seller_order", o["id"])
-    # Referral qualification: referee's first paid order rewards the referrer with a delivery credit.
+    return True
+
+
+async def reward_referral(o: dict):
+    """Referral qualification: referee's first paid order rewards the referrer with a delivery credit."""
     ref = await db.referrals.find_one({"referee_id": o["user_id"], "status": "pending"})
     if ref and o["bill"]["subtotal"] >= 149:
         await db.referrals.update_one({"id": ref["id"]}, {"$set": {"status": "rewarded", "order_id": o["id"], "rewarded_at": iso(now())}})
         await db.users.update_one({"id": ref["referrer_id"]}, {"$inc": {"delivery_credits": 1}})
         await notify([ref["referrer_id"]], "Referral reward", "Your friend placed their first order. You earned 1 free delivery credit!", "referral")
+
+
+@router.post("/cod")
+async def cash_on_delivery(body: CodIn, user=Depends(current_user)):
+    o = await db.orders.find_one({"id": body.order_id, "user_id": user["id"]}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Order not found")
+    if o["status"] != "pending_payment":
+        raise HTTPException(400, "This order is already confirmed" if o["status"] != "cancelled" else "Order cancelled")
+    if o["bill"]["total"] > COD_LIMIT:
+        raise HTTPException(400, f"Cash on delivery is available for orders up to ₹{COD_LIMIT}")
+    p = {"id": new_id(), "order_id": o["id"], "user_id": user["id"], "amount": o["bill"]["total"], "currency": "INR",
+         "provider": "cod", "provider_order_id": f"cod_{new_id()}", "status": "pending_collection", "attempts": [], "created_at": iso(now())}
+    await db.payments.insert_one(dict(p))
+    if not await confirm_order(o, p["id"], "cod"):
+        await db.payments.delete_one({"id": p["id"]})
+        raise HTTPException(409, "Order status changed — refresh and try again")
+    # Any unfinished online attempt is void now; completing it later triggers an automatic refund.
+    await db.payments.update_many({"order_id": o["id"], "status": {"$in": ["created", "failed"]}}, {"$set": {"status": "cancelled"}})
+    return await db.orders.find_one({"id": o["id"]}, {"_id": 0, "delivery_otp": 0})
+
+
+async def collect_cod(o: dict):
+    """Rider handed over the package and took the cash: the order is now paid."""
+    if o.get("payment_status") != "cod":
+        return
+    await db.payments.update_one({"id": o["payment_id"]}, {"$set": {"status": "captured", "captured_at": iso(now())}})
+    await db.orders.update_one({"id": o["id"]}, {"$set": {"payment_status": "paid", "cash_collected_at": iso(now())}})
+    await reward_referral(o)
 
 
 async def verify_and_apply(body: VerifyIn, user_id: str | None = None) -> dict:
@@ -107,6 +170,7 @@ async def verify(body: VerifyIn, user=Depends(current_user)):
 @router.post("/{pid}/demo-complete")
 async def demo_complete(pid: str, body: DemoCompleteIn, user=Depends(current_user)):
     """Simulates the hosted checkout. Success produces a provider signature which is then verified server-side."""
+    require_demo()
     p = await db.payments.find_one({"id": pid, "user_id": user["id"]}, {"_id": 0})
     if not p:
         raise HTTPException(404, "Payment not found")

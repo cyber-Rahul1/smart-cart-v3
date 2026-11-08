@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ApiError } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { rupee } from "@/src/format";
+import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { Button, ErrorState, Ionicons, Loader, Sheet, Stepper, useToast, VegMark } from "@/src/ui";
@@ -79,7 +79,7 @@ export default function SellerScreen() {
         ListHeaderComponent={
           <View>
             <View style={s.hero}>
-              <Image source={{ uri: seller.image }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              <Image source={{ uri: mediaUri(seller.image) }} style={StyleSheet.absoluteFill} contentFit="cover" />
               <View style={[s.heroTop, { paddingTop: insets.top + spacing.sm }]}>
                 <Pressable testID="seller-back-button" onPress={() => router.back()} style={s.round}><Ionicons name="chevron-back" size={22} color={colors.onSurface} /></Pressable>
               </View>
@@ -107,7 +107,7 @@ export default function SellerScreen() {
               <Text style={s.pdesc} numberOfLines={2}>{p.available ? (p.stock < 10 ? `Only ${p.stock} left` : p.description) : "Currently unavailable"}</Text>
             </View>
             <View style={{ alignItems: "center" }}>
-              <Image source={{ uri: p.image }} style={s.pimg} contentFit="cover" transition={150} />
+              <Image source={{ uri: mediaUri(p.image) }} style={s.pimg} contentFit="cover" transition={150} />
               <View style={{ marginTop: -18 }}>
                 <Stepper testID={`product-stepper-${p.id}`} qty={qtyOf(p.id)} disabled={!p.available || busy === p.id} onChange={(n) => change(p, n)} />
               </View>

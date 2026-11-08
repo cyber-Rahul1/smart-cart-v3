@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="2" failures="2" skipped="0" tests="21" time="1.133" timestamp="2026-11-07T06:41:13.870218+00:00" hostname="agent-env-70343229-56f2-431a-a565-4ae6eec61d37"><testcase classname="" name="tests.test_gathrcart_extended" time="0.000"><error message="collection failure">tests/test_gathrcart_extended.py:12: in &lt;module&gt;
+    BASE = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") + "/api"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+&lt;frozen os&gt;:679: in __getitem__
+    ???
+E   KeyError: 'EXPO_PUBLIC_BACKEND_URL'</error><error message="collection failure">tests/test_gathrcart_extended.py:12: in &lt;module&gt;
+    BASE = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/") + "/api"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+&lt;frozen os&gt;:679: in __getitem__
+    ???
+E   KeyError: 'EXPO_PUBLIC_BACKEND_URL'</error></testcase><testcase classname="tests.test_seller_extended.TestOnboarding" name="test_fssai_must_be_14_digits" time="0.033" /><testcase classname="tests.test_admin_config_validation" name="test_config_rejects_out_of_range[commission_pct--5]" time="0.024" /><testcase classname="tests.test_admin_config_validation" name="test_config_rejects_out_of_range[commission_pct-150]" time="0.007" /><testcase classname="tests.test_admin_config_validation" name="test_config_rejects_out_of_range[community_delivery_discount-5]" time="0.006" /><testcase classname="tests.test_seller_extended.TestOnboarding" name="test_bad_image_key" time="0.013" /><testcase classname="tests.test_admin_config_validation" name="test_config_rejects_out_of_range[delivery_base--1]" time="0.008" /><testcase classname="tests.test_seller_extended.TestOnboarding" name="test_seller_without_shop_gets_404" time="0.013" /><testcase classname="tests.test_admin_config_validation" name="test_config_roundtrip" time="0.011" /><testcase classname="tests.test_seller_extended.TestPendingGate" name="test_pending_shop_hidden_and_not_orderable" time="0.047" /><testcase classname="tests.test_seller_extended.TestShopAndMenu" name="test_approve_and_settings" time="0.041" /><testcase classname="tests.test_seller_extended.TestShopAndMenu" name="test_edit_availability_delete" time="0.017" /><testcase classname="tests.test_seller_extended.TestPendingGate" name="test_search_hides_pending" time="0.005" /><testcase classname="tests.test_rider_admin" name="test_rider_admin_flow" time="0.552" /><testcase classname="tests.test_seller_extended.TestShopAndMenu" name="test_closed_shop_not_orderable" time="0.029" /><testcase classname="tests.test_seller" name="test_seller_flow" time="0.124" /><testcase classname="tests.test_seller_extended.TestIsolation" name="test_seller_cannot_use_customer_cart" time="0.016" /><testcase classname="tests.test_smoke" name="test_flow" time="0.149" /><testcase classname="tests.test_seller_extended.TestLifecycle" name="test_ready_then_rider_and_otp" time="0.034"><failure message="KeyError: 'id'">self = &lt;test_seller_extended.TestLifecycle object at 0xf8084fb5e010&gt;
+ctx = {'sh': {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNDgxZjlhZS05M2JlLTRhMjAtYmEwNy02ODUz...aa7-a3fc-c8b005f585ef', 'seller_id': '42c81826-fe71-4837-8a97-31eff5e78af6', 'name': 'TEST_Raita', 'price': 40.0, ...}}
+
+    def test_ready_then_rider_and_otp(self, ctx):
+        sh = ctx["sh"]
+        ch = login(f"+91966{SFX}1", "customer", "TEST_Buyer3")
+        a = requests.post(f"{BASE}/addresses", headers=ch, json={"label": "Home", "line": "Flat 9, Koramangala"}).json()
+        requests.delete(f"{BASE}/cart", headers=ch)
+        requests.post(f"{BASE}/cart/items", headers=ch, json={"product_id": ctx["p1"]["id"], "qty": 1})
+        requests.post(f"{BASE}/cart/items", headers=ch, json={"product_id": ctx["p2"]["id"], "qty": 2})
+        o = requests.post(f"{BASE}/orders/checkout", headers=ch, json={"address_id": a["id"]}).json()
+&gt;       pay = requests.post(f"{BASE}/payments/initiate", headers=ch, json={"order_id": o["id"]}).json()
+                                                                                       ^^^^^^^
+E       KeyError: 'id'
+
+tests/test_seller_extended.py:112: KeyError</failure></testcase><testcase classname="tests.test_seller_extended.TestCommunityBatch" name="test_batch" time="0.025"><failure message="KeyError: 'id'">self = &lt;test_seller_extended.TestCommunityBatch object at 0xf8084f7ac150&gt;
+ctx = {'sh': {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNDgxZjlhZS05M2JlLTRhMjAtYmEwNy02ODUz...aa7-a3fc-c8b005f585ef', 'seller_id': '42c81826-fe71-4837-8a97-31eff5e78af6', 'name': 'TEST_Raita', 'price': 40.0, ...}}
+
+    def test_batch(self, ctx):
+        sh = ctx["sh"]
+        requests.post(f"{BASE}/seller/shop/demo-approve", headers=sh)  # self-contained: don't rely on earlier test order
+        hs = [login(f"+9196{7 + i}{SFX}1", "customer", f"TEST_F{i}") for i in range(2)]
+        cm = requests.post(f"{BASE}/communities", json={"name": f"TEST_Comm{SFX}", "address": "80ft Road Koramangala", "flats": "A1,A2", "my_flat": "A1"}, headers=hs[0]).json()
+        requests.post(f"{BASE}/communities/join", json={"code": cm["invite_code"], "flat": "A2"}, headers=hs[1])
+&gt;       b = requests.post(f"{BASE}/communities/{cm['id']}/baskets", json={"seller_id": ctx["shop"]["id"], "title": "TEST_Batch", "closes_in_min": 60}, headers=hs[0])
+                                                                                       ^^^^^^^^^^^^^^^^^
+E       KeyError: 'id'
+
+tests/test_seller_extended.py:143: KeyError</failure></testcase></testsuite></testsuites>

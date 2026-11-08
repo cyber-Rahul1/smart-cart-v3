@@ -7,6 +7,7 @@ import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
+import { mediaUri } from "@/src/format";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { ErrorState, Ionicons, Loader } from "@/src/ui";
@@ -53,7 +54,7 @@ export default function Reels() {
               </View>
               <View style={[s.bottom, { bottom: bottomChrome + spacing.lg }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                  <Image source={{ uri: item.seller_image }} style={s.avatar} />
+                  <Image source={{ uri: mediaUri(item.seller_image) }} style={s.avatar} />
                   <Text style={s.seller}>{item.seller_name}</Text>
                 </View>
                 <Text style={s.title}>{item.title}</Text>

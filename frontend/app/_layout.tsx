@@ -8,6 +8,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth } from "@/src/auth";
+import { ROLE_HOME, ROLE_PREFIX } from "@/src/navigation";
 import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
@@ -24,8 +25,9 @@ function RoleGuard() {
   const first = segments[0] as string | undefined;
   useEffect(() => {
     if (!user || !first || SHARED_ROUTES.includes(first)) return;
-    if (user.role === "seller" && first !== "partner") router.replace("/partner");
-    else if (user.role !== "seller" && first === "partner") router.replace("/");
+    const home = ROLE_HOME[user.role];
+    if (home && `/${first}` !== home) router.replace(home as any);
+    else if (!home && ROLE_PREFIX.includes(first)) router.replace("/");
   }, [user, first]);
   return null;
 }

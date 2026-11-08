@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { PartnerHeader } from "@/src/components/partner-header";
-import { rupee } from "@/src/format";
+import { rupee, mediaUri } from "@/src/format";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Product } from "@/src/types";
@@ -53,7 +53,7 @@ export default function PartnerMenu() {
           renderItem={({ item: p }) => (
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
               <Pressable testID={`partner-product-${p.id}`} onPress={() => router.push(`/partner/product?id=${p.id}`)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-                <Image source={{ uri: p.image }} style={{ width: 56, height: 56, borderRadius: radius.md, opacity: p.available ? 1 : 0.4 }} />
+                <Image source={{ uri: mediaUri(p.image) }} style={{ width: 56, height: 56, borderRadius: radius.md, opacity: p.available ? 1 : 0.4 }} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}><VegMark veg={p.veg} /><Text style={{ fontWeight: "700", color: colors.onSurface, flexShrink: 1 }} numberOfLines={1}>{p.name}</Text></View>
                   <Text style={{ color: colors.muted, fontSize: font.sm }}>{rupee(p.price)} · Stock {p.stock}{p.stock < 10 ? " · Low" : ""}</Text>

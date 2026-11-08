@@ -28,7 +28,7 @@ export function AddressPicker({ visible, onClose, selected, onSelect }: { visibl
         </Pressable>
       ))}
       {q.data && q.data.length === 0 ? <Text style={{ color: colors.muted }}>No saved addresses yet.</Text> : null}
-      <Button testID="address-picker-add-button" variant="secondary" icon="add" title="Add new address" onPress={() => { onClose(); router.push("/addresses?add=1"); }} />
+      <Button testID="address-picker-add-button" variant="secondary" icon="add" title="Add new address" onPress={() => { onClose(); router.push("/address/new"); }} />
     </Sheet>
   );
 }

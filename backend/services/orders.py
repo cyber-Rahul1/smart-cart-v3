@@ -112,6 +112,10 @@ async def cancel_order_doc(o: dict, reason: str = "customer") -> None:
     oid = o["id"]
     update = {"status": "cancelled", "cancel_reason": reason}
     await db.payments.update_one({"order_id": oid, "status": {"$in": ["created", "failed"]}}, {"$set": {"status": "cancelled"}})
+    if o["payment_status"] == "cod":  # nothing was charged; just release the reserved stock
+        await db.payments.update_one({"id": o["payment_id"]}, {"$set": {"status": "cancelled"}})
+        update["payment_status"] = "void"
+        await restore_stock(o)
     if o["payment_status"] == "paid":
         await db.refunds.insert_one({"id": new_id(), "order_id": oid, "payment_id": o["payment_id"], "amount": o["bill"]["total"],
                                      "status": "processed", "provider": "demo", "reason": reason, "created_at": iso(now())})

@@ -53,12 +53,38 @@ GathrCart (formerly Smart Cart v2): a hyperlocal commerce platform covering groc
 - Shop settings: open/closed, prep time, minimum order, hours, promotion. Today's stats use the IST day.
 - Customer demo-advance is blocked for seller-owned shops until the shop marks the order ready. Sellers are notified on each new paid order.
 
+## Implemented — Rider app, Admin app, Seller photos (2026-06)
+- Login screen has four modes: customer, partner, rider and admin. Admin access is limited to phones listed in ADMIN_PHONES in backend .env (currently +919999900000). A RoleGuard sends each role to its own app.
+- Rider app (/rider), tabs Jobs, Deliveries, Profile:
+  - Onboarding asks for vehicle (sets capacity) and licence; an admin must verify before the rider can go online
+  - Jobs tab lists single orders and apartment batches
+  - Claims are capacity-aware: only whole flat packages that fit are taken; the rest stay open for another rider (split delivery)
+  - Confirm pickup, then the customer's OTP is required to mark delivered (max 5 attempts, double delivery blocked)
+  - Delivery history with estimated earnings
+- Admin app (/admin):
+  - Overview metrics
+  - Shop approvals with FSSAI review (rejecting needs a note; deciding the same thing twice is blocked)
+  - Rider verification
+  - Fee and commission rules, plus the auto-approve setting
+  - Audit logs for every decision
+- Seller photos:
+  - Uploads go to Emergent Object Storage (5 MB limit, file contents checked to be a real image), served publicly from /api/files/{id}
+  - Product photos and storefront photo, with a photo-permission explanation and Open Settings fallback
+  - Rejected shops can fix their FSSAI number and resubmit
+- The seller "DEMO approve" button is gone; its endpoint only works in the dev environment, for automated tests.
+- Tests: tests/test_rider_admin.py, test_seller.py and test_smoke.py all pass. Testing-agent iterations 3 and 4 passed.
+
 ## Backlog
-- P0: Rider app; Admin app (approvals, FSSAI review, fee config, moderation, analytics)
 - P0: Real Razorpay; Twilio Verify OTP
-- P1: Seller photo upload (object storage), reels and campaigns, seller analytics, printable labels
-- P1: Real map/GPS location and geo radius filtering, live tracking over WebSocket, push notifications, video reels
-- P2: Next.js admin web, settlements and reconciliation reports, coupon usage limits, migration toward independent services
+- P1: Live GPS rider tracking (WebSocket) and maps; push notifications; seller reels and campaigns; rider payouts; settlement reports
+- P2: Next.js admin web; migration toward independent services; coupon limits
 
 ## Next tasks
-Rider app → Admin approvals & fee config → Razorpay
+Razorpay → live tracking → seller reels/campaigns
+
+## Iteration 5 (2026-06) — Maps, live tracking, split delivery, COD
+- Address add is map-first: /address/new (Leaflet + OpenStreetMap tiles, Nominatim search/reverse proxied via /api/geo/*), then house/landmark/label details.
+- Live tracking: rider app streams foreground GPS (expo-location) to PUT /api/rider/location while carrying orders; customer order screen polls GET /api/delivery/orders/{id}/track (map + ETA).
+- Split delivery: community batches pre-split into runs by package count, weight and item count, sized to the free space in the rider's bag (bike 4/12kg/25, scooter 5/15/30, cycle 2/5/10).
+- Payments: /pay/{orderId} offers demo online (only when APP_ENV=dev) and cash on delivery (≤ ₹3000). COD becomes paid when rider ticks "cash collected" with OTP.
+- Backlog: real Razorpay, real SMS OTP, background location on native builds, OSM tile provider with key for production volume.

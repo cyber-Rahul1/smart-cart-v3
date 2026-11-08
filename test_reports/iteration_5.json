@@ -1,0 +1,51 @@
+{
+  "summary": "Frontend-only test of the iteration-5 features, run on a 375x667 viewport against the public preview URL. Every requested flow works end to end. (1) Add address: Saved addresses > Add new address opens /address/new with the map and centre pin. Searching 'Indiranagar' returns 6 results. Tapping the first result moves the pin and shows the area and address line. Confirm location > details step > saving with no house number shows the toast 'Enter your flat / house number'. With house, landmark and the Work label filled in, the address saves and the list shows it as the default, with lat/lng stored. 'Use my location' opens the location-permission-sheet and 'Not now' closes it. The cart's address picker 'Add new address' opens /address/new. (2) Pay screen: placing an order from the cart opens /pay/{id} with Pay online selected by default and the demo banner shown. 'Simulate payment failure' shows pay-failed-message. Choosing Cash on delivery hides the banner, and 'Place order · pay ₹334 in cash' opens the order detail with status Confirmed, order-cod-card and the delivery OTP. The online success path confirms the order (paid online), and reopening /pay shows 'already confirmed'. For an order over ₹3000, the COD option is disabled with the text 'Available for orders up to ₹3000'. (3) Customer live track: once the order is ready_for_pickup, the map card shows 'Waiting for a rider'. After a rider claims it and sends a location, it shows 'Arriving in ~21 min · TEST_UIRider · Bike · 5.82 km away (heading to the shop first)', with shop, home and rider markers. After delivery the card is hidden and order-cod-paid is shown. (4) Rider: the 30-item community batch is split into 2 runs of 15 items (rider-run-{bid}-1/2). Accepting run 1 shows the toast 'Accepted 1 package(s)' and opens /rider/active. Accepting a run that is over capacity shows the error toast 'These jobs are taken or exceed your capacity'. /rider/order/{id} shows the map, 'Navigate to shop' (opens Google Maps directions with the shop coordinates; after pickup the button says 'Navigate to customer'), the rider-share-location banner (which opens the permission sheet), and the COD banner 'collect ₹334'. With geolocation granted, rider-sharing-on is shown and PUT /rider/location is sent with the browser coordinates. In the OTP sheet, Mark delivered stays disabled with the OTP entered until rider-cash-collected is ticked; after ticking, delivery succeeds. Only minor UX and robustness issues were found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/otp/request", "issue": "Accepts 9-digit Indian numbers (+91 + 9 digits), e.g. +91836925721; test_cod_tracking_runs.py also builds 9-digit phones. Mobile numbers should be validated as exactly 10 digits starting with 6-9."},
+      {"endpoint": "GET /api/rider/jobs (test data hygiene)", "issue": "Riders currently see 5 community batches and 29 single jobs, mostly left over from earlier test runs (TEST_RunComm*, TEST_CodShop*). test_cod_tracking_runs.py leaves ready_for_pickup orders unclaimed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Pay screen -> order detail (online success)", "issue": "Right after 'Pay' succeeds, the order detail shows the old status 'Awaiting payment' and the order-pay-button for about 1s, then updates to Confirmed. Cause: done() in app/pay/[id].tsx:32-37 calls qc.invalidateQueries without await and then router.replace. The order screen reads the same cached ['order', id] entry, which still holds the pending_payment data.", "testID": "order-detail-status", "priority": "LOW"},
+      {"component": "Address map initial load", "issue": "Opening /address/new sends 5 /geo/reverse calls. The first location label takes about 4.3s and Confirm stays disabled until then. The Leaflet iframe fires 'moveend' several times on init, and every move clears the place (setPlace(null)) and restarts the 450ms debounce. app/address/new.tsx:130.", "testID": "address-locating", "priority": "LOW"},
+      {"component": "Rider batch card", "issue": "Plural bug: the batch header reads 'TEST_UIComm… · 1 flats'. app/rider/(tabs)/index.tsx.", "testID": "rider-batch-{basketId}", "priority": "LOW"},
+      {"component": "Rider runs", "issue": "Runs are planned against an empty bag, not the rider's remaining capacity. With 2 packages already loaded, a 15-item run still shows an enabled Accept button and the text 'split into 1 run that fit your bag'; tapping it gives the error toast 'These jobs are taken or exceed your capacity'.", "testID": "rider-claim-run-{basketId}-{n}", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/address/new", "issues": ["With 6 search hits, the results list covers the 'Use my location' pill.", "Search results are not limited to the user's area: hits include Indiranagar 424006 and 441614 (other states). Add countrycodes=in plus a viewbox or bounded search around the current pin."]},
+      {"screen": "Rider Jobs header", "issues": ["The subtitle 'Bike · capacity 4 pkgs / 12 kg / 25 items · load 2 p…' is cut off at 375px width."]},
+      {"screen": "/rider/order/{id}", "issues": ["The map shows only the shop and home markers, not the rider's own position.", "The route line between shop and home is barely visible when the two markers are close together."]}
+    ],
+    "react_native_issues": [
+      {"component": "OSM tiles on native WebView", "issue": "Risk, not verified on a device. The native WebView loads the page as source={{html}} with no baseUrl, so tile requests to tile.openstreetmap.org carry no HTTP Referer. OSM's tile usage policy requires one and can block such requests, and it does not allow heavy production use. Reference: /app/frontend/src/components/osm-map.tsx:42, /app/frontend/src/components/map-html.ts:46"},
+      {"component": "Rider LocationSharer", "issue": "Foreground-only watchPositionAsync with an 8s client-side throttle. A position that arrives within 8s of the last send is dropped, and with distanceInterval 10 no new event may follow once the rider stops, so the customer can see a stale position. There are no background updates (expected; needs a native build plus a background task). Reference: /app/frontend/app/rider/_layout.tsx:19-22"}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/seed_iter5_ui.py", "/app/backend/tests/iter5_ui_step.py"],
+  "action_items": [
+    "pay/[id].tsx done(): before router.replace, either await qc.invalidateQueries({queryKey:['order', id]}) or setQueryData with the confirmed order, so the stale 'Awaiting payment' state and Pay button don't flash.",
+    "address/new.tsx: ignore 'move' events whose centre has not changed (within ~1e-5 of the current point), or don't call setPlace(null) for them. This removes the duplicate reverse geocodes and the ~4s 'Locating…' on open.",
+    "Bias /geo/search to India and the area around the current pin (countrycodes=in, viewbox).",
+    "Fix the rider batch header plural ('1 flat').",
+    "Rider runs: plan runs against the rider's remaining capacity, or disable/label runs that won't fit, instead of returning an error after Accept.",
+    "Native maps: pass source={{html, baseUrl:'https://<app-domain>'}} to the WebView (or use a tile provider with an API key) to meet OSM's Referer requirement before production.",
+    "Backend: validate Indian mobile numbers as exactly 10 digits; in test_cod_tracking_runs.py, clean up or claim the ready_for_pickup test orders so the rider feed isn't cluttered."
+  ],
+  "critical_code_review_comments": [
+    "osm-map.web.tsx: the iframe postMessage bridge filters on mapId and queues commands until the map reports ready. This works.",
+    "rider/order/[id].tsx: the COD gating (disabled until otp.length === 4 and the cash box is ticked) is correct, and the backend also rejects cash_collected=false (verified earlier).",
+    "map-html.ts loads Leaflet from unpkg and tiles from tile.openstreetmap.org. Both are third-party CDNs with no fallback; if one is down, the map card is blank.",
+    "No deprecated Expo packages found (no expo-av, expo-barcode-scanner or expo-background-fetch)."
+  ],
+  "updated_files": ["/app/backend/tests/seed_iter5_ui.py (new)", "/app/backend/tests/iter5_ui_step.py (new)"],
+  "success_rate": {"backend": "N/A (not in scope)", "frontend": "100% of requested flows pass (4 low-priority UX bugs)"},
+  "seed_data_creation": "seed_iter5_ui.py created a seller with shop TEST_UIShop732702 (closed after testing), customer +918373270212 (TEST_UIBuyer) with 2 addresses, rider +918473270212 (TEST_UIRider, verified, set offline after testing), and community TEST_UIComm732702 with 2 COD orders. One of those (Flat R2) is still ready_for_pickup and unclaimed. Orders: 1 COD delivered, 2 paid online, 1 over-₹3000 order cancelled.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run `export $(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env) && python tests/seed_iter5_ui.py` from /app/backend. It writes /tmp/iter5_seed.json with 10-digit phones and auth headers. iter5_ui_step.py has steps online_order|ready|claim|addresses|order <id> (ready/claim read /tmp/iter5_cod.json {cod_order}). Log in through the UI: login-phone-input > login-send-otp-button > login-dev-otp-banner > login-verify-otp-button (tap login-mode-rider first for riders). Click Sheet buttons (location-not-now, rider-otp-confirm, cancel-sheet-confirm, address-picker-add-button) with a JS click, because they animate in from outside the viewport. For rider-sharing-on, use context.grant_permissions(['geolocation']) + set_geolocation. Use search hits to move the map pin.",
+  "rca_of_issue": "Stale status flash after online payment: pay/[id].tsx calls invalidateQueries without await and then router.replace(`/orders/${id}`). The order screen's useQuery(['order', id]) first renders the cached pending_payment data from the pay screen, and the refetch replaces it about 1s later. Reproduce: place an order > Pay > read order-detail-status immediately ('Awaiting payment'), then again at +1s ('Confirmed'). Fix: await the invalidation/refetch, or seed the cache with the confirmed order, before navigating."
+}

@@ -1,20 +1,29 @@
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { useAuth, User } from "@/src/auth";
+import { ROLE_HOME } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Button, Input, useToast } from "@/src/ui";
+
+type Role = "customer" | "seller" | "rider" | "admin";
+const COPY: Record<Role, { title: string; sub: string; switch: string; icon: any }> = {
+  customer: { title: "Log in or sign up", sub: "Groceries, food & shared carts from shops near you", switch: "Ordering food? Customer login", icon: "person-outline" },
+  seller: { title: "GathrCart Partner login", sub: "For shopkeepers & cloud kitchens — menu, orders and packing", switch: "Own a shop or kitchen? Partner login", icon: "storefront-outline" },
+  rider: { title: "Delivery partner login", sub: "Pick up packages and deliver with OTP verification", switch: "Deliver with GathrCart? Rider login", icon: "bicycle-outline" },
+  admin: { title: "Admin login", sub: "Authorised GathrCart staff only", switch: "GathrCart staff? Admin login", icon: "shield-checkmark-outline" },
+};
 
 const HERO = "https://images.pexels.com/photos/18367330/pexels-photo-18367330.jpeg?auto=compress&w=900";
 
 export default function Login() {
-  const params = useLocalSearchParams<{ step?: string; partner?: string }>();
-  const [partner, setPartner] = useState(params.partner === "1");
+  const params = useLocalSearchParams<{ step?: string; partner?: string; mode?: Role }>();
+  const [role, setRole] = useState<Role>(params.partner === "1" ? "seller" : params.mode && COPY[params.mode] ? params.mode : "customer");
   const [step, setStep] = useState<"phone" | "otp" | "profile">(params.step === "profile" ? "profile" : "phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -23,7 +32,12 @@ export default function Login() {
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const { signIn, setUser } = useAuth();
+  const { signIn, setUser, user } = useAuth();
+  useEffect(() => {
+    if (!user || step !== "phone") return;
+    if (ROLE_HOME[user.role]) router.replace(ROLE_HOME[user.role] as any);
+    else if (user.name) router.replace("/(tabs)");
+  }, [user, step]);
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const s = useStyles();
@@ -37,7 +51,7 @@ export default function Login() {
     if (!/^[6-9]\d{9}$/.test(phone)) return setErr("Enter a valid 10-digit mobile number");
     setBusy(true);
     try {
-      const r = await api<{ dev_code?: string }>("/auth/otp/request", { method: "POST", body: { phone: full, role: partner ? "seller" : "customer" }, auth: false });
+      const r = await api<{ dev_code?: string }>("/auth/otp/request", { method: "POST", body: { phone: full, role }, auth: false });
       setDevCode(r.dev_code ?? null);
       setStep("otp");
       setTimeout(() => otpRef.current?.focus(), 300);
@@ -54,10 +68,10 @@ export default function Login() {
     setBusy(true);
     try {
       const r = await api<{ access_token: string; refresh_token: string; user: User; is_new: boolean }>("/auth/otp/verify", {
-        method: "POST", body: { phone: full, code, role: partner ? "seller" : "customer" }, auth: false,
+        method: "POST", body: { phone: full, code, role }, auth: false,
       });
       await signIn(r, r.user);
-      if (r.user.role === "seller") router.replace("/partner");
+      if (ROLE_HOME[r.user.role]) router.replace(ROLE_HOME[r.user.role] as any);
       else if (r.is_new) setStep("profile");
       else router.replace("/(tabs)");
     } catch (e: any) {
@@ -100,8 +114,8 @@ export default function Login() {
         <View style={s.card}>
           {step === "phone" && (
             <>
-              <Text style={s.title}>{partner ? "GathrCart Partner login" : "Log in or sign up"}</Text>
-              <Text style={s.sub}>{partner ? "For shopkeepers & cloud kitchens — manage menu, orders and packing" : "Groceries, food & shared carts from shops near you"}</Text>
+              <Text testID="login-title" style={s.title}>{COPY[role].title}</Text>
+              <Text style={s.sub}>{COPY[role].sub}</Text>
               <View style={s.phoneRow}>
                 <View style={s.cc}><Text style={s.ccText}>+91</Text></View>
                 <TextInput
@@ -118,8 +132,11 @@ export default function Login() {
               </View>
               {err ? <Text testID="login-error" style={s.err}>{err}</Text> : null}
               <Button testID="login-send-otp-button" title="Continue" onPress={requestOtp} loading={busy} />
-              <Button testID="login-partner-toggle" variant="ghost" icon={partner ? "person-outline" : "storefront-outline"}
-                title={partner ? "Ordering food? Customer login" : "Own a shop or kitchen? Partner login"} onPress={() => { setPartner(!partner); setErr(null); }} />
+              <View style={{ gap: 2 }}>
+                {(Object.keys(COPY) as Role[]).filter((k) => k !== role).map((k) => (
+                  <Button key={k} testID={`login-mode-${k}`} small variant="ghost" icon={COPY[k].icon} title={COPY[k].switch} onPress={() => { setRole(k); setErr(null); }} />
+                ))}
+              </View>
             </>
           )}
 

@@ -1,4 +1,5 @@
 """Identity Service: OTP auth, JWT access + rotating refresh tokens, sessions."""
+import os
 import re
 import secrets
 from datetime import timedelta
@@ -13,11 +14,12 @@ from core import APP_ENV, REFRESH_DAYS, clean, current_user, db, digest, iso, ma
 
 router = APIRouter(prefix="/api/auth", tags=["identity"])
 PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
+ADMIN_PHONES = {p.strip() for p in os.environ["ADMIN_PHONES"].split(",") if p.strip()}
 
 
 class PhoneIn(BaseModel):
     phone: str
-    role: Literal["customer", "seller"] = "customer"  # self-registration only; rider/admin are granted server-side
+    role: Literal["customer", "seller", "rider", "admin"] = "customer"  # admin only for phones in ADMIN_PHONES
 
 
 class VerifyIn(PhoneIn):
@@ -63,6 +65,8 @@ async def issue_pair(user: dict, family: str | None = None) -> dict:
 @router.post("/otp/request")
 async def request_otp(body: PhoneIn):
     phone = norm_phone(body.phone)
+    if body.role == "admin" and phone not in ADMIN_PHONES:
+        raise HTTPException(403, "This number is not authorised for admin access")
     recent = await db.otp_challenges.find_one({"phone": phone})
     if recent and (now() - parse_iso(recent["created_at"])).total_seconds() < 10:
         raise HTTPException(429, "Please wait a few seconds before requesting another OTP")
@@ -84,6 +88,8 @@ async def verify_otp(body: VerifyIn):
     await db.otp_challenges.update_one({"phone": phone}, {"$inc": {"attempts": 1}})
     if not secrets.compare_digest(c["code_hash"], digest(body.code)):
         raise HTTPException(400, "Invalid or expired OTP")
+    if body.role == "admin" and phone not in ADMIN_PHONES:
+        raise HTTPException(403, "This number is not authorised for admin access")
     await db.otp_challenges.delete_one({"phone": phone})
     user = await db.users.find_one({"phone": phone}, {"_id": 0})
     is_new = user is None
@@ -97,7 +103,7 @@ async def verify_otp(body: VerifyIn):
             user = await db.users.find_one({"phone": phone}, {"_id": 0})
             is_new = False
     if user["role"] != body.role:
-        kind = "business partner" if user["role"] == "seller" else user["role"]
+        kind = {"seller": "business partner", "rider": "delivery partner"}.get(user["role"], user["role"])
         raise HTTPException(409, f"This number is registered as a {kind} account. Use a different number here.")
     await db.users.update_one({"id": user["id"]}, {"$set": {"last_login_at": iso(now())}})
     pair = await issue_pair(user)

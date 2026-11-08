@@ -1,42 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { useAddresses } from "@/src/components/address-picker";
 import { font, radius, spacing, useTheme } from "@/src/theme";
-import { Button, Chip, EmptyState, Header, Input, Ionicons, Loader, Sheet, useToast } from "@/src/ui";
+import { Button, EmptyState, Header, Ionicons, Loader } from "@/src/ui";
 
 export default function Addresses() {
-  const { add } = useLocalSearchParams<{ add?: string }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const qc = useQueryClient();
-  const toast = useToast();
   const q = useAddresses();
-  const [open, setOpen] = useState(!!add);
-  const [label, setLabel] = useState("Home");
-  const [line, setLine] = useState("");
-  const [landmark, setLandmark] = useState("");
-  const [busy, setBusy] = useState(false);
-
   const refresh = () => qc.invalidateQueries({ queryKey: ["addresses"] });
-  const save = async () => {
-    if (line.trim().length < 5) return toast("Enter the full address", "err");
-    setBusy(true);
-    try {
-      await api("/addresses", { method: "POST", body: { label, line: line.trim(), landmark: landmark.trim(), is_default: true } });
-      refresh(); setOpen(false); setLine(""); setLandmark("");
-      toast("Address saved");
-      if (add && router.canGoBack()) router.back();
-    } catch (e: any) {
-      toast(e.message, "err");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -61,18 +38,9 @@ export default function Addresses() {
               ) : null}
             </View>
           ))}
-          <Button testID="addresses-add-button" icon="add" variant="secondary" title="Add new address" onPress={() => setOpen(true)} />
+          <Button testID="addresses-add-button" icon="add" variant="secondary" title="Add new address" onPress={() => router.push("/address/new")} />
         </ScrollView>
       )}
-      <Sheet visible={open} onClose={() => setOpen(false)} title="New address" testID="address-form-sheet">
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          {["Home", "Work", "PG", "Other"].map((l) => <Chip key={l} testID={`address-label-${l}`} label={l} selected={label === l} onPress={() => setLabel(l)} />)}
-        </View>
-        <Input testID="address-line-input" label="Flat / house, street, area" placeholder="Flat 302, Green Meadows, Koramangala 5th Block" value={line} onChangeText={setLine} multiline />
-        <Input testID="address-landmark-input" label="Landmark (optional)" placeholder="Near Forum Mall" value={landmark} onChangeText={setLandmark} />
-        <Text style={{ color: colors.muted, fontSize: font.sm }}>Map pin & GPS location arrive with native maps in a later milestone.</Text>
-        <Button testID="address-save-button" title="Save address" loading={busy} onPress={save} />
-      </Sheet>
     </View>
   );
 }

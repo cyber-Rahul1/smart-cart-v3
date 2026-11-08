@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { ImagePresetPicker } from "@/src/components/image-preset-picker";
+import { PhotoPicker } from "@/src/components/photo-picker";
 import { font, spacing, useTheme } from "@/src/theme";
 import { Product } from "@/src/types";
 import { Button, Header, Input, Loader, Sheet, useToast } from "@/src/ui";
@@ -26,6 +27,7 @@ export default function ProductForm() {
   const [veg, setVeg] = useState(true);
   const [available, setAvailable] = useState(true);
   const [img, setImg] = useState("store");
+  const [photo, setPhoto] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -36,6 +38,7 @@ export default function ProductForm() {
         stock: String(existing.stock), weight: String(existing.weight_kg ?? 0.5) });
       setVeg(existing.veg); setAvailable(existing.available);
       setImg(Object.entries(imgs.data ?? {}).find(([, u]) => u === existing.image)?.[0] ?? "store");
+      setPhoto(existing.image?.startsWith("/api/files/") ? existing.image : null);
     }
   }, [existing, imgs.data]);
 
@@ -44,7 +47,7 @@ export default function ProductForm() {
     setBusy("save");
     try {
       const body = { name: f.name.trim(), price: Number(f.price), category: f.category.trim(), description: f.description.trim(), stock: Number(f.stock || 0),
-        weight_kg: Number(f.weight || 0.5), veg, available, image_key: img };
+        weight_kg: Number(f.weight || 0.5), veg, available, image_key: img, image_url: photo };
       await api(id ? `/seller/products/${id}` : "/seller/products", { method: id ? "PUT" : "POST", body });
       toast(id ? "Item updated" : "Item added");
       done();
@@ -87,9 +90,14 @@ export default function ProductForm() {
             <Switch testID={t as string} value={v as boolean} onValueChange={fn as (b: boolean) => void} trackColor={{ true: colors.success, false: colors.borderStrong }} thumbColor={colors.surface} />
           </View>
         ))}
-        <Text style={{ fontWeight: "700", color: colors.onSurfaceSecondary }}>Image</Text>
-        <ImagePresetPicker value={img} onChange={setImg} />
-        <Text style={{ color: colors.muted, fontSize: font.sm }}>Uploading your own photos is not yet implemented — pick the closest image for now.</Text>
+        <Text style={{ fontWeight: "700", color: colors.onSurfaceSecondary }}>Photo</Text>
+        <PhotoPicker testID="product-photo" label="Upload dish / product photo" url={photo} onChange={setPhoto} />
+        {!photo ? (
+          <>
+            <Text style={{ color: colors.muted, fontSize: font.sm }}>No photo yet? Pick a stock image instead:</Text>
+            <ImagePresetPicker value={img} onChange={setImg} />
+          </>
+        ) : null}
         <Button testID="product-save-button" title={id ? "Save changes" : "Add to menu"} loading={busy === "save"} onPress={save} />
         {id ? <Button testID="product-delete-button" variant="danger" title="Delete item" onPress={() => setConfirmDel(true)} /> : null}
       </KeyboardAwareScrollView>

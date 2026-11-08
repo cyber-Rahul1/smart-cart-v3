@@ -5,7 +5,7 @@ import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
-import { rupee, STATUS_LABEL, when } from "@/src/format";
+import { rupee, STATUS_LABEL, when, mediaUri } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Order } from "@/src/types";
 import { EmptyState, ErrorState, Header, Loader } from "@/src/ui";
@@ -31,7 +31,7 @@ export default function Orders() {
             <Pressable testID={`order-card-${o.id}`} onPress={() => router.push(`/orders/${o.id}`)}
               style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.sm }}>
               <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "center" }}>
-                <Image source={{ uri: o.seller_image }} style={{ width: 48, height: 48, borderRadius: radius.md }} />
+                <Image source={{ uri: mediaUri(o.seller_image) }} style={{ width: 48, height: 48, borderRadius: radius.md }} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: "800", color: colors.onSurface, fontSize: font.base + 1 }}>{o.seller_name}</Text>
                   <Text style={{ color: colors.muted, fontSize: font.sm }}>{o.order_no} · {kindLabel(o)}</Text>

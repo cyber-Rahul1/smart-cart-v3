@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { SellerRow } from "@/src/components/seller-card";
-import { rupee } from "@/src/format";
+import { rupee, mediaUri } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { Chip, EmptyState, Ionicons, Loader } from "@/src/ui";
@@ -51,7 +51,7 @@ export default function Search() {
           {q.data?.products.length ? <Text style={{ fontWeight: "800", fontSize: font.lg, color: colors.onSurface, padding: spacing.lg, paddingBottom: spacing.sm }}>Items</Text> : null}
           {q.data?.products.map((p) => (
             <Pressable key={p.id} testID={`search-product-${p.id}`} onPress={() => router.push(`/seller/${p.seller_id}`)} style={{ flexDirection: "row", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, alignItems: "center" }}>
-              <Image source={{ uri: p.image }} style={{ width: 56, height: 56, borderRadius: radius.md }} />
+              <Image source={{ uri: mediaUri(p.image) }} style={{ width: 56, height: 56, borderRadius: radius.md }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: "700", color: colors.onSurface }}>{p.name}</Text>
                 <Text style={{ color: colors.muted, fontSize: font.sm }}>{p.seller_name} · {rupee(p.price)}</Text>

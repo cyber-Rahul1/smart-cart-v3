@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { LiveTrack } from "@/src/components/live-track";
 import { rupee, STATUS_LABEL, when } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Line, Order } from "@/src/types";
@@ -46,10 +47,7 @@ export default function OrderDetail() {
   const o = q.data!;
   const stepIdx = STEPS.indexOf(o.status);
 
-  const pay = () => run("pay", async () => {
-    const p = await api<{ id: string }>("/payments/initiate", { method: "POST", body: { order_id: o.id } });
-    router.push(`/pay/${p.id}?orderId=${o.id}`);
-  });
+  const pay = () => router.push(`/pay/${o.id}`);
   const advance = () => {
     if (o.status === "out_for_delivery") return setOtpSheet(true);
     run("adv", () => api(`/delivery/orders/${o.id}/demo-advance`, { method: "POST", body: {} }));
@@ -90,7 +88,7 @@ export default function OrderDetail() {
           ) : null}
         </View>
 
-        {o.delivery_otp && o.payment_status === "paid" && o.status !== "delivered" && o.status !== "cancelled" ? (
+        {o.delivery_otp && ["paid", "cod"].includes(o.payment_status) && o.status !== "delivered" && o.status !== "cancelled" ? (
           <View style={s.otpCard} testID="order-delivery-otp-card">
             <Ionicons name="shield-checkmark" size={24} color={colors.onPastelMint} />
             <View style={{ flex: 1 }}>
@@ -100,6 +98,16 @@ export default function OrderDetail() {
             <Text testID="order-delivery-otp" style={s.otp}>{o.delivery_otp}</Text>
           </View>
         ) : null}
+
+        {["ready_for_pickup", "out_for_delivery"].includes(o.status) ? <LiveTrack orderId={o.id} /> : null}
+
+        {o.payment_status === "cod" && o.status !== "cancelled" ? (
+          <View style={s.codCard} testID="order-cod-card">
+            <Ionicons name="cash-outline" size={22} color={colors.onPastelLemon} />
+            <Text style={{ flex: 1, color: colors.onPastelLemon, fontWeight: "700" }}>Cash on delivery · keep {rupee(o.bill.total)} ready for your rider</Text>
+          </View>
+        ) : null}
+        {o.payment_method === "cod" && o.payment_status === "paid" ? <Text testID="order-cod-paid" style={s.sub}>Paid in cash on delivery</Text> : null}
 
         {o.package_label ? (
           <View style={s.card} testID="order-package-label">
@@ -143,7 +151,7 @@ export default function OrderDetail() {
 
         {o.status === "pending_payment" && o.is_payer ? <Button testID="order-pay-button" title={`Pay ${rupee(o.bill.total)}`} loading={busy === "pay"} onPress={pay} /> : null}
         {o.status === "pending_payment" && !o.is_payer ? <Text style={s.sub}>Waiting for the payer to complete payment.</Text> : null}
-        {o.payment_status === "paid" && o.status !== "delivered" && o.status !== "cancelled" && (!o.seller_managed || ["ready_for_pickup", "out_for_delivery"].includes(o.status)) ? (
+        {["paid", "cod"].includes(o.payment_status) && o.status !== "delivered" && o.status !== "cancelled" && (!o.seller_managed || ["ready_for_pickup", "out_for_delivery"].includes(o.status)) && !(o.rider as any)?.user_id ? (
           <View style={s.demo}>
             <Text style={s.demoText}>DEMO · The Rider app arrives in a later milestone. Simulate the next delivery step:</Text>
             <Button testID="order-demo-advance-button" variant="secondary" small title={o.status === "out_for_delivery" ? "Rider: verify OTP & deliver" : `Move to "${STATUS_LABEL[STEPS[stepIdx + 1]]}"`} loading={busy === "adv"} onPress={advance} />
@@ -197,6 +205,7 @@ const useStyles = makeStyles((c) => ({
   mono: { color: c.onSurface, fontWeight: "700" },
   divider: { height: 1, backgroundColor: c.divider, marginVertical: spacing.sm },
   demo: { backgroundColor: c.pastelLemon, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
+  codCard: { backgroundColor: c.pastelLemon, borderRadius: radius.md, padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md },
   demoText: { color: c.onPastelLemon, fontSize: font.sm, fontWeight: "600" },
   otpInput: { height: 60, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surfaceSecondary, textAlign: "center", fontSize: 28, letterSpacing: 12, color: c.onSurface, fontWeight: "800" },
 }));

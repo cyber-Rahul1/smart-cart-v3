@@ -3,7 +3,7 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { Platform } from "react-native";
 
 import { useAuth } from "@/src/auth";
-import { usesNativeTabs } from "@/src/navigation";
+import { ROLE_HOME, usesNativeTabs } from "@/src/navigation";
 import { useTheme } from "@/src/theme";
 import { Ionicons, IconName } from "@/src/ui";
 
@@ -18,7 +18,7 @@ export default function TabsLayout() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
   if (!loading && !user) return <Redirect href="/login" />;
-  if (user?.role === "seller") return <Redirect href="/partner" />;
+  if (user && ROLE_HOME[user.role]) return <Redirect href={ROLE_HOME[user.role] as any} />;
 
   if (usesNativeTabs) {
     return (

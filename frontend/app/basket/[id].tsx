@@ -101,7 +101,7 @@ export default function Basket() {
           <View style={[s.card, { borderColor: colors.brandPrimary }]} testID="basket-my-order">
             <Text style={s.h}>Your flat order {b.my_order.order_no}</Text>
             <Text style={s.sub}>{STATUS_LABEL[b.my_order.status]} · {rupee(b.my_order.bill.total)} incl. shared delivery</Text>
-            <Button testID="basket-open-my-order" small title={b.my_order.payment_status === "paid" ? "Track order" : "View bill & pay"} onPress={() => router.push(`/orders/${b.my_order!.id}`)} style={{ marginTop: spacing.sm }} />
+            <Button testID="basket-open-my-order" small title={["paid", "cod"].includes(b.my_order.payment_status) ? "Track order" : "View bill & pay"} onPress={() => router.push(`/orders/${b.my_order!.id}`)} style={{ marginTop: spacing.sm }} />
           </View>
         ) : null}
 

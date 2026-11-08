@@ -1,0 +1,17 @@
+{
+  "summary": "Targeted retest of the iteration 3 fixes, run on a 375x667 viewport against the public URL. All 6 items pass. (1) Admin Fees: when Convenience fee is cleared, Save shows the error toast 'Enter a value for \"Platform convenience fee (₹)\"', no PUT /admin/config is sent, and the config read back over the API is unchanged. (2) A rejected food shop shows 'Not approved' with a close-circle icon, 'Reason: Address unclear', the corrected FSSAI input and the 'Fix & resubmit for review' button. Resubmitting with a new FSSAI number changes the card to 'Pending review' and saves the new FSSAI as submitted. (3) After a rider claims, picks up and delivers with OTP, 'Delivered · back to jobs' returns to /rider/active and only one tablist is visible. (4) The header label reads GATHRCART RIDER on rider tabs, GATHRCART ADMIN on admin screens and GATHRCART PARTNER on seller screens. (5) Opening /login while logged in redirects to /partner, /admin or /rider for seller, admin and rider. (6) Backend test_rider_admin.py prints RIDER/ADMIN OK and RESUBMIT OK.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": ["/app/backend/tests/test_rider_admin.py", "/app/backend/tests/seed_rejected_shop.py", "/app/backend/tests/seed_rider_admin_ui.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "rider/order/[id].tsx uses the generic Header, not PartnerHeader, so the GATHRCART RIDER label does not show on the order detail screen. This is OK, just noting it.",
+    "shop.tsx resubmit: if the seller types a partial FSSAI number (not 14 digits), PUT /seller/shop/fssai returns 422 and the backend message appears as a toast. There is no inline check on the client. Minor."
+  ],
+  "updated_files": ["/app/backend/tests/seed_rejected_shop.py (new seed helper)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created a TEST_Rejected Kitchen seller with a random 93xxxxxxxx phone, and ran seed_rider_admin_ui.py (sfx 3064777). Then onboarded, verified and set online the TEST_UI Rider. Cleanup: rejected all 3 pending/rejected TEST shops with note TEST_cleanup, closed the 3 TEST seller shops, and set the rider unavailable. The approved TEST_UI shop1 is closed but still approved. The admin fee config was not changed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "seed_rider_admin_ui.py does not create a rider. Use the rider_phone from /tmp/ui_seed.json: log in as rider, then the admin calls POST /admin/riders/{id}/review approve, then the rider calls PUT /rider/availability {available:true}. After claiming, the app goes to /rider/active; tap rider-job-* to open the order. Click the OTP confirm button with a JS click. Use seed_rejected_shop.py to get a rejected food shop (writes /tmp/rejected_shop.json)."
+}

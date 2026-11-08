@@ -5,7 +5,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from core import db, get_config, iso, new_id, notify, now, require
+from core import APP_ENV, FULFILLABLE, db, get_config, iso, new_id, notify, now, require
 from services.orders import cancel_order_doc
 
 router = APIRouter(prefix="/api/seller", tags=["seller"])
@@ -58,6 +58,7 @@ class ShopUpdate(BaseModel):
     cuisine: Optional[str] = Field(None, min_length=2, max_length=80)
     opens_at: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     closes_at: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
+    image_url: Optional[str] = Field(None, pattern=r"^/api/files/[0-9a-f-]{36}$")
 
 
 class ProductIn(BaseModel):
@@ -69,6 +70,7 @@ class ProductIn(BaseModel):
     available: bool = True
     description: str = Field("", max_length=200)
     image_key: str = "store"
+    image_url: Optional[str] = Field(None, pattern=r"^/api/files/[0-9a-f-]{36}$")
     weight_kg: float = Field(0.5, gt=0, le=50)
 
 
@@ -138,9 +140,38 @@ async def onboard(body: OnboardIn, user=Depends(seller_only)):
     return doc
 
 
+@router.post("/shop/resubmit")
+async def resubmit(user=Depends(seller_only)):
+    """After a rejection the seller fixes details and asks for another review."""
+    s = await my_shop(user)
+    if s.get("approval_status") != "rejected":
+        raise HTTPException(400, "Only rejected shops can be resubmitted")
+    upd = {"approval_status": "pending_review", "approved": False, "resubmitted_at": iso(now())}
+    if s["category"] == "food":
+        upd["fssai_status"] = "submitted"
+    await db.sellers.update_one({"id": s["id"]}, {"$set": upd})
+    await db.audit_logs.insert_one({"id": new_id(), "actor": user["id"], "action": "seller.resubmit", "target": s["id"], "at": iso(now())})
+    return await db.sellers.find_one({"id": s["id"]}, {"_id": 0})
+
+
+class FssaiIn(BaseModel):
+    fssai_number: str = Field(pattern=r"^\d{14}$")
+
+
+@router.put("/shop/fssai")
+async def update_fssai(body: FssaiIn, user=Depends(seller_only)):
+    s = await my_shop(user)
+    if s["approved"]:
+        raise HTTPException(400, "Contact support to change a verified FSSAI number")
+    await db.sellers.update_one({"id": s["id"]}, {"$set": {"fssai_number": body.fssai_number}})
+    return await db.sellers.find_one({"id": s["id"]}, {"_id": 0})
+
+
 @router.post("/shop/demo-approve")
 async def demo_approve(user=Depends(seller_only)):
-    """DEMO stand-in for the Admin review (documents + FSSAI) until the Admin app exists."""
+    """DEV-only stand-in for Admin review, used by automated tests. Real approvals happen in the Admin app."""
+    if APP_ENV != "dev":
+        raise HTTPException(404, "Not found")
     s = await my_shop(user)
     fssai = "verified" if s["category"] == "food" else "not_required"
     await db.sellers.update_one({"id": s["id"]}, {"$set": {"approved": True, "approval_status": "approved", "fssai_status": fssai}})
@@ -153,6 +184,8 @@ async def demo_approve(user=Depends(seller_only)):
 async def update_shop(body: ShopUpdate, user=Depends(seller_only)):
     s = await my_shop(user)
     upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "image_url" in upd:
+        upd["image"] = await owned_image(upd.pop("image_url"), user)
     if "prep_time_min" in upd:
         upd["eta_min"] = upd["prep_time_min"] + int(s["distance_km"] * 4)
     if upd:
@@ -166,11 +199,21 @@ async def products(user=Depends(seller_only)):
     return await db.products.find({"seller_id": s["id"]}, {"_id": 0}).sort([("category", 1), ("name", 1)]).to_list(1000)
 
 
-def product_doc(body: ProductIn) -> dict:
-    if body.image_key not in PRESET_IMAGES:
-        raise HTTPException(400, "Pick an image")
+async def owned_image(url: Optional[str], user: dict) -> Optional[str]:
+    if not url:
+        return None
+    if not await db.files.find_one({"id": url.rsplit("/", 1)[-1], "owner_id": user["id"], "is_deleted": False}):
+        raise HTTPException(400, "Upload the photo again")
+    return url
+
+
+async def product_doc(body: ProductIn, user: dict) -> dict:
     d = body.model_dump()
-    d["image"] = PRESET_IMAGES[d.pop("image_key")]
+    url = await owned_image(d.pop("image_url"), user)
+    if not url and body.image_key not in PRESET_IMAGES:
+        raise HTTPException(400, "Pick an image")
+    d["image"] = url or PRESET_IMAGES[d["image_key"]]
+    d.pop("image_key")
     d["name"], d["category"] = d["name"].strip(), d["category"].strip().title()
     return d
 
@@ -178,7 +221,7 @@ def product_doc(body: ProductIn) -> dict:
 @router.post("/products")
 async def add_product(body: ProductIn, user=Depends(seller_only)):
     s = await my_shop(user)
-    doc = {"id": new_id(), "seller_id": s["id"], **product_doc(body), "created_at": iso(now())}
+    doc = {"id": new_id(), "seller_id": s["id"], **(await product_doc(body, user)), "created_at": iso(now())}
     await db.products.insert_one(dict(doc))
     return doc
 
@@ -186,7 +229,7 @@ async def add_product(body: ProductIn, user=Depends(seller_only)):
 @router.put("/products/{pid}")
 async def edit_product(pid: str, body: ProductIn, user=Depends(seller_only)):
     s = await my_shop(user)
-    res = await db.products.update_one({"id": pid, "seller_id": s["id"]}, {"$set": product_doc(body)})
+    res = await db.products.update_one({"id": pid, "seller_id": s["id"]}, {"$set": await product_doc(body, user)})
     if not res.matched_count:
         raise HTTPException(404, "Item not found")
     return await db.products.find_one({"id": pid}, {"_id": 0})
@@ -207,7 +250,7 @@ TABS = {"new": ["confirmed"], "active": ["preparing", "ready_for_pickup"], "done
 @router.get("/orders")
 async def orders(tab: Literal["new", "active", "scheduled", "done"] = "new", user=Depends(seller_only)):
     s = await my_shop(user)
-    f: dict = {"seller_id": s["id"], "payment_status": {"$in": ["paid", "refunded"]}}
+    f: dict = {"seller_id": s["id"], "payment_status": {"$in": ["paid", "cod", "refunded", "void"]}}
     if tab == "scheduled":
         f |= {"scheduled_for": {"$ne": None}, "status": {"$in": ["confirmed", "preparing", "ready_for_pickup"]}}
     else:
@@ -221,10 +264,10 @@ async def summary(user=Depends(seller_only)):
     s = await my_shop(user)
     ist = now() + timedelta(hours=5, minutes=30)
     today = iso((ist.replace(hour=0, minute=0, second=0, microsecond=0)) - timedelta(hours=5, minutes=30))
-    rows = await db.orders.find({"seller_id": s["id"], "payment_status": "paid", "created_at": {"$gte": today}}, {"_id": 0, "bill": 1, "status": 1}).to_list(2000)
+    rows = await db.orders.find({"seller_id": s["id"], "payment_status": {"$in": FULFILLABLE}, "created_at": {"$gte": today}}, {"_id": 0, "bill": 1, "status": 1}).to_list(2000)
     counts = {}
     for st in ("confirmed", "preparing", "ready_for_pickup"):
-        counts[st] = await db.orders.count_documents({"seller_id": s["id"], "payment_status": "paid", "status": st})
+        counts[st] = await db.orders.count_documents({"seller_id": s["id"], "payment_status": {"$in": FULFILLABLE}, "status": st})
     return {"today_orders": len(rows), "today_sales": sum(r["bill"]["subtotal"] for r in rows),
             "today_payout": round(sum(r["bill"]["subtotal"] - r["bill"].get("commission", 0) for r in rows), 2),
             "new": counts["confirmed"], "preparing": counts["preparing"], "ready": counts["ready_for_pickup"]}
@@ -237,7 +280,7 @@ async def order(oid: str, user=Depends(seller_only)):
 
 
 async def move(o: dict, frm: list[str], to: str, msg: str):
-    res = await db.orders.update_one({"id": o["id"], "status": {"$in": frm}, "payment_status": "paid"},
+    res = await db.orders.update_one({"id": o["id"], "status": {"$in": frm}, "payment_status": {"$in": FULFILLABLE}},
                                      {"$set": {"status": to}, "$push": {"history": {"status": to, "at": iso(now())}}})
     if not res.modified_count:
         raise HTTPException(400, "Order status changed — refresh and try again")
@@ -290,7 +333,7 @@ async def ready(oid: str, user=Depends(seller_only)):
 async def batches(user=Depends(seller_only)):
     """Consolidated fulfilment requests: one per community basket, each holding separate flat packages."""
     s = await my_shop(user)
-    rows = await db.orders.find({"seller_id": s["id"], "kind": "community_flat", "payment_status": "paid",
+    rows = await db.orders.find({"seller_id": s["id"], "kind": "community_flat", "payment_status": {"$in": FULFILLABLE},
                                  "status": {"$in": ["confirmed", "preparing", "ready_for_pickup"]}}, {"_id": 0}).sort("flat", 1).to_list(1000)
     out: dict[str, dict] = {}
     for o in rows:

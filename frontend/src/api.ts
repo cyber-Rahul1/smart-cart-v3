@@ -24,6 +24,10 @@ export async function saveTokens(access: string | null, refresh: string | null) 
   else await storage.secureRemove(REFRESH);
 }
 
+export async function getAccessToken() {
+  return (await storage.secureGet(ACCESS, null)) as string | null;
+}
+
 export async function getRefreshToken() {
   return (await storage.secureGet(REFRESH, null)) as string | null;
 }

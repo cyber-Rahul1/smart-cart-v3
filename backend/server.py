@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from core import client, db, iso, notify, now
 from seed import seed
-from services import cart, catalog, community, customer, delivery, group_ordering, identity, orders, payments, seller
+from services import admin, cart, catalog, community, customer, delivery, geo, group_ordering, identity, media, orders, payments, rider, seller
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("gathrcart")
@@ -36,6 +36,8 @@ INDEXES: dict[str, list[IndexModel]] = {
     "residents": [IndexModel([("community_id", ASCENDING), ("user_id", ASCENDING)], unique=True, name="cu")],
     "baskets": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("status", ASCENDING), ("closes_at", ASCENDING)], name="sched")],
     "payments": [IndexModel([("id", ASCENDING)], unique=True, name="id"), IndexModel([("provider_order_id", ASCENDING)], unique=True, name="poid")],
+    "riders": [IndexModel([("user_id", ASCENDING)], name="uid", unique=True, partialFilterExpression={"user_id": {"$type": "string"}})],
+    "files": [IndexModel([("id", ASCENDING)], unique=True, name="id")],
     "webhook_events": [IndexModel([("event_id", ASCENDING)], unique=True, name="eid")],
     "notifications": [IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)], name="uc")],
 }
@@ -99,7 +101,7 @@ async def api_health():
                                          "payments", "delivery", "notifications", "promotions", "referral"]}
 
 
-for module in (identity, customer, catalog, cart, orders, payments, delivery, group_ordering, community, seller):
+for module in (identity, customer, catalog, cart, orders, payments, delivery, group_ordering, community, seller, rider, admin, media, geo):
     app.include_router(module.router)
 
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -108,6 +110,10 @@ app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], 
 @app.on_event("startup")
 async def startup():
     await seed()
+    try:
+        await asyncio.to_thread(media.init_storage)
+    except Exception as exc:
+        logger.error("object storage init failed: %s", exc)
     app.state.index_task = asyncio.create_task(ensure_indexes())
     app.state.scheduler = asyncio.create_task(scheduler())
 

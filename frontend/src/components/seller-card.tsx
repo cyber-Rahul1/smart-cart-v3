@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
+import { mediaUri } from "@/src/format";
 import { Seller } from "@/src/types";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Ionicons } from "@/src/ui";
@@ -12,7 +13,7 @@ export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
   return (
     <Pressable testID={testID} onPress={() => router.push(`/seller/${s.id}`)} style={({ pressed }) => [st.row, pressed && { opacity: 0.85 }]}>
       <View>
-        <Image source={{ uri: s.image }} style={st.rowImg} contentFit="cover" transition={200} />
+        <Image source={{ uri: mediaUri(s.image) }} style={st.rowImg} contentFit="cover" transition={200} />
         {s.offer ? (
           <View style={st.offerBand}><Text style={st.offerText} numberOfLines={1}>{s.offer}</Text></View>
         ) : null}
@@ -38,7 +39,7 @@ export function SellerTile({ s, testID, rank }: { s: Seller; testID: string; ran
   const st = useStyles();
   return (
     <Pressable testID={testID} onPress={() => router.push(`/seller/${s.id}`)} style={({ pressed }) => [st.tile, pressed && { transform: [{ scale: 0.98 }] }]}>
-      <Image source={{ uri: s.image }} style={st.tileImg} contentFit="cover" transition={200} />
+      <Image source={{ uri: mediaUri(s.image) }} style={st.tileImg} contentFit="cover" transition={200} />
       {rank ? <View style={st.rank}><Text style={st.rankText}>#{rank}</Text></View> : null}
       <Text style={st.tileName} numberOfLines={1}>{s.name}</Text>
       <Text style={st.tileMeta} numberOfLines={1}>★ {s.rating} · {s.eta_min} mins</Text>

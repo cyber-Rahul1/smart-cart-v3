@@ -72,11 +72,10 @@ export default function CartScreen() {
     setPlacing(true);
     try {
       const order = await api<{ id: string }>("/orders/checkout", { method: "POST", body: { address_id: addr.id, coupon: applied, use_credit: useCredit, schedule } });
-      const pay = await api<{ id: string }>("/payments/initiate", { method: "POST", body: { order_id: order.id } });
       qc.invalidateQueries({ queryKey: ["cart"] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setApplied(null); setCoupon(""); setUseCredit(false);
-      router.push(`/pay/${pay.id}?orderId=${order.id}`);
+      router.push(`/pay/${order.id}`);
       refresh();
     } catch (e: any) {
       toast(e.message, "err");

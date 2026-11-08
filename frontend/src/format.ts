@@ -33,3 +33,5 @@ export const TIME_PRESETS = [
   { label: "3 hours", value: 180 },
   { label: "Tonight", value: 480 },
 ];
+
+export const mediaUri = (u?: string | null) => (u && u.startsWith("/api/") ? `${process.env.EXPO_PUBLIC_BACKEND_URL}${u}` : u ?? undefined);

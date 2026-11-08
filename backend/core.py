@@ -21,6 +21,8 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
 APP_ENV = os.environ["APP_ENV"]
 ACCESS_MINUTES = 60
+# Orders that can be fulfilled: paid online, or cash on delivery (collected at the door).
+FULFILLABLE = ["paid", "cod"]
 REFRESH_DAYS = 30
 
 

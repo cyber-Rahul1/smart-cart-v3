@@ -57,9 +57,8 @@ export default function GroupCart() {
 
   const finalize = (a: Address) => act("fin", async () => {
     const o = await api<{ id: string }>(`/group-carts/${id}/finalize`, { method: "POST", body: { address_id: a.id } });
-    const pay = await api<{ id: string }>("/payments/initiate", { method: "POST", body: { order_id: o.id } });
     qc.invalidateQueries({ queryKey: ["orders"] });
-    router.push(`/pay/${pay.id}?orderId=${o.id}`);
+    router.push(`/pay/${o.id}`);
   });
 
   return (

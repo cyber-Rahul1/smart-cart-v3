@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the Rider, Admin and Seller-photo features on both the backend and the mobile web preview (375x667). Backend: test_rider_admin.py, test_seller.py and test_smoke.py pass when run as scripts and as pytest. The new test_admin_config_validation.py passes 5/5: the API rejects out-of-range fees with 422. In the UI these all work: login mode links change the title; admin login with 9999900000 lands on /admin; any other number in admin mode shows 'This number is not authorised for admin access'; Admin overview shows 11 metrics and 2 pending cards that link to their tabs; Shops chips and review sheet approve/reject work (reject without a note shows a validation message); Riders verify works; Fees save persists after reload and was restored; the rider flow works end to end (job accept, Deliveries list, Confirm pickup, wrong OTP shows a toast, correct OTP marks delivered, profile history shows 1 · ₹29); the Seller Shop tab has no DEMO button and shows 'Live for customers'; the storefront and product photo pickers render, and a real web file upload shows a preview; the customer seller page loads the product image from /api/files/...; role redirects work (rider: / and /admin go to /rider; admin: /rider and /partner go to /admin; customer: /admin goes to /). Found and fixed one bug: after a new rider submitted onboarding, the app sent them back to an empty onboarding form. Remaining issues: an empty Fees field saves as 0; a rejected shop's status title says 'Pending review'; 'Delivered · back to jobs' stacks a second tabs navigator; a ROUTE_NAMES_CHANGED dev error appears on cross-role redirects. No deprecated Expo packages or SafeAreaView issues detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "tests (full suite under xdist)", "issue": "Each file passes on its own, and the whole suite passes serially (-p no:xdist). Under xdist, test_seller_extended::test_ready_then_rider_and_otp and ::test_batch fail with KeyError 'id', and later runs also hit Errno 99 'Cannot assign requested address' (local ports running out because every call opens a new connection without requests.Session). Uvicorn WatchFiles also reloads the backend when files under backend/tests change, which drops connections mid-run."},
+      {"endpoint": "tests/test_gathrcart_extended.py", "issue": "Collection error: it requires the EXPO_PUBLIC_BACKEND_URL env var (KeyError), unlike the other files, which use API."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Admin Fees form", "issue": "Clearing a field and saving sends Number('') = 0. commission_pct was saved as 0 without any warning (restored to 15 via API). There is no client-side check for empty or non-numeric values. Reference: app/admin/(tabs)/fees.tsx:34", "testID": "admin-save-fees-button", "priority": "HIGH"},
+      {"component": "Seller Shop approval card", "issue": "A rejected shop still shows the title 'Pending review' with an hourglass, while the body says 'FSSAI: rejected' and gives the reason. The title should say 'Not approved' and the card should offer a way to fix and resubmit. Reference: app/partner/(tabs)/shop.tsx:58", "testID": "partner-approval-status", "priority": "MEDIUM"},
+      {"component": "Rider order 'Delivered · back to jobs'", "issue": "router.replace('/rider') from the order screen inside the rider Stack puts a second (tabs) navigator on the stack. After the tap, two rider-tab-index elements are in the DOM, one hidden. Use router.back() or router.dismissTo('/rider'). Reference: app/rider/order/[id].tsx:73", "testID": "rider-back-to-jobs", "priority": "LOW"},
+      {"component": "Login screen", "issue": "A logged-in rider who opens /login sees the login form instead of being sent to their role home.", "testID": "login-title", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Rider onboarding -> Jobs (FIXED by testing agent)", "issue": "After the onboarding POST returned 200, the app went to /rider and then straight back to an empty /rider/onboarding form. Cause: invalidateQueries does not refetch inactive queries, so RiderTabs read the stale cached {rider:null} and redirected again. Fixed with qc.setQueryData(['rider-me'], {rider}), the same approach partner/onboarding already uses. Retested: lands on /rider with the pending banner and the online switch disabled.", "affected_testIDs": ["rider-onboard-submit", "rider-pending-banner"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin and Rider headers", "issues": ["PartnerHeader shows the eyebrow 'GATHRCART PARTNER' on the Admin and Rider apps. It should read e.g. 'GATHRCART ADMIN' or 'GATHRCART RIDER'."]},
+      {"screen": "Cross-role redirect (dev)", "issues": ["A red dev error toast appears: \"The action 'ROUTE_NAMES_CHANGED' ... was not handled by any navigator\". It shows when an admin opens /rider or /partner and is redirected through '/'. It is dev-only noise but visible."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_admin_config_validation.py", "/app/backend/tests/seed_rider_admin_ui.py", "/app/test_reports/pytest/iter3_config.xml"],
+  "action_items": [
+    "Fees form: validate that each field is non-empty and numeric before saving, and do not turn '' into 0 (fees.tsx save()).",
+    "partner/(tabs)/shop.tsx: give rejected shops their own state ('Not approved' plus the reason and a resubmit path).",
+    "rider/order/[id].tsx: replace router.replace('/rider') with router.dismissTo('/rider') or router.back() so a second tabs navigator is not stacked.",
+    "Change the PartnerHeader eyebrow text per role (admin / rider).",
+    "Make tests stable under xdist: use requests.Session, and fix the EXPO_PUBLIC_BACKEND_URL dependency in test_gathrcart_extended.py.",
+    "Optional: redirect logged-in users away from /login."
+  ],
+  "critical_code_review_comments": [
+    "rider/onboarding.tsx had the stale-cache redirect loop (now fixed). Check any other screen that calls invalidateQueries and then navigates to a layout that gates on the same query.",
+    "PhotoPicker uses EXPO_PUBLIC_BACKEND_URL from env, checks permissions first, and handles errors; a web upload worked.",
+    "No deprecated packages (expo-av, expo-barcode-scanner, expo-background-fetch) and no SafeAreaView imports from react-native."
+  ],
+  "updated_files": ["/app/frontend/app/rider/onboarding.tsx", "/app/backend/tests/test_admin_config_validation.py", "/app/backend/tests/seed_rider_admin_ui.py"],
+  "success_rate": {"backend": "100% (each file run alone, and the full suite serially); full suite under xdist is flaky", "frontend": "~88% (requested flows pass after the onboarding fix; 4 minor UI issues open)"},
+  "seed_data_creation": "Run twice: seed_rider_admin_ui.py created TEST_UI Kitchen/Pending/Reject shops (sfx 7048202, 9749131) with TEST_Photo Roll products and TEST_Buyer customers. Both orders (GC-AB8312 and the second seed's order) were delivered by rider TEST_Rider UI (+918670482021, now verified and set offline). Riders TEST_Rider Two and TEST_Rider Three are still pending. Cleanup: test shops were closed; the pending and approved TEST_UI Pending shops were rejected with the note TEST_cleanup. Admin config was restored to the original values (commission 15, convenience 5).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run backend scripts with API=http://localhost:8001/api. To create a fresh ready_for_pickup order with an uploaded photo, run: API=http://localhost:8001/api python tests/seed_rider_admin_ui.py (writes /tmp/ui_seed.json with order id and OTP). Review sheets slide in, so wait about 2s, then use JS click (evaluate e=>e.click()) on the sheet buttons. The admin pending card testIDs are admin-pending-sellers_pending and admin-pending-riders_pending. Run test_admin_config_validation.py on its own because it changes global config.",
+  "rca_of_issue": "Rider onboarding bounce: rider/(tabs)/_layout.tsx redirects when rider-me.data.rider is null. On the onboarding screen the tabs layout is unmounted, so its query is inactive. invalidateQueries only refetches active queries, so the cache still held {rider:null}. On router.replace('/rider') the layout rendered from that stale cache and immediately sent the user back to onboarding, a fresh mount with empty fields. Fix: write the POST response into the cache with setQueryData before navigating."
+}
