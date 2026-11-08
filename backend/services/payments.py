@@ -67,9 +67,37 @@ async def initiate(body: InitiateIn, user=Depends(current_user)):
     existing = await db.payments.find_one({"order_id": o["id"], "status": "created"}, {"_id": 0})
     if existing:  # idempotent initiation
         return existing
-    p = {"id": new_id(), "order_id": o["id"], "user_id": user["id"], "amount": o["bill"]["total"], "currency": "INR",
-         "provider": "demo", "provider_order_id": short_code("order_demo_"), "status": "created", "attempts": [],
-         "created_at": iso(now())}
+    amount_paise = int(round(o["bill"]["total"] * 100))
+    provider = "razorpay" if razorpay_client.has_active_credentials else "demo"
+    
+    if razorpay_client.has_active_credentials:
+        try:
+            rzp_order = razorpay_client.create_order(
+                amount_paise=amount_paise,
+                currency="INR",
+                receipt=f"rec_{o['id'][:12]}"
+            )
+            provider_order_id = rzp_order["id"]
+        except Exception as exc:
+            raise HTTPException(502, f"Razorpay order creation failed: {str(exc)}")
+    else:
+        provider_order_id = short_code("order_demo_")
+
+    p = {
+        "id": new_id(),
+        "order_id": o["id"],
+        "user_id": user["id"],
+        "amount": o["bill"]["total"],
+        "amount_paise": amount_paise,
+        "currency": "INR",
+        "provider": provider,
+        "provider_order_id": provider_order_id,
+        "razorpay_order_id": provider_order_id,
+        "key_id": razorpay_client.key_id or "rzp_test_mock_key_id",
+        "status": "created",
+        "attempts": [],
+        "created_at": iso(now())
+    }
     await db.payments.insert_one(dict(p))
     return p
 

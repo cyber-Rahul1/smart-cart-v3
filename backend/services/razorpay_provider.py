@@ -1,6 +1,6 @@
 """
 Razorpay Payment Provider Implementation.
-Integrates official razorpay-python SDK with fallback for test environments.
+Integrates official razorpay-python SDK with explicit environment enforcement.
 Follows Razorpay official server verification guidelines:
 HMAC SHA256 signature verification over (order_id + '|' + payment_id).
 Safe against forgery and replay attacks.
@@ -20,24 +20,33 @@ logger = logging.getLogger("gathrcart.razorpay")
 
 class RazorpayClient:
     def __init__(self, key_id: Optional[str] = None, key_secret: Optional[str] = None):
+        self.environment = os.environ.get("RAZORPAY_ENVIRONMENT", "test").lower()
         self.key_id = key_id or os.environ.get("RAZORPAY_KEY_ID")
         self.key_secret = key_secret or os.environ.get("RAZORPAY_KEY_SECRET")
-        self._is_live = bool(self.key_id and self.key_secret and not self.key_id.startswith("rzp_test_mock"))
+        self.webhook_secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET") or os.environ.get("PAYMENT_WEBHOOK_SECRET")
+        
+        # Determine whether valid test/live credentials exist
+        self._has_credentials = bool(self.key_id and self.key_secret and not self.key_id.startswith("rzp_test_mock"))
         
         self.sdk_client = None
-        if self._is_live and razorpay:
+        if self._has_credentials and razorpay:
             self.sdk_client = razorpay.Client(auth=(self.key_id, self.key_secret))
 
     @property
-    def is_live_configured(self) -> bool:
-        return self._is_live
+    def has_active_credentials(self) -> bool:
+        return self._has_credentials
 
     def create_order(self, amount_paise: int, currency: str = "INR", receipt: str = "") -> Dict[str, Any]:
         """
         Creates an authoritative order on Razorpay.
-        When live credentials exist, calls the official Razorpay API client;
-        otherwise provides deterministic secure order identifier for test/dev environments.
+        When credentials exist (RAZORPAY_ENVIRONMENT=test with real rzp_test_... or live),
+        calls the official Razorpay API client directly.
+        
+        In production, missing credentials strictly raise RuntimeError.
+        In local development/tests without credentials, fails safely or falls back to test harness only if explicitly allowed.
         """
+        app_env = os.environ.get("APP_ENV", "dev").lower()
+
         if self.sdk_client:
             try:
                 order_data = {
@@ -46,21 +55,31 @@ class RazorpayClient:
                     "receipt": receipt,
                     "payment_capture": 1
                 }
+                logger.info("Calling Razorpay API create_order in %s environment (paise: %d)", self.environment, amount_paise)
                 return self.sdk_client.order.create(data=order_data)
             except Exception as e:
-                logger.error("Razorpay live API order creation failed: %s", e)
+                logger.error("Razorpay API order creation failed: %s", e)
                 raise
 
-        # Deterministic Test Mode simulation when live API credentials are not set
-        mock_key = self.key_id or "rzp_test_mock_key_id"
-        return {
-            "id": f"order_{receipt[:14]}_{amount_paise}",
-            "entity": "order",
-            "amount": amount_paise,
-            "currency": currency,
-            "receipt": receipt,
-            "status": "created"
-        }
+        # When credentials are not provided:
+        if app_env == "production":
+            raise RuntimeError(
+                "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be configured in production. "
+                "Simulated payments are strictly forbidden."
+            )
+
+        if self.environment == "test" and not self._has_credentials:
+            # Deterministic test harness identifier for pytest/dev client execution
+            return {
+                "id": f"order_{receipt[:14]}_{amount_paise}",
+                "entity": "order",
+                "amount": amount_paise,
+                "currency": currency,
+                "receipt": receipt,
+                "status": "created"
+            }
+
+        raise RuntimeError(f"Missing Razorpay credentials for environment: {self.environment}")
 
     def verify_payment_signature(self, razorpay_order_id: str, razorpay_payment_id: str, razorpay_signature: str) -> bool:
         """
@@ -80,7 +99,8 @@ class RazorpayClient:
                     "razorpay_signature": razorpay_signature
                 })
                 return True
-            except Exception:
+            except Exception as e:
+                logger.warning("Razorpay SDK signature verification rejected: %s", e)
                 return False
 
         payload = f"{razorpay_order_id}|{razorpay_payment_id}".encode("utf-8")
@@ -96,7 +116,7 @@ class RazorpayClient:
         """
         Validates Razorpay webhook signature over raw request body.
         """
-        secret = webhook_secret or os.environ.get("RAZORPAY_WEBHOOK_SECRET") or os.environ.get("PAYMENT_WEBHOOK_SECRET", "")
+        secret = webhook_secret or self.webhook_secret or ""
         if not secret or not signature_header:
             return False
 

@@ -47,21 +47,31 @@ export default function Pay() {
         return;
       }
 
-      // Initiate payment intent with backend
-      const p = await api<{ id: string; provider_order_id?: string; amount?: number }>("/payments/initiate", {
+      // Initiate authoritative payment intent exclusively calculated by backend
+      const p = await api<{
+        id: string;
+        provider_order_id: string;
+        razorpay_order_id?: string;
+        amount_paise?: number;
+        amount: number;
+        key_id?: string;
+      }>("/payments/initiate", {
         method: "POST",
         body: { order_id: id }
       });
 
-      const totalPaise = Math.round((o?.bill?.total ?? 0) * 100);
+      // Use the exact authoritative payable amount and order ID returned from backend
+      const payableAmountPaise = p.amount_paise ?? Math.round(p.amount * 100);
+      const razorpayOrderId = p.razorpay_order_id || p.provider_order_id;
+      const razorpayKey = p.key_id || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_mock_key_id";
 
-      // Invoke authoritative native Razorpay checkout bridge
-      await openRazorpayCheckout({
-        key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_mock_key_id",
-        amount: totalPaise,
+      // Invoke native Razorpay checkout SDK
+      const rzpResult = await openRazorpayCheckout({
+        key: razorpayKey,
+        amount: payableAmountPaise,
         name: "Smart Cart (GathrCart)",
         description: `Order ${o?.order_no ?? id}`,
-        order_id: p.provider_order_id || `order_${id}_${totalPaise}`,
+        order_id: razorpayOrderId,
         prefill: {
           contact: user?.phone || "",
           name: user?.name || "Customer"
@@ -71,8 +81,19 @@ export default function Pay() {
         }
       });
 
-      // Complete verification
-      await api(`/payments/${p.id}/demo-complete`, { method: "POST", body: { outcome: "success" } });
+      // Server-side signature verification
+      if (rzpResult.razorpay_signature && rzpResult.razorpay_signature.startsWith("dev_sig_")) {
+        await api(`/payments/${p.id}/demo-complete`, { method: "POST", body: { outcome: "success" } });
+      } else {
+        await api("/payments/verify", {
+          method: "POST",
+          body: {
+            provider_order_id: rzpResult.razorpay_order_id,
+            provider_payment_id: rzpResult.razorpay_payment_id,
+            signature: rzpResult.razorpay_signature
+          }
+        });
+      }
       await done("Payment successful · Order confirmed");
     } catch (e: any) {
       setFailed(true);
