@@ -241,3 +241,38 @@ ea769bf feat(services): add Razorpay verification, S3 CloudFront media storage, 
   - **Live API mode**: When `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are provided (non-mock), invokes official Razorpay API endpoints for order generation, payment signature verification (`utility.verify_payment_signature`), and refund execution (`payment.refund`).
   - **Deterministic Test Mode**: When credentials are unset or mock, safely verifies HMAC SHA256 signatures server-side and prevents unexpected network failures during testing.
 - **Regression Verification**: Ran all 45 backend tests; all 45 passed (`45 passed, 1 warning in 7.35s`).
+
+
+---
+
+## 7. Authoritative Pricing, Clean Type Isolation & Razorpay Test Mode Verification
+
+### A. Dependency Type Isolation (Eliminating node_modules Edits)
+- Reverted all manual modifications inside `node_modules/react-native-webview/index.d.ts` and executed a clean `npm install`.
+- Resolved the `WebViewProps` type overload permanently in userland code ([`frontend/src/components/osm-map.tsx`](file:///C:/Users/Rahul/Desktop/smart_cart_v3/frontend/src/components/osm-map.tsx)) by supplying the explicit type parameter `<WebView<{}> ... />`.
+- Verified clean typecheck: `npx tsc --noEmit` exited cleanly with exit code `0`.
+
+### B. Authoritative Backend Pricing & Dual-Mode Razorpay Execution
+- **Exclusive Backend Calculation**: [`frontend/app/pay/[id].tsx`](file:///C:/Users/Rahul/Desktop/smart_cart_v3/frontend/app/pay/[id].tsx) no longer calculates or overrides the payable amount. The backend calculates integer paise (`amount_paise`), order receipt, and public Key ID during `/api/payments/initiate` and returns it directly to the checkout bridge.
+- **Environment Selection**: Configured `RAZORPAY_ENVIRONMENT` (`test` or `live`).
+  - When real Test Mode keys (`RAZORPAY_KEY_ID=rzp_test_...` and `RAZORPAY_KEY_SECRET=...`) are provided, the official `razorpay` Python SDK creates actual orders on Razorpay's servers and validates HMAC SHA256 signatures via `razorpay.utility.verify_payment_signature`.
+  - In `production`, missing credentials strictly throw `RuntimeError`. Silent simulation fallback is completely forbidden.
+  - In development/testing environments without keys, the backend fails safely with a deterministic test harness to maintain automated regression stability.
+- **Complete Test Mode Payment Flow Ready**:
+  1. Authenticated checkout initiates on backend (`/api/payments/initiate`).
+  2. Authoritative cart and bills retrieved; real or deterministic Razorpay order generated.
+  3. Mobile client opens native checkout via `react-native-razorpay@3.0.0` with returned `razorpay_order_id` and `amount_paise`.
+  4. Server-side signature verified (`/api/payments/verify`) using HMAC SHA256.
+  5. Webhook verified over raw request bytes (`/api/payments/webhook`) with duplicate event protection.
+  6. Double-entry financial ledger records balanced debits (`gateway_receivable`) and credits (`seller_payable`, `platform_revenue`).
+
+### C. Docker Daemon & Microservice Status
+- Inspected the host Docker Desktop status. The Docker Desktop service (`com.docker.service`) is currently stopped on the host OS.
+- Because the Docker daemon is stopped, multi-container Docker Compose container orchestration cannot be started locally without manual host privilege activation.
+- All microservices (`core_marketplace:8001`, `payment_service:8002`, `notification_service:8003`, and worker) were verified via independent ASGI execution and health endpoints.
+- **Classification**: Docker Compose container deployment is **BLOCKED** pending Docker Desktop service startup on the host.
+
+### D. Regression Verification
+- Complete backend test suite passed: `45 passed, 1 warning in 6.69s` (100% pass rate).
+- Frontend TypeScript typecheck: `npx tsc --noEmit` passed with exit code `0`.
+- Git tree clean; commits created with full traceability.
