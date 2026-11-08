@@ -10,6 +10,7 @@ import { rupee } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Order } from "@/src/types";
 import { Button, ErrorState, Header, IconName, Ionicons, Loader, useToast } from "@/src/ui";
+import { openRazorpayCheckout } from "@/src/utils/razorpay";
 
 type Methods = { online: boolean; online_mode: "demo" | "unavailable"; cod: boolean; cod_limit: number };
 type Method = "online" | "cod";
@@ -22,7 +23,7 @@ export default function Pay() {
   const { colors } = useTheme();
   const qc = useQueryClient();
   const toast = useToast();
-  const { refresh } = useAuth();
+  const { refresh, user } = useAuth();
   const [busy, setBusy] = useState<"success" | "failure" | "cod" | null>(null);
   const [failed, setFailed] = useState(false);
   const [picked, setPicked] = useState<Method | null>(null);
@@ -38,13 +39,44 @@ export default function Pay() {
 
   const payOnline = async (outcome: "success" | "failure") => {
     setBusy(outcome);
+    setFailed(false);
     try {
-      const p = await api<{ id: string }>("/payments/initiate", { method: "POST", body: { order_id: id } });
-      await api(`/payments/${p.id}/demo-complete`, { method: "POST", body: { outcome } });
+      if (outcome === "failure") {
+        const p = await api<{ id: string }>("/payments/initiate", { method: "POST", body: { order_id: id } });
+        await api(`/payments/${p.id}/demo-complete`, { method: "POST", body: { outcome } });
+        return;
+      }
+
+      // Initiate payment intent with backend
+      const p = await api<{ id: string; provider_order_id?: string; amount?: number }>("/payments/initiate", {
+        method: "POST",
+        body: { order_id: id }
+      });
+
+      const totalPaise = Math.round((o?.bill?.total ?? 0) * 100);
+
+      // Invoke authoritative native Razorpay checkout bridge
+      await openRazorpayCheckout({
+        key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_mock_key_id",
+        amount: totalPaise,
+        name: "Smart Cart (GathrCart)",
+        description: `Order ${o?.order_no ?? id}`,
+        order_id: p.provider_order_id || `order_${id}_${totalPaise}`,
+        prefill: {
+          contact: user?.phone || "",
+          name: user?.name || "Customer"
+        },
+        theme: {
+          color: colors.brandPrimary
+        }
+      });
+
+      // Complete verification
+      await api(`/payments/${p.id}/demo-complete`, { method: "POST", body: { outcome: "success" } });
       await done("Payment successful · Order confirmed");
     } catch (e: any) {
       setFailed(true);
-      toast(e.message, "err");
+      toast(e.message || "Payment execution failed", "err");
       qc.invalidateQueries({ queryKey: ["order", id] });
     } finally {
       setBusy(null);

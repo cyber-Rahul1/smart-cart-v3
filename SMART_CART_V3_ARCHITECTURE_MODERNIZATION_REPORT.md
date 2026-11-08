@@ -188,3 +188,32 @@ cd51f67 docs: add comprehensive architecture modernization and production readin
 ea769bf feat(services): add Razorpay verification, S3 CloudFront media storage, and SQS/Redis async services
 4d8fd4e feat(database): integrate hybrid PostgreSQL relational engine with financial ledger and outbox pattern
 ```
+
+
+---
+
+## 5. Native Razorpay SDK & Independent Microservices End-to-End Verification
+
+### A. Native Razorpay Integration Verification
+1. **Installed Official Package**: Verified `react-native-razorpay@3.0.0` directly via `npm ls react-native-razorpay`.
+2. **Production vs. Preview Isolation**:
+   - `frontend/src/utils/razorpay.ts` explicitly checks `isProduction` (`NODE_ENV === "production"` or `EXPO_PUBLIC_APP_ENV === "production"`).
+   - In production builds, simulation fallback is strictly disabled and throws `Error("Native Razorpay Checkout is required for production payments. Web/Simulated payments are disabled in production.")`.
+   - On native Android/iOS, invokes native `RazorpayCheckout.open(options)` with Razorpay key, amount in paise, order ID, prefill info, and brand color.
+3. **Screen Hookup**:
+   - `frontend/app/pay/[id].tsx` is wired to call `openRazorpayCheckout` during online payment checkout.
+   - Upon native checkout return, server-side signature verification is executed before marking order confirmed.
+
+### B. Standalone Microservice Verification Results
+- **Payment Service (`backend/services_standalone/payment_service/main.py`)**:
+  - Health check: `GET /health` -> `200 OK` (`{"status": "ok", "service": "payment-service"}`)
+  - Order creation: `POST /api/payments/orders/create` -> `200 OK` (`order_rec_ord_stand__45000`, 45,000 paise)
+  - Signature verification: `POST /api/payments/verify` with HMAC SHA256 -> `200 OK` (`{"status": "paid"}`)
+  - Ledger creation: Double-entry ledger debits `gateway_receivable` and credits `seller_payable` (90%) and `platform_revenue` (10%).
+  - Refund processing: `POST /api/payments/refund` -> `200 OK` (`{"status": "refunded"}`) with compensating ledger entries.
+- **Notification Service (`backend/services_standalone/notification_service/main.py`)**:
+  - Health check: `GET /health` -> `200 OK` (`{"status": "ok", "service": "notification-service"}`)
+  - Event dispatch: `POST /api/notifications/dispatch` -> `200 OK` (`{"status": "dispatched", "count": 1}`)
+  - Event retrieval: `GET /api/notifications` -> `200 OK`
+- **Regression Suite**:
+  - All 45 backend regression tests pass (`45 passed, 1 warning in 6.32s`).
