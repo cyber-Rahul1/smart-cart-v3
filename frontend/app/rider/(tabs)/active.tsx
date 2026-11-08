@@ -24,7 +24,7 @@ export default function RiderActive() {
           testID="rider-active-list"
           data={q.data}
           keyExtractor={(j) => j.id}
-          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brandPrimary} />}
+          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => { q.refetch(); }} tintColor={colors.brandPrimary} />}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: bottomChrome + spacing.xl }}
           ListEmptyComponent={<EmptyState testID="rider-active-empty" icon="cube-outline" title="No active deliveries" body="Accept a job from the Jobs tab." />}
           renderItem={({ item: j }) => (

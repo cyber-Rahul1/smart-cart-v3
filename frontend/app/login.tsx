@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -42,7 +42,7 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const s = useStyles();
   const { colors } = useTheme();
-  const otpRef = useRef<TextInput>(null);
+  const otpRef = useRef<TextInputInstance>(null);
 
   const full = `+91${phone}`;
 

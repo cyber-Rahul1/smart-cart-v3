@@ -27,7 +27,7 @@ export default function AdminOverview() {
     <View style={{ flex: 1, backgroundColor: colors.surfaceSecondary }}>
       <PartnerHeader title="Admin" subtitle="Platform overview" />
       {q.isLoading ? <Loader /> : (
-        <ScrollView refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brandPrimary} />}
+        <ScrollView refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => { q.refetch(); }} tintColor={colors.brandPrimary} />}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: (usesNativeTabs ? insets.bottom : 0) + spacing.xl }}>
           {[["sellers_pending", "shops waiting for review", "/admin/shops"], ["riders_pending", "riders waiting for verification", "/admin/riders"]].map(([k, l, href]) => (
             <Pressable key={k} testID={`admin-pending-${k}`} onPress={() => router.push(href as any)}

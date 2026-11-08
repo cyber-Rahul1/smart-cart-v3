@@ -24,7 +24,7 @@ export default function Orders() {
           testID="orders-list"
           data={q.data}
           keyExtractor={(o) => o.id}
-          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={colors.brandPrimary} />}
+          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => { q.refetch(); }} tintColor={colors.brandPrimary} />}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.md, paddingBottom: insets.bottom + spacing.xl }}
           ListEmptyComponent={<EmptyState testID="orders-empty" icon="receipt-outline" title="No orders yet" body="Your food, grocery, group and community orders show up here." action="Start shopping" onAction={() => router.replace("/(tabs)")} />}
           renderItem={({ item: o }) => (
