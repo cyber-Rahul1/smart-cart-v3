@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ApiError } from "@/src/api";
@@ -106,14 +107,18 @@ export default function DiscoverScreen() {
     setActiveSearch("");
   };
 
-  // Render individual showcase card
-  const renderShowcase = ({ item }: { item: ShowcaseItem }) => {
+  // Render individual showcase card with entrance animation
+  const renderShowcase = ({ item, index }: { item: ShowcaseItem; index: number }) => {
     const { seller, banner_url, gallery, highlights, description, products } = item;
     const isRecentlyOpened = seller.is_new;
     const hasOffer = !!seller.offer;
 
     return (
-      <View style={s.card} testID={`discover-showcase-${seller.id}`}>
+      <Animated.View
+        entering={FadeInDown.delay(Math.min(index * 70, 300)).duration(400).springify().damping(15)}
+        style={s.card}
+        testID={`discover-showcase-${seller.id}`}
+      >
         {/* 1. Large Full-width Banner with Badges and Gradient Title */}
         <Pressable
           onPress={() => router.push(`/seller/${seller.id}`)}
@@ -287,7 +292,7 @@ export default function DiscoverScreen() {
             <Ionicons name="arrow-forward" size={16} color={colors.onBrandPrimary} />
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -384,6 +389,9 @@ export default function DiscoverScreen() {
           keyExtractor={(item) => item.seller.id}
           renderItem={renderShowcase}
           contentContainerStyle={[s.feedList, { paddingBottom: insets.bottom + spacing.xxl }]}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          showsVerticalScrollIndicator={false}
           refreshing={isRefetching}
           onRefresh={() => refetch()}
           onEndReached={() => {
