@@ -59,6 +59,10 @@ class ShopUpdate(BaseModel):
     opens_at: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     closes_at: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     image_url: Optional[str] = Field(None, pattern=r"^/api/files/[0-9a-f-]{36}$")
+    banner_url: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=500)
+    gallery: Optional[list[str]] = None
+    highlights: Optional[list[str]] = None
 
 
 class ProductIn(BaseModel):

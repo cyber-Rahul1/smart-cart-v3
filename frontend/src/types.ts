@@ -2,6 +2,23 @@ export type Seller = {
   id: string; name: string; category: "food" | "grocery"; business_type: string; cuisine: string; image: string; rating: number;
   distance_km: number; eta_min: number; prep_time_min: number; is_new: boolean; offer?: string | null; min_order: number;
   fssai_status: string; address: string; opened_on: string; trend_score?: number;
+  banner_url?: string; description?: string; gallery?: string[]; highlights?: string[]; open?: boolean;
+};
+export type ShowcaseItem = {
+  seller: Seller;
+  banner_url: string;
+  gallery: string[];
+  highlights: string[];
+  description: string;
+  products: Product[];
+  total_products: number;
+};
+export type DiscoverResponse = {
+  items: ShowcaseItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
 };
 export type Product = {
   id: string; seller_id: string; name: string; price: number; category: string; veg: boolean; image: string; available: boolean;

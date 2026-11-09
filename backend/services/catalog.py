@@ -21,17 +21,106 @@ async def home():
 
 
 @router.get("/sellers")
-async def list_sellers(category: Optional[str] = Query(None, pattern="^(food|grocery|new)$"), q: Optional[str] = None):
+async def list_sellers(category: Optional[str] = Query(None, pattern="^(food|grocery|new|cloud_kitchen|recently_registered)$"), q: Optional[str] = None):
     f = dict(PUBLIC)
+    sort_field = "distance_km"
+    sort_dir = 1
+
     if category == "food":
         f["category"] = "food"
     elif category == "grocery":
         f["category"] = "grocery"
     elif category == "new":
         f["is_new"] = True
+    elif category == "cloud_kitchen":
+        f["business_type"] = "cloud_kitchen"
+    elif category == "recently_registered":
+        sort_field = "opened_on"
+        sort_dir = -1
+
     if q:
-        f["name"] = {"$regex": q, "$options": "i"}
-    return await db.sellers.find(f, {"_id": 0}).sort("distance_km", 1).to_list(100)
+        f["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"cuisine": {"$regex": q, "$options": "i"}},
+            {"address": {"$regex": q, "$options": "i"}},
+        ]
+    return await db.sellers.find(f, {"_id": 0}).sort(sort_field, sort_dir).to_list(100)
+
+
+@router.get("/discover")
+async def discover_feed(
+    category: Optional[str] = Query(None, pattern="^(all|food|grocery|cloud_kitchen|new|recently_registered)$"),
+    q: Optional[str] = None,
+    limit: int = Query(10, ge=1, le=50),
+    offset: int = Query(0, ge=0)
+):
+    """
+    Dedicated Discovery feed for newly registered and recently opened shops.
+    Returns rich shop showcases with banner, gallery, highlights, and product previews.
+    """
+    f = dict(PUBLIC)
+    sort_field = "opened_on"
+    sort_dir = -1
+
+    if category == "food":
+        f["category"] = "food"
+    elif category == "grocery":
+        f["category"] = "grocery"
+    elif category == "cloud_kitchen":
+        f["business_type"] = "cloud_kitchen"
+    elif category == "new":
+        f["is_new"] = True
+    elif category == "recently_registered":
+        sort_field = "created_at"
+        sort_dir = -1
+
+    if q:
+        f["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"cuisine": {"$regex": q, "$options": "i"}},
+            {"address": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}},
+        ]
+
+    total = await db.sellers.count_documents(f)
+    sellers = await db.sellers.find(f, {"_id": 0}).sort(sort_field, sort_dir).skip(offset).limit(limit).to_list(limit)
+
+    # Attach product previews (first 6 items per shop)
+    seller_ids = [s["id"] for s in sellers]
+    all_products = await db.products.find(
+        {"seller_id": {"$in": seller_ids}, "available": True},
+        {"_id": 0}
+    ).to_list(1000)
+
+    # Group products by seller
+    products_by_seller: dict = {}
+    for p in all_products:
+        products_by_seller.setdefault(p["seller_id"], []).append(p)
+
+    showcases = []
+    for s in sellers:
+        shop_prods = products_by_seller.get(s["id"], [])
+        prod_images = [p["image"] for p in shop_prods if p.get("image")]
+        gallery = s.get("gallery") or ([s.get("image")] + prod_images)[:4]
+        highlights = s.get("highlights") or [p["name"] for p in shop_prods[:3]]
+
+        showcases.append({
+            "seller": s,
+            "banner_url": s.get("banner_url") or s.get("image"),
+            "gallery": gallery,
+            "highlights": highlights,
+            "description": s.get("description") or f"{s['name']} · authentic {s.get('cuisine', s['category'])}",
+            "products": shop_prods[:8],
+            "total_products": len(shop_prods)
+        })
+
+    return {
+        "items": showcases,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": (offset + limit) < total
+    }
 
 
 @router.get("/sellers/{sid}")
