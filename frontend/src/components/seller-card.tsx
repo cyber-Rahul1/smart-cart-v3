@@ -234,24 +234,28 @@ export function SellerFullCard({
             <View style={st.bottomDotsContainer}>
               {images.map((_, i) => {
                 const isCurrent = i === activeIndex;
-                return (
-                  <View key={i} style={st.dotTrack}>
-                    {isCurrent ? (
-                      <RNAnimated.View
-                        style={[
-                          st.dotFill,
-                          {
-                            width: progressAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: ["0%", "100%"],
-                            }),
-                          },
-                        ]}
-                      />
-                    ) : i < activeIndex ? (
-                      <View style={[st.dotFill, { width: "100%" }]} />
-                    ) : null}
+                return isCurrent ? (
+                  <View key={i} style={st.activeDotTrack}>
+                    <RNAnimated.View
+                      style={[
+                        st.activeDotFill,
+                        {
+                          width: progressAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0%", "100%"],
+                          }),
+                        },
+                      ]}
+                    />
                   </View>
+                ) : (
+                  <View
+                    key={i}
+                    style={[
+                      st.inactiveRoundDot,
+                      i < activeIndex && { backgroundColor: "rgba(255,255,255,0.75)" },
+                    ]}
+                  />
                 );
               })}
             </View>
@@ -384,23 +388,29 @@ const useStyles = makeStyles((c) => ({
   bottomDotsContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: radius.pill,
   },
-  dotTrack: {
-    width: 14,
-    height: 4,
-    borderRadius: 2,
+  activeDotTrack: {
+    width: 16,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: "rgba(255,255,255,0.35)",
     overflow: "hidden",
   },
-  dotFill: {
+  activeDotFill: {
     height: "100%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 2,
+    borderRadius: 2.5,
+  },
+  inactiveRoundDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: "rgba(255,255,255,0.4)",
   },
   fullCardBody: {
     padding: spacing.md,

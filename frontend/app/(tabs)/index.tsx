@@ -36,13 +36,13 @@ import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 type Home = { trending: Seller[]; new_shops: Seller[]; nearby: Seller[]; recommended: Seller[]; offers: { code: string; description: string }[] };
 
-const TILES: { key: string; label: string; icon: IconName; bg: keyof ThemeColors; fg: keyof ThemeColors; href: string }[] = [
+const TILES: { key: string; label: string; icon: IconName; bg: keyof ThemeColors; fg: keyof ThemeColors; href?: string }[] = [
   { key: "food", label: "Food", icon: "fast-food-outline", bg: "brandTertiary", fg: "onBrandTertiary", href: "/listing/food" },
   { key: "grocery", label: "Groceries", icon: "basket-outline", bg: "pastelMint", fg: "onPastelMint", href: "/listing/grocery" },
   { key: "new", label: "Discover", icon: "sparkles-outline", bg: "pastelLemon", fg: "onPastelLemon", href: "/listing/new" },
   { key: "group", label: "Group Orders", icon: "people-outline", bg: "pastelLilac", fg: "onPastelLilac", href: "/groups" },
   { key: "community", label: "Apartment", icon: "business-outline", bg: "pastelSky", fg: "onPastelSky", href: "/community" },
-  { key: "reels", label: "Trending", icon: "play-circle-outline", bg: "pastelRose", fg: "onPastelRose", href: "/(tabs)/reels" },
+  { key: "reels", label: "Bites", icon: "play-circle-outline", bg: "pastelRose", fg: "onPastelRose" },
 ];
 
 export default function HomeScreen() {
@@ -50,7 +50,7 @@ export default function HomeScreen() {
   const s = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { tabBarTranslateY, setPagerScrollEnabled } = useTabBarVisibility();
+  const { tabBarTranslateY, setPagerScrollEnabled, scrollPageTo } = useTabBarVisibility();
 
   const q = useQuery({ queryKey: ["home"], queryFn: () => api<Home>("/home") });
   const addr = useQuery({ queryKey: ["addresses"], queryFn: () => api<Address[]>("/addresses") });
@@ -210,7 +210,6 @@ export default function HomeScreen() {
             value={vegOnly}
             onToggle={(val) => {
               setVegOnly(val);
-              router.push(`/search?veg=${val ? "1" : "0"}`);
             }}
             testID="home-veg-toggle"
           />
@@ -237,8 +236,18 @@ export default function HomeScreen() {
           <View style={s.grid}>
             {TILES.map((t) => (
               <View key={t.key} style={s.tileWrap}>
-                <Pressable testID={`home-tile-${t.key}`} onPress={() => router.push(t.href as any)}
-                  style={({ pressed }) => [s.tile, { backgroundColor: colors[t.bg] as string }, pressed && { transform: [{ scale: 0.96 }] }]}>
+                <Pressable
+                  testID={`home-tile-${t.key}`}
+                  onPress={() => {
+                    if (t.key === "reels") {
+                      // Navigate directly to Bites (index 1 in tabs)
+                      scrollPageTo(1);
+                    } else if (t.href) {
+                      router.push(t.href as any);
+                    }
+                  }}
+                  style={({ pressed }) => [s.tile, { backgroundColor: colors[t.bg] as string }, pressed && { transform: [{ scale: 0.96 }] }]}
+                >
                   <Ionicons name={t.icon} size={28} color={colors[t.fg] as string} />
                   <Text style={[s.tileLabel, { color: colors[t.fg] as string }]}>{t.label}</Text>
                 </Pressable>
