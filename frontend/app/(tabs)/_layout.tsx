@@ -1,13 +1,16 @@
 import { Redirect, Tabs, useRouter, useSegments } from "expo-router";
+import { BottomTabBar, BottomTabBarProps } from "expo-router/js-tabs";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import React, { useRef } from "react";
 import { Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 
 import { useAuth } from "@/src/auth";
 import { ROLE_HOME, usesNativeTabs } from "@/src/navigation";
 import { useTheme } from "@/src/theme";
 import { Ionicons, IconName } from "@/src/ui";
+import { TabBarVisibilityProvider, useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 const TABS: { name: string; title: string; icon: IconName; active: IconName; sf: string }[] = [
   { name: "index", title: "Home", icon: "home-outline", active: "home", sf: "house.fill" },
@@ -16,7 +19,20 @@ const TABS: { name: string; title: string; icon: IconName; active: IconName; sf:
   { name: "account", title: "Account", icon: "person-circle-outline", active: "person-circle", sf: "person.crop.circle.fill" },
 ];
 
-export default function TabsLayout() {
+function AnimatedTabBar(props: BottomTabBarProps) {
+  const { tabBarTranslateY } = useTabBarVisibility();
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: tabBarTranslateY.value }],
+  }));
+
+  return (
+    <Animated.View style={[{ position: "absolute", bottom: 0, left: 0, right: 0 }, animStyle]}>
+      <BottomTabBar {...props} />
+    </Animated.View>
+  );
+}
+
+function TabsContent() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
@@ -85,6 +101,7 @@ export default function TabsLayout() {
     <GestureDetector gesture={panGesture}>
       <View style={{ flex: 1 }}>
         <Tabs
+          tabBar={(props) => <AnimatedTabBar {...props} />}
           screenOptions={{
             headerShown: false,
             animation: "shift",
@@ -115,5 +132,13 @@ export default function TabsLayout() {
         </Tabs>
       </View>
     </GestureDetector>
+  );
+}
+
+export default function TabsLayout() {
+  return (
+    <TabBarVisibilityProvider>
+      <TabsContent />
+    </TabBarVisibilityProvider>
   );
 }

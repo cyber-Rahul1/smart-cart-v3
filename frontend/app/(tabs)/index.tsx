@@ -2,7 +2,23 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, RefreshControl, ScrollView, Text, View } from "react-native";
+import React, { useRef, useState } from "react";
+import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  StyleSheet,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
@@ -12,6 +28,7 @@ import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Address, Seller } from "@/src/types";
 import { ErrorState, IconName, Ionicons, Loader, SectionTitle } from "@/src/ui";
+import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 type Home = { trending: Seller[]; new_shops: Seller[]; nearby: Seller[]; recommended: Seller[]; offers: { code: string; description: string }[] };
 
@@ -29,16 +46,79 @@ export default function HomeScreen() {
   const s = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { tabBarTranslateY } = useTabBarVisibility();
+
   const q = useQuery({ queryKey: ["home"], queryFn: () => api<Home>("/home") });
   const addr = useQuery({ queryKey: ["addresses"], queryFn: () => api<Address[]>("/addresses") });
   const notif = useQuery({ queryKey: ["notifications"], queryFn: () => api<{ unread: number }>("/notifications") });
   const def = addr.data?.find((a) => a.is_default);
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
 
+  // Header animation values
+  const [locRowHeight, setLocRowHeight] = useState(56);
+  const headerTranslateY = useSharedValue(0);
+  const headerOpacity = useSharedValue(1);
+
+  // Scroll tracking ref to compute delta
+  const lastScrollY = useRef(0);
+  const isHiddenRef = useRef(false);
+
+  const TIMING_CONFIG = {
+    duration: 250,
+    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+  };
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const currentY = e.nativeEvent.contentOffset.y;
+    const diff = currentY - lastScrollY.current;
+
+    // Only trigger when scrolled past top padding or pulled down
+    if (currentY <= 10) {
+      // At the very top, always show header and tab bar
+      if (isHiddenRef.current) {
+        isHiddenRef.current = false;
+        headerTranslateY.value = withTiming(0, TIMING_CONFIG);
+        headerOpacity.value = withTiming(1, TIMING_CONFIG);
+        tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
+      }
+    } else if (diff > 12 && currentY > 50) {
+      // User is scrolling content UP (finger moving up) -> hide top address & bottom tab bar
+      if (!isHiddenRef.current) {
+        isHiddenRef.current = true;
+        headerTranslateY.value = withTiming(-(locRowHeight + spacing.sm), TIMING_CONFIG);
+        headerOpacity.value = withTiming(0, TIMING_CONFIG);
+        tabBarTranslateY.value = withTiming(100, TIMING_CONFIG);
+      }
+    } else if (diff < -12) {
+      // User is scrolling content DOWN (finger moving down) -> reveal both smoothly
+      if (isHiddenRef.current) {
+        isHiddenRef.current = false;
+        headerTranslateY.value = withTiming(0, TIMING_CONFIG);
+        headerOpacity.value = withTiming(1, TIMING_CONFIG);
+        tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
+      }
+    }
+
+    lastScrollY.current = currentY;
+  };
+
+  const locRowAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: headerTranslateY.value }],
+    opacity: headerOpacity.value,
+  }));
+
   return (
     <View style={s.root}>
+      {/* Sticky Top Header */}
       <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
-        <View style={s.locRow}>
+        {/* Address and Notification row that collapses up */}
+        <Animated.View
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0) setLocRowHeight(h);
+          }}
+          style={[s.locRow, locRowAnimStyle]}
+        >
           <Pressable testID="home-location-selector" style={{ flex: 1 }} onPress={() => router.push("/addresses")}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Ionicons name="location" size={20} color={colors.brandPrimary} />
@@ -51,7 +131,9 @@ export default function HomeScreen() {
             <Ionicons name="notifications-outline" size={22} color={colors.onSurface} />
             {notif.data?.unread ? <View style={s.dot}><Text style={s.dotText}>{Math.min(notif.data.unread, 9)}</Text></View> : null}
           </Pressable>
-        </View>
+        </Animated.View>
+
+        {/* Search bar stays pinned below the collapsed address */}
         <Pressable testID="home-search-bar" onPress={() => router.push("/search")} style={s.search}>
           <Ionicons name="search" size={18} color={colors.muted} />
           <Text style={s.searchText}>Search biryani, milk, shops…</Text>
@@ -60,7 +142,9 @@ export default function HomeScreen() {
 
       {q.isLoading ? <Loader /> : q.isError ? <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} /> : (
         <ScrollView
-          contentContainerStyle={{ paddingBottom: bottomChrome + spacing.xl }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingBottom: bottomChrome + 80 }}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => { q.refetch(); notif.refetch(); }} tintColor={colors.brandPrimary} />}
         >
           <Text style={s.hello}>Hi {user?.name?.split(" ")[0]}, what are we ordering?</Text>
@@ -138,7 +222,15 @@ export default function HomeScreen() {
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surface },
-  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, backgroundColor: c.surface, gap: spacing.md, borderBottomWidth: 1, borderBottomColor: c.divider },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: c.surface,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: c.divider,
+    overflow: "hidden",
+  },
   locRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   locLabel: { fontSize: font.lg + 1, fontWeight: "800", color: c.onSurface },
   locLine: { fontSize: font.sm + 1, color: c.muted, marginTop: 2, marginLeft: 24 },
