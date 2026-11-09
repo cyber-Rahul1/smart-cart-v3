@@ -58,13 +58,42 @@ function TabsContent() {
     });
   }, [pageWidth]);
 
-  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const isScrollingRef = useRef(false);
+
+  const snapToNearest = (offsetX: number, velocityX: number = 0) => {
     if (pageWidth <= 0) return;
-    const offset = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(offset / pageWidth);
-    if (idx >= 0 && idx < TABS.length && idx !== activeTabIndex) {
-      setActiveTabIndex(idx);
+    let targetIdx: number;
+    const rawIdx = offsetX / pageWidth;
+
+    if (Math.abs(velocityX) > 0.3) {
+      // Meaningful velocity gesture: flick in velocity direction
+      targetIdx = velocityX > 0 ? Math.ceil(rawIdx) : Math.floor(rawIdx);
+    } else {
+      // Position based threshold: snap to whichever page is closer (<= 0.5 snaps back, > 0.5 snaps forward)
+      targetIdx = Math.round(rawIdx);
     }
+
+    targetIdx = Math.max(0, Math.min(TABS.length - 1, targetIdx));
+    flatListRef.current?.scrollToOffset({
+      offset: targetIdx * pageWidth,
+      animated: true,
+    });
+    if (targetIdx !== activeTabIndex) {
+      setActiveTabIndex(targetIdx);
+    }
+  };
+
+  const onScrollEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const velocityX = e.nativeEvent.velocity?.x ?? 0;
+    // On Android, if velocity is low or drag ends slowly, momentum scroll may not fire.
+    // Ensure we snap immediately to nearest page so pages never get stuck in between.
+    snapToNearest(offsetX, velocityX);
+  };
+
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    snapToNearest(offsetX, 0);
   };
 
   const animTabBarStyle = useAnimatedStyle(() => ({
@@ -121,8 +150,8 @@ function TabsContent() {
         showsHorizontalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"
-        onMomentumScrollEnd={onScrollEnd}
-        onScrollEndDrag={onScrollEnd}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        onScrollEndDrag={onScrollEndDrag}
         snapToInterval={pageWidth}
         snapToAlignment="center"
         decelerationRate="fast"
