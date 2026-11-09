@@ -19,6 +19,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
+import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 export { Ionicons };
 export type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -73,9 +74,20 @@ export function Chip({ label, selected, onPress, testID, icon }: { label: string
 }
 
 export function ChipRow({ children }: { children: ReactNode }) {
+  const { setPagerScrollEnabled } = useTabBarVisibility();
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, height: 56 }}
-      contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, alignItems: "center" }}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      nestedScrollEnabled
+      onTouchStart={() => setPagerScrollEnabled(false)}
+      onTouchEnd={() => setPagerScrollEnabled(true)}
+      onScrollBeginDrag={() => setPagerScrollEnabled(false)}
+      onScrollEndDrag={() => setPagerScrollEnabled(true)}
+      onMomentumScrollEnd={() => setPagerScrollEnabled(true)}
+      style={{ flexGrow: 0, height: 56 }}
+      contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, alignItems: "center" }}
+    >
       {children}
     </ScrollView>
   );

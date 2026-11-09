@@ -9,6 +9,8 @@ interface TabBarVisibilityContextType {
   setScrollPageToHandler: (fn: (idx: number) => void) => void;
   isPagerScrollEnabled: boolean;
   setPagerScrollEnabled: (enabled: boolean) => void;
+  enablePagerScroll: () => void;
+  disablePagerScroll: () => void;
 }
 
 const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null>(null);
@@ -16,8 +18,29 @@ const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null
 export function TabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const tabBarTranslateY = useSharedValue(0);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const [isPagerScrollEnabled, setPagerScrollEnabled] = useState(true);
+  const [isPagerScrollEnabled, setPagerScrollEnabledState] = useState(true);
+  const lockCountRef = React.useRef(0);
   const [scrollPageToFn, setScrollPageToFn] = useState<((idx: number) => void) | null>(null);
+
+  const disablePagerScroll = React.useCallback(() => {
+    lockCountRef.current += 1;
+    setPagerScrollEnabledState(false);
+  }, []);
+
+  const enablePagerScroll = React.useCallback(() => {
+    lockCountRef.current = Math.max(0, lockCountRef.current - 1);
+    if (lockCountRef.current === 0) {
+      setPagerScrollEnabledState(true);
+    }
+  }, []);
+
+  const setPagerScrollEnabled = React.useCallback((enabled: boolean) => {
+    if (enabled) {
+      enablePagerScroll();
+    } else {
+      disablePagerScroll();
+    }
+  }, [enablePagerScroll, disablePagerScroll]);
 
   const scrollPageTo = (idx: number) => {
     if (scrollPageToFn) {
@@ -39,6 +62,8 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
         setScrollPageToHandler,
         isPagerScrollEnabled,
         setPagerScrollEnabled,
+        enablePagerScroll,
+        disablePagerScroll,
       }}
     >
       {children}

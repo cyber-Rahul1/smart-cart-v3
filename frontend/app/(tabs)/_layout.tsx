@@ -58,7 +58,7 @@ function TabsContent() {
     });
   }, [pageWidth]);
 
-  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (pageWidth <= 0) return;
     const offset = e.nativeEvent.contentOffset.x;
     const idx = Math.round(offset / pageWidth);
@@ -121,7 +121,12 @@ function TabsContent() {
         showsHorizontalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"
-        onMomentumScrollEnd={onMomentumScrollEnd}
+        onMomentumScrollEnd={onScrollEnd}
+        onScrollEndDrag={onScrollEnd}
+        snapToInterval={pageWidth}
+        snapToAlignment="center"
+        decelerationRate="fast"
+        disableIntervalMomentum={true}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
