@@ -3,7 +3,6 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, RefreshControl, ScrollView, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
@@ -66,14 +65,14 @@ export default function HomeScreen() {
         >
           <Text style={s.hello}>Hi {user?.name?.split(" ")[0]}, what are we ordering?</Text>
           <View style={s.grid}>
-            {TILES.map((t, i) => (
-              <Animated.View key={t.key} entering={FadeInDown.delay(i * 50).springify()} style={s.tileWrap}>
+            {TILES.map((t) => (
+              <View key={t.key} style={s.tileWrap}>
                 <Pressable testID={`home-tile-${t.key}`} onPress={() => router.push(t.href as any)}
                   style={({ pressed }) => [s.tile, { backgroundColor: colors[t.bg] as string }, pressed && { transform: [{ scale: 0.96 }] }]}>
                   <Ionicons name={t.icon} size={28} color={colors[t.fg] as string} />
                   <Text style={[s.tileLabel, { color: colors[t.fg] as string }]}>{t.label}</Text>
                 </Pressable>
-              </Animated.View>
+              </View>
             ))}
           </View>
 
