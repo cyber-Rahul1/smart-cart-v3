@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ApiError } from "@/src/api";
@@ -45,6 +45,7 @@ export default function DiscoverScreen() {
   const [activeSearch, setActiveSearch] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [addingPid, setAddingPid] = useState<string | null>(null);
+  const [containerHeight, setContainerHeight] = useState<number>(0);
 
   // Default address for location discovery
   const addr = useQuery({ queryKey: ["addresses"], queryFn: () => api<Address[]>("/addresses") });
@@ -107,16 +108,16 @@ export default function DiscoverScreen() {
     setActiveSearch("");
   };
 
-  // Render individual showcase card with entrance animation
+  // Render individual showcase card with entrance animation applied to internal contents
   const renderShowcase = ({ item, index }: { item: ShowcaseItem; index: number }) => {
     const { seller, banner_url, gallery, highlights, description, products } = item;
     const isRecentlyOpened = seller.is_new;
     const hasOffer = !!seller.offer;
+    const baseDelay = Math.min(index * 60, 240);
 
     return (
-      <Animated.View
-        entering={FadeInDown.delay(Math.min(index * 70, 300)).duration(400).springify().damping(15)}
-        style={s.card}
+      <View
+        style={[s.card, containerHeight > 0 && { height: containerHeight }]}
         testID={`discover-showcase-${seller.id}`}
       >
         {/* 1. Large Full-width Banner with Badges and Gradient Title */}
@@ -130,8 +131,11 @@ export default function DiscoverScreen() {
             colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.85)"]}
             style={s.bannerGradient}
           >
-            {/* Top Badges */}
-            <View style={s.badgeRow}>
+            {/* Top Badges: Animated FadeInDown */}
+            <Animated.View
+              entering={FadeInDown.delay(baseDelay + 40).duration(350).springify().damping(16)}
+              style={s.badgeRow}
+            >
               {isRecentlyOpened ? (
                 <View style={[s.badge, { backgroundColor: colors.brandPrimary }]}>
                   <Ionicons name="sparkles" size={12} color={colors.onBrandPrimary} />
@@ -148,19 +152,27 @@ export default function DiscoverScreen() {
                   <Text style={s.badgeText}>Currently Closed</Text>
                 </View>
               ) : null}
-            </View>
+            </Animated.View>
 
-            {/* Banner Bottom: Shop Name & Cuisine */}
-            <View>
+            {/* Banner Bottom: Shop Name & Cuisine Animated */}
+            <Animated.View entering={FadeInDown.delay(baseDelay + 80).duration(350).springify().damping(16)}>
               <Text style={s.bannerShopName}>{seller.name}</Text>
               <Text style={s.bannerCuisine}>{seller.cuisine || seller.category.toUpperCase()}</Text>
-            </View>
+            </Animated.View>
           </LinearGradient>
         </Pressable>
 
         {/* 2. Shop Details Section */}
-        <View style={s.detailsSection}>
-          <View style={s.metaRow}>
+        <ScrollView
+          style={s.detailsSection}
+          contentContainerStyle={s.detailsContent}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          <Animated.View
+            entering={FadeInDown.delay(baseDelay + 120).duration(350).springify().damping(16)}
+            style={s.metaRow}
+          >
             {/* Rating */}
             <View style={s.ratingPill}>
               <Ionicons name="star" size={13} color="#FFFFFF" />
@@ -185,29 +197,38 @@ export default function DiscoverScreen() {
                 <Text style={s.fssaiText}>FSSAI Verified</Text>
               </View>
             ) : null}
-          </View>
+          </Animated.View>
 
-          {/* Shop Description */}
-          <Text style={s.descriptionText} numberOfLines={2}>
-            {description}
-          </Text>
+          {/* Shop Description Animated */}
+          <Animated.View entering={FadeInDown.delay(baseDelay + 160).duration(350).springify().damping(16)}>
+            <Text style={s.descriptionText} numberOfLines={2}>
+              {description}
+            </Text>
+          </Animated.View>
 
           {/* Special Offer Badge if available */}
           {hasOffer ? (
-            <View style={s.offerBox}>
+            <Animated.View
+              entering={FadeInDown.delay(baseDelay + 180).duration(350).springify().damping(16)}
+              style={s.offerBox}
+            >
               <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
               <Text style={s.offerText}>{seller.offer}</Text>
-            </View>
+            </Animated.View>
           ) : null}
 
           {/* 3. Multiple Shop Photographs (Horizontal Swipe Gallery) */}
           {gallery && gallery.length > 0 ? (
-            <View style={s.galleryContainer}>
+            <Animated.View
+              entering={FadeInRight.delay(baseDelay + 200).duration(400).springify().damping(16)}
+              style={s.galleryContainer}
+            >
               <Text style={s.subSectionTitle}>Shop Highlights & Ambience</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.galleryList}
+                nestedScrollEnabled
               >
                 {gallery.map((imgUri, index) => (
                   <Pressable
@@ -223,23 +244,29 @@ export default function DiscoverScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
-            </View>
+            </Animated.View>
           ) : null}
 
           {/* 4. Highlights Tags */}
           {highlights && highlights.length > 0 ? (
-            <View style={s.highlightsRow}>
+            <Animated.View
+              entering={FadeInDown.delay(baseDelay + 220).duration(350).springify().damping(16)}
+              style={s.highlightsRow}
+            >
               {highlights.map((tag, idx) => (
                 <View key={`hl-${idx}`} style={s.highlightChip}>
                   <Text style={s.highlightText}>{tag}</Text>
                 </View>
               ))}
-            </View>
+            </Animated.View>
           ) : null}
 
           {/* 5. Product Preview Section */}
           {products && products.length > 0 ? (
-            <View style={s.productsSection}>
+            <Animated.View
+              entering={FadeInRight.delay(baseDelay + 240).duration(400).springify().damping(16)}
+              style={s.productsSection}
+            >
               <View style={s.productsHeader}>
                 <Text style={s.subSectionTitle}>Popular Items</Text>
                 <Pressable onPress={() => router.push(`/seller/${seller.id}`)}>
@@ -251,6 +278,7 @@ export default function DiscoverScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={s.productList}
+                nestedScrollEnabled
               >
                 {products.map((prod) => (
                   <View key={prod.id} style={s.productCard} testID={`discover-prod-${prod.id}`}>
@@ -279,20 +307,22 @@ export default function DiscoverScreen() {
                   </View>
                 ))}
               </ScrollView>
-            </View>
+            </Animated.View>
           ) : null}
 
           {/* 6. Shop CTA Button */}
-          <Pressable
-            style={s.exploreBtn}
-            onPress={() => router.push(`/seller/${seller.id}`)}
-            testID={`discover-explore-${seller.id}`}
-          >
-            <Text style={s.exploreBtnText}>Explore Shop & Full Menu</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.onBrandPrimary} />
-          </Pressable>
-        </View>
-      </Animated.View>
+          <Animated.View entering={FadeInDown.delay(baseDelay + 260).duration(350).springify().damping(16)}>
+            <Pressable
+              style={s.exploreBtn}
+              onPress={() => router.push(`/seller/${seller.id}`)}
+              testID={`discover-explore-${seller.id}`}
+            >
+              <Text style={s.exploreBtnText}>Explore Shop & Full Menu</Text>
+              <Ionicons name="arrow-forward" size={16} color={colors.onBrandPrimary} />
+            </Pressable>
+          </Animated.View>
+        </ScrollView>
+      </View>
     );
   };
 
@@ -379,42 +409,57 @@ export default function DiscoverScreen() {
       </View>
 
       {/* C. Shop Showcase Feed */}
-      {isLoading ? (
-        <Loader />
-      ) : isError ? (
-        <ErrorState message={(error as Error)?.message || "Failed to load discovery feed"} onRetry={() => refetch()} />
-      ) : (
-        <FlatList
-          data={showcaseItems}
-          keyExtractor={(item) => item.seller.id}
-          renderItem={renderShowcase}
-          contentContainerStyle={[s.feedList, { paddingBottom: insets.bottom + spacing.xxl }]}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          showsVerticalScrollIndicator={false}
-          refreshing={isRefetching}
-          onRefresh={() => refetch()}
-          onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-          }}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            isFetchingNextPage ? (
-              <View style={s.footerLoader}>
-                <ActivityIndicator size="small" color={colors.brandPrimary} />
-                <Text style={s.footerText}>Loading more businesses...</Text>
-              </View>
-            ) : undefined
+      <View
+        style={s.feedContainer}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0 && Math.abs(h - containerHeight) > 2) {
+            setContainerHeight(h);
           }
-          ListEmptyComponent={
-            <EmptyState
-              icon="compass-outline"
-              title="No shops found"
-              body="No recently opened or matching businesses found for this filter. Try another category."
-            />
-          }
-        />
-      )}
+        }}
+      >
+        {isLoading ? (
+          <Loader />
+        ) : isError ? (
+          <ErrorState message={(error as Error)?.message || "Failed to load discovery feed"} onRetry={() => refetch()} />
+        ) : (
+          <FlatList
+            data={showcaseItems}
+            keyExtractor={(item) => item.seller.id}
+            renderItem={renderShowcase}
+            pagingEnabled
+            snapToAlignment="start"
+            decelerationRate="fast"
+            showsVerticalScrollIndicator={false}
+            getItemLayout={
+              containerHeight > 0
+                ? (_, i) => ({ length: containerHeight, offset: containerHeight * i, index: i })
+                : undefined
+            }
+            refreshing={isRefetching}
+            onRefresh={() => refetch()}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              isFetchingNextPage ? (
+                <View style={s.footerLoader}>
+                  <ActivityIndicator size="small" color={colors.brandPrimary} />
+                  <Text style={s.footerText}>Loading more businesses...</Text>
+                </View>
+              ) : undefined
+            }
+            ListEmptyComponent={
+              <EmptyState
+                icon="compass-outline"
+                title="No shops found"
+                body="No recently opened or matching businesses found for this filter. Try another category."
+              />
+            }
+          />
+        )}
+      </View>
 
       {/* Full-screen Image Viewer Modal */}
       <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
@@ -518,19 +563,15 @@ const useStyles = makeStyles((c) => ({
     color: c.onSurface,
     fontWeight: "600",
   },
-  feedList: {
-    padding: spacing.lg,
-    gap: spacing.xl,
+  feedContainer: {
+    flex: 1,
   },
   card: {
     backgroundColor: c.surface,
-    borderRadius: radius.lg,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: c.border,
   },
   bannerContainer: {
-    height: 200,
+    height: 190,
     width: "100%",
     position: "relative",
   },
@@ -571,8 +612,12 @@ const useStyles = makeStyles((c) => ({
     color: "rgba(255,255,255,0.85)",
   },
   detailsSection: {
-    padding: spacing.lg,
+    flex: 1,
+  },
+  detailsContent: {
+    padding: spacing.md,
     gap: spacing.md,
+    paddingBottom: spacing.xxl,
   },
   metaRow: {
     flexDirection: "row",
