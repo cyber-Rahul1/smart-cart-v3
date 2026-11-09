@@ -115,6 +115,9 @@ export default function DiscoverScreen() {
     const hasOffer = !!seller.offer;
     const baseDelay = Math.min(index * 60, 240);
 
+    // Dynamic banner height: 32% of available container height (e.g., ~250-260dp on tall phones, min 220dp)
+    const dynamicBannerHeight = containerHeight > 0 ? Math.max(220, Math.round(containerHeight * 0.32)) : 240;
+
     return (
       <View
         style={[s.card, containerHeight > 0 && { height: containerHeight }]}
@@ -123,7 +126,7 @@ export default function DiscoverScreen() {
         {/* 1. Large Full-width Banner with Badges and Gradient Title */}
         <Pressable
           onPress={() => router.push(`/seller/${seller.id}`)}
-          style={s.bannerContainer}
+          style={[s.bannerContainer, { height: dynamicBannerHeight }]}
           testID={`discover-banner-${seller.id}`}
         >
           <Image source={{ uri: banner_url }} style={s.bannerImage} contentFit="cover" transition={200} />
@@ -162,156 +165,161 @@ export default function DiscoverScreen() {
           </LinearGradient>
         </Pressable>
 
-        {/* 2. Shop Details Section */}
-        <ScrollView
-          style={s.detailsSection}
-          contentContainerStyle={s.detailsContent}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-        >
-          <Animated.View
-            entering={FadeInDown.delay(baseDelay + 120).duration(350).springify().damping(16)}
-            style={s.metaRow}
+        {/* 2. Shop Details Section with Bottom Anchored CTA */}
+        <View style={s.detailsSection}>
+          <ScrollView
+            style={s.detailsScroll}
+            contentContainerStyle={s.detailsContent}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
           >
-            {/* Rating */}
-            <View style={s.ratingPill}>
-              <Ionicons name="star" size={13} color="#FFFFFF" />
-              <Text style={s.ratingText}>{seller.rating.toFixed(1)}</Text>
-            </View>
-
-            {/* Distance & ETA */}
-            <View style={s.metaItem}>
-              <Ionicons name="location-outline" size={14} color={colors.muted} />
-              <Text style={s.metaText}>{seller.distance_km} km</Text>
-            </View>
-            <View style={s.metaDot} />
-            <View style={s.metaItem}>
-              <Ionicons name="time-outline" size={14} color={colors.muted} />
-              <Text style={s.metaText}>{seller.eta_min} mins</Text>
-            </View>
-
-            {/* FSSAI Verified Pill */}
-            {seller.fssai_status === "verified" ? (
-              <View style={s.fssaiPill}>
-                <Ionicons name="shield-checkmark" size={12} color={colors.onPastelMint} />
-                <Text style={s.fssaiText}>FSSAI Verified</Text>
+            <Animated.View
+              entering={FadeInDown.delay(baseDelay + 120).duration(350).springify().damping(16)}
+              style={s.metaRow}
+            >
+              {/* Rating */}
+              <View style={s.ratingPill}>
+                <Ionicons name="star" size={13} color="#FFFFFF" />
+                <Text style={s.ratingText}>{seller.rating.toFixed(1)}</Text>
               </View>
-            ) : null}
-          </Animated.View>
 
-          {/* Shop Description Animated */}
-          <Animated.View entering={FadeInDown.delay(baseDelay + 160).duration(350).springify().damping(16)}>
-            <Text style={s.descriptionText} numberOfLines={2}>
-              {description}
-            </Text>
-          </Animated.View>
+              {/* Distance & ETA */}
+              <View style={s.metaItem}>
+                <Ionicons name="location-outline" size={14} color={colors.muted} />
+                <Text style={s.metaText}>{seller.distance_km} km</Text>
+              </View>
+              <View style={s.metaDot} />
+              <View style={s.metaItem}>
+                <Ionicons name="time-outline" size={14} color={colors.muted} />
+                <Text style={s.metaText}>{seller.eta_min} mins</Text>
+              </View>
 
-          {/* Special Offer Badge if available */}
-          {hasOffer ? (
-            <Animated.View
-              entering={FadeInDown.delay(baseDelay + 180).duration(350).springify().damping(16)}
-              style={s.offerBox}
-            >
-              <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
-              <Text style={s.offerText}>{seller.offer}</Text>
-            </Animated.View>
-          ) : null}
-
-          {/* 3. Multiple Shop Photographs (Horizontal Swipe Gallery) */}
-          {gallery && gallery.length > 0 ? (
-            <Animated.View
-              entering={FadeInRight.delay(baseDelay + 200).duration(400).springify().damping(16)}
-              style={s.galleryContainer}
-            >
-              <Text style={s.subSectionTitle}>Shop Highlights & Ambience</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.galleryList}
-                nestedScrollEnabled
-              >
-                {gallery.map((imgUri, index) => (
-                  <Pressable
-                    key={`gal-${seller.id}-${index}`}
-                    onPress={() => setPreviewImage(imgUri)}
-                    style={s.galleryItem}
-                    testID={`discover-gallery-img-${seller.id}-${index}`}
-                  >
-                    <Image source={{ uri: imgUri }} style={s.galleryImage} contentFit="cover" transition={200} />
-                    <View style={s.galleryZoomIcon}>
-                      <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </Animated.View>
-          ) : null}
-
-          {/* 4. Highlights Tags */}
-          {highlights && highlights.length > 0 ? (
-            <Animated.View
-              entering={FadeInDown.delay(baseDelay + 220).duration(350).springify().damping(16)}
-              style={s.highlightsRow}
-            >
-              {highlights.map((tag, idx) => (
-                <View key={`hl-${idx}`} style={s.highlightChip}>
-                  <Text style={s.highlightText}>{tag}</Text>
+              {/* FSSAI Verified Pill */}
+              {seller.fssai_status === "verified" ? (
+                <View style={s.fssaiPill}>
+                  <Ionicons name="shield-checkmark" size={12} color={colors.onPastelMint} />
+                  <Text style={s.fssaiText}>FSSAI Verified</Text>
                 </View>
-              ))}
+              ) : null}
             </Animated.View>
-          ) : null}
 
-          {/* 5. Product Preview Section */}
-          {products && products.length > 0 ? (
-            <Animated.View
-              entering={FadeInRight.delay(baseDelay + 240).duration(400).springify().damping(16)}
-              style={s.productsSection}
-            >
-              <View style={s.productsHeader}>
-                <Text style={s.subSectionTitle}>Popular Items</Text>
-                <Pressable onPress={() => router.push(`/seller/${seller.id}`)}>
-                  <Text style={s.viewAllLink}>View all ({item.total_products})</Text>
-                </Pressable>
-              </View>
+            {/* Shop Description Animated */}
+            <Animated.View entering={FadeInDown.delay(baseDelay + 160).duration(350).springify().damping(16)}>
+              <Text style={s.descriptionText} numberOfLines={2}>
+                {description}
+              </Text>
+            </Animated.View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.productList}
-                nestedScrollEnabled
+            {/* Special Offer Badge if available */}
+            {hasOffer ? (
+              <Animated.View
+                entering={FadeInDown.delay(baseDelay + 180).duration(350).springify().damping(16)}
+                style={s.offerBox}
               >
-                {products.map((prod) => (
-                  <View key={prod.id} style={s.productCard} testID={`discover-prod-${prod.id}`}>
-                    <Image source={{ uri: prod.image }} style={s.productImage} contentFit="cover" transition={150} />
-                    <View style={s.productInfo}>
-                      <Text style={s.productName} numberOfLines={1}>
-                        {prod.name}
-                      </Text>
-                      <Text style={s.productPrice}>{rupee(prod.price)}</Text>
-                      <Pressable
-                        style={[s.addBtn, addingPid === prod.id && { opacity: 0.6 }]}
-                        onPress={() => addToCart(prod, seller)}
-                        disabled={addingPid === prod.id}
-                        testID={`discover-add-cart-${prod.id}`}
-                      >
-                        {addingPid === prod.id ? (
-                          <ActivityIndicator size="small" color={colors.brandPrimary} />
-                        ) : (
-                          <>
-                            <Ionicons name="add" size={14} color={colors.brandPrimary} />
-                            <Text style={s.addBtnText}>ADD</Text>
-                          </>
-                        )}
-                      </Pressable>
-                    </View>
+                <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
+                <Text style={s.offerText}>{seller.offer}</Text>
+              </Animated.View>
+            ) : null}
+
+            {/* 3. Multiple Shop Photographs (Horizontal Swipe Gallery) */}
+            {gallery && gallery.length > 0 ? (
+              <Animated.View
+                entering={FadeInRight.delay(baseDelay + 200).duration(400).springify().damping(16)}
+                style={s.galleryContainer}
+              >
+                <Text style={s.subSectionTitle}>Shop Highlights & Ambience</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.galleryList}
+                  nestedScrollEnabled
+                >
+                  {gallery.map((imgUri, index) => (
+                    <Pressable
+                      key={`gal-${seller.id}-${index}`}
+                      onPress={() => setPreviewImage(imgUri)}
+                      style={s.galleryItem}
+                      testID={`discover-gallery-img-${seller.id}-${index}`}
+                    >
+                      <Image source={{ uri: imgUri }} style={s.galleryImage} contentFit="cover" transition={200} />
+                      <View style={s.galleryZoomIcon}>
+                        <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </Animated.View>
+            ) : null}
+
+            {/* 4. Highlights Tags */}
+            {highlights && highlights.length > 0 ? (
+              <Animated.View
+                entering={FadeInDown.delay(baseDelay + 220).duration(350).springify().damping(16)}
+                style={s.highlightsRow}
+              >
+                {highlights.map((tag, idx) => (
+                  <View key={`hl-${idx}`} style={s.highlightChip}>
+                    <Text style={s.highlightText}>{tag}</Text>
                   </View>
                 ))}
-              </ScrollView>
-            </Animated.View>
-          ) : null}
+              </Animated.View>
+            ) : null}
 
-          {/* 6. Shop CTA Button */}
-          <Animated.View entering={FadeInDown.delay(baseDelay + 260).duration(350).springify().damping(16)}>
+            {/* 5. Product Preview Section */}
+            {products && products.length > 0 ? (
+              <Animated.View
+                entering={FadeInRight.delay(baseDelay + 240).duration(400).springify().damping(16)}
+                style={s.productsSection}
+              >
+                <View style={s.productsHeader}>
+                  <Text style={s.subSectionTitle}>Popular Items</Text>
+                  <Pressable onPress={() => router.push(`/seller/${seller.id}`)}>
+                    <Text style={s.viewAllLink}>View all ({item.total_products})</Text>
+                  </Pressable>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.productList}
+                  nestedScrollEnabled
+                >
+                  {products.map((prod) => (
+                    <View key={prod.id} style={s.productCard} testID={`discover-prod-${prod.id}`}>
+                      <Image source={{ uri: prod.image }} style={s.productImage} contentFit="cover" transition={150} />
+                      <View style={s.productInfo}>
+                        <Text style={s.productName} numberOfLines={1}>
+                          {prod.name}
+                        </Text>
+                        <Text style={s.productPrice}>{rupee(prod.price)}</Text>
+                        <Pressable
+                          style={[s.addBtn, addingPid === prod.id && { opacity: 0.6 }]}
+                          onPress={() => addToCart(prod, seller)}
+                          disabled={addingPid === prod.id}
+                          testID={`discover-add-cart-${prod.id}`}
+                        >
+                          {addingPid === prod.id ? (
+                            <ActivityIndicator size="small" color={colors.brandPrimary} />
+                          ) : (
+                            <>
+                              <Ionicons name="add" size={14} color={colors.brandPrimary} />
+                              <Text style={s.addBtnText}>ADD</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </Animated.View>
+            ) : null}
+          </ScrollView>
+
+          {/* 6. Shop CTA Button anchored at bottom of card */}
+          <Animated.View
+            entering={FadeInDown.delay(baseDelay + 260).duration(350).springify().damping(16)}
+            style={s.ctaContainer}
+          >
             <Pressable
               style={s.exploreBtn}
               onPress={() => router.push(`/seller/${seller.id}`)}
@@ -321,7 +329,7 @@ export default function DiscoverScreen() {
               <Ionicons name="arrow-forward" size={16} color={colors.onBrandPrimary} />
             </Pressable>
           </Animated.View>
-        </ScrollView>
+        </View>
       </View>
     );
   };
@@ -616,11 +624,22 @@ const useStyles = makeStyles((c) => ({
   },
   detailsSection: {
     flex: 1,
+    justifyContent: "space-between",
+  },
+  detailsScroll: {
+    flex: 1,
   },
   detailsContent: {
-    padding: spacing.md,
-    gap: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  ctaContainer: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    paddingTop: spacing.xs,
+    backgroundColor: c.surface,
   },
   metaRow: {
     flexDirection: "row",
