@@ -133,14 +133,33 @@ async def seller_detail(sid: str):
 
 
 @router.get("/search")
-async def search(q: str = Query(min_length=1, max_length=50)):
-    sellers = await db.sellers.find({**PUBLIC, "$or": [{"name": {"$regex": q, "$options": "i"}},
-                                                       {"cuisine": {"$regex": q, "$options": "i"}}]}, {"_id": 0}).limit(20).to_list(20)
+async def search(q: str = Query(min_length=1, max_length=50), veg_only: Optional[bool] = None):
+    seller_query = {**PUBLIC, "$or": [{"name": {"$regex": q, "$options": "i"}},
+                                        {"cuisine": {"$regex": q, "$options": "i"}}]}
+    sellers = await db.sellers.find(seller_query, {"_id": 0}).limit(20).to_list(20)
     live_ids = [s["id"] for s in await db.sellers.find(PUBLIC, {"_id": 0, "id": 1}).to_list(1000)]
-    products = await db.products.find({"name": {"$regex": q, "$options": "i"}, "seller_id": {"$in": live_ids}}, {"_id": 0}).limit(30).to_list(30)
+
+    product_query: dict = {"name": {"$regex": q, "$options": "i"}, "seller_id": {"$in": live_ids}}
+    if veg_only is True:
+        product_query["veg"] = True
+    elif veg_only is False:
+        # nonveg means veg == False
+        product_query["veg"] = False
+
+    products = await db.products.find(product_query, {"_id": 0}).limit(30).to_list(30)
     names = {s["id"]: s["name"] for s in await db.sellers.find({"id": {"$in": [p["seller_id"] for p in products]}}, {"_id": 0}).to_list(100)}
     for p in products:
         p["seller_name"] = names.get(p["seller_id"], "")
+
+    if veg_only is True:
+        # Filter sellers who have veg dishes or are grocery/pure veg
+        # Keep sellers who match or have veg products
+        sellers_with_veg = set(p["seller_id"] for p in products)
+        sellers = [s for s in sellers if s["id"] in sellers_with_veg or s.get("category") == "grocery" or "veg" in s.get("cuisine", "").lower()]
+    elif veg_only is False:
+        sellers_with_nonveg = set(p["seller_id"] for p in products)
+        sellers = [s for s in sellers if s["id"] in sellers_with_nonveg or "non" in s.get("cuisine", "").lower() or "chicken" in s.get("cuisine", "").lower() or "biryani" in s.get("cuisine", "").lower()]
+
     return {"sellers": sellers, "products": products}
 
 

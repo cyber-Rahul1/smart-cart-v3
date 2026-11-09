@@ -23,7 +23,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { AnimatedPlaceholder } from "@/src/components/animated-placeholder";
 import { SellerFullCard, SellerTile } from "@/src/components/seller-card";
+import { VegToggle } from "@/src/components/veg-toggle";
+import { VoiceSearchModal } from "@/src/components/voice-search-modal";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Address, Seller } from "@/src/types";
@@ -53,6 +56,9 @@ export default function HomeScreen() {
   const notif = useQuery({ queryKey: ["notifications"], queryFn: () => api<{ unread: number }>("/notifications") });
   const def = addr.data?.find((a) => a.is_default);
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
+
+  const [vegOnly, setVegOnly] = useState(false);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
 
   // Header animation values: animate collapse of address row
   const [locRowHeight, setLocRowHeight] = useState(56);
@@ -132,12 +138,67 @@ export default function HomeScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Search bar stays pinned below the collapsed address */}
-        <Pressable testID="home-search-bar" onPress={() => router.push("/search")} style={s.search}>
-          <Ionicons name="search" size={18} color={colors.muted} />
-          <Text style={s.searchText}>Search biryani, milk, shops…</Text>
-        </Pressable>
+        {/* Search bar row with Animated Placeholder, Mic, and Veg filter */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <Pressable
+            testID="home-search-bar"
+            onPress={() => router.push(vegOnly ? "/search?veg=1" : "/search")}
+            style={[s.search, { flex: 1 }]}
+          >
+            <Ionicons name="search" size={18} color={colors.muted} />
+            <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
+              <AnimatedPlaceholder
+                placeholders={[
+                  "Try 'Biryani'",
+                  "Try 'Pizza'",
+                  "Try 'Milk'",
+                  "Try 'Sweets'",
+                  "Try 'Dosa'",
+                  "Try 'Organic Vegetables'",
+                  "Try 'Burger'",
+                ]}
+              />
+            </View>
+
+            {/* Vertical divider before mic */}
+            <View style={{ width: 1, height: 20, backgroundColor: colors.border }} />
+
+            {/* Voice mic option */}
+            <Pressable
+              testID="home-voice-mic-button"
+              onPress={(e) => {
+                e.stopPropagation();
+                setVoiceModalVisible(true);
+              }}
+              style={({ pressed }) => [
+                { padding: 4, alignItems: "center", justifyContent: "center" },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Ionicons name="mic" size={20} color={colors.brandPrimary} />
+            </Pressable>
+          </Pressable>
+
+          {/* Veg toggle filter */}
+          <VegToggle
+            value={vegOnly}
+            onToggle={(val) => {
+              setVegOnly(val);
+              router.push(`/search?veg=${val ? "1" : "0"}`);
+            }}
+            testID="home-veg-toggle"
+          />
+        </View>
       </View>
+
+      {/* Voice Search Modal */}
+      <VoiceSearchModal
+        visible={voiceModalVisible}
+        onClose={() => setVoiceModalVisible(false)}
+        onTranscript={(spoken) => {
+          router.push(`/search?q=${encodeURIComponent(spoken)}${vegOnly ? "&veg=1" : ""}`);
+        }}
+      />
 
       {q.isLoading ? <Loader /> : q.isError ? <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} /> : (
         <ScrollView
