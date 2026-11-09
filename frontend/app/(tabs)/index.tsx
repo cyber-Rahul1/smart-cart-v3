@@ -31,7 +31,7 @@ import { VoiceSearchModal } from "@/src/components/voice-search-modal";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Address, Seller } from "@/src/types";
-import { ErrorState, IconName, Ionicons, Loader, SectionTitle } from "@/src/ui";
+import { ErrorState, IconName, Ionicons, Loader, SectionTitle, EndOfListIndicator } from "@/src/ui";
 import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 type Home = { trending: Seller[]; new_shops: Seller[]; nearby: Seller[]; recommended: Seller[]; offers: { code: string; description: string }[] };
@@ -367,6 +367,7 @@ export default function HomeScreen() {
               />
             </View>
           ))}
+          <EndOfListIndicator message="You've explored all shops nearby" />
         </ScrollView>
       )}
     </View>

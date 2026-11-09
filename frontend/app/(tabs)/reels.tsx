@@ -53,13 +53,12 @@ export default function Reels() {
                 <LinearGradient colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.75)"]} style={StyleSheet.absoluteFill} />
                 <View style={[s.top, { top: insets.top + spacing.sm }]}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                    <Text style={s.topTitle}>Bites</Text>
                     {showTrendingBadge ? (
                       <View style={s.trendingBadge}>
                         <Ionicons name="flame" size={13} color="#FFFFFF" />
                         <Text style={s.trendingBadgeText}>Trending</Text>
                       </View>
-                    ) : null}
+                    ) : <View style={{ height: 26 }} />}
                   </View>
                   {item.sponsored ? <View testID={`reel-sponsored-${item.id}`} style={s.sp}><Text style={s.spText}>Sponsored</Text></View> : null}
                 </View>

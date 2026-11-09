@@ -15,6 +15,23 @@ async def home():
     trending = await db.sellers.find(PUBLIC, {"_id": 0}).sort("trend_score", -1).limit(6).to_list(6)
     new_shops = await db.sellers.find({**PUBLIC, "is_new": True}, {"_id": 0}).limit(6).to_list(6)
     nearby = await db.sellers.find(PUBLIC, {"_id": 0}).sort("distance_km", 1).limit(10).to_list(10)
+
+    # Populate gallery with product images for nearby sellers if gallery has duplicates or is empty
+    nearby_sids = [s["id"] for s in nearby]
+    if nearby_sids:
+        all_prods = await db.products.find({"seller_id": {"$in": nearby_sids}}, {"_id": 0, "seller_id": 1, "image": 1}).to_list(200)
+        prod_map = {}
+        for p in all_prods:
+            if p.get("image"):
+                prod_map.setdefault(p["seller_id"], []).append(p["image"])
+        for s in nearby:
+            s_prods = prod_map.get(s["id"], [])
+            distinct_images = []
+            for img in [s.get("image"), *s_prods, *(s.get("gallery") or [])]:
+                if img and img not in distinct_images:
+                    distinct_images.append(img)
+            s["gallery"] = distinct_images[:5]
+
     offers = await db.coupons.find({"active": True}, {"_id": 0}).to_list(10)
     recommended = await db.sellers.find(PUBLIC, {"_id": 0}).sort("rating", -1).limit(6).to_list(6)
     return {"trending": trending, "new_shops": new_shops, "nearby": nearby, "offers": offers, "recommended": recommended}

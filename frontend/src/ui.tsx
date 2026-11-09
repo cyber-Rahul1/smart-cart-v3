@@ -281,6 +281,19 @@ export function SectionTitle({ title, action, onAction, testID }: { title: strin
   );
 }
 
+/* ---------------- End of List Indicator ---------------- */
+export function EndOfListIndicator({ message = "You've reached the end of the list" }: { message?: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: spacing.xl, paddingHorizontal: spacing.lg, gap: spacing.xs }}>
+      <View style={{ width: 32, height: 3, borderRadius: 1.5, backgroundColor: colors.borderStrong, marginBottom: spacing.xs }} />
+      <Text style={{ fontSize: font.sm, color: colors.muted, fontWeight: "600", textAlign: "center" }}>
+        {message}
+      </Text>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((c) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     backgroundColor: c.surface, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },

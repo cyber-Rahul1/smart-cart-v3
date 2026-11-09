@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
-import { Button, IconName, Ionicons } from "@/src/ui";
+import { Button, EndOfListIndicator, IconName, Ionicons } from "@/src/ui";
 
 const LINKS: { key: string; label: string; sub: string; icon: IconName; href: string }[] = [
   { key: "orders", label: "Your orders", sub: "Track, reorder, cancel", icon: "receipt-outline", href: "/orders" },
@@ -21,7 +21,8 @@ export default function Account() {
   const s = useStyles();
   const { colors } = useTheme();
   const { user, signOut } = useAuth();
-  const bottomChrome = usesNativeTabs ? insets.bottom : 0;
+  const tabBarHeight = insets.bottom > 0 ? insets.bottom + 52 : 60;
+  const bottomChrome = usesNativeTabs ? insets.bottom : tabBarHeight;
 
   return (
     <View style={s.root}>
@@ -65,6 +66,7 @@ export default function Account() {
         <Button testID="account-logout-button" variant="danger" icon="log-out-outline" title="Log out" onPress={async () => { await signOut(); router.replace("/login"); }}
           style={{ marginHorizontal: spacing.lg, marginTop: spacing.xl }} />
         <Text style={s.version}>GathrCart · Milestone 1 · Demo payments</Text>
+        <EndOfListIndicator message="You've reached the end of the page" />
       </ScrollView>
     </View>
   );
