@@ -9,7 +9,7 @@ import { Ionicons, IconName } from "@/src/ui";
 
 const TABS: { name: string; title: string; icon: IconName; active: IconName; sf: string }[] = [
   { name: "index", title: "Home", icon: "home-outline", active: "home", sf: "house.fill" },
-  { name: "reels", title: "Reels", icon: "play-circle-outline", active: "play-circle", sf: "play.rectangle.fill" },
+  { name: "reels", title: "Trending", icon: "play-circle-outline", active: "play-circle", sf: "play.rectangle.fill" },
   { name: "cart", title: "Cart", icon: "bag-handle-outline", active: "bag-handle", sf: "bag.fill" },
   { name: "account", title: "Account", icon: "person-circle-outline", active: "person-circle", sf: "person.crop.circle.fill" },
 ];

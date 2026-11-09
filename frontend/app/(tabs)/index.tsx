@@ -19,10 +19,10 @@ type Home = { trending: Seller[]; new_shops: Seller[]; nearby: Seller[]; recomme
 const TILES: { key: string; label: string; icon: IconName; bg: keyof ThemeColors; fg: keyof ThemeColors; href: string }[] = [
   { key: "food", label: "Food", icon: "fast-food-outline", bg: "brandTertiary", fg: "onBrandTertiary", href: "/listing/food" },
   { key: "grocery", label: "Groceries", icon: "basket-outline", bg: "pastelMint", fg: "onPastelMint", href: "/listing/grocery" },
-  { key: "new", label: "New Shops", icon: "sparkles-outline", bg: "pastelLemon", fg: "onPastelLemon", href: "/listing/new" },
+  { key: "new", label: "Discover", icon: "sparkles-outline", bg: "pastelLemon", fg: "onPastelLemon", href: "/listing/new" },
   { key: "group", label: "Group Orders", icon: "people-outline", bg: "pastelLilac", fg: "onPastelLilac", href: "/groups" },
   { key: "community", label: "Apartment", icon: "business-outline", bg: "pastelSky", fg: "onPastelSky", href: "/community" },
-  { key: "reels", label: "Ads & Reels", icon: "play-circle-outline", bg: "pastelRose", fg: "onPastelRose", href: "/(tabs)/reels" },
+  { key: "reels", label: "Trending", icon: "play-circle-outline", bg: "pastelRose", fg: "onPastelRose", href: "/(tabs)/reels" },
 ];
 
 export default function HomeScreen() {

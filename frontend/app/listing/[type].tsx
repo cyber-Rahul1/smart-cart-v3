@@ -12,7 +12,7 @@ import { EmptyState, ErrorState, Header, Ionicons, Loader } from "@/src/ui";
 const TITLES: Record<string, [string, string]> = {
   food: ["Food", "Restaurants & cloud kitchens near you"],
   grocery: ["Groceries", "Kirana, fresh produce & dairy"],
-  new: ["New Shops", "Recently opened, approved businesses"],
+  new: ["Discover", "Recently opened, approved businesses"],
 };
 
 export default function Listing() {

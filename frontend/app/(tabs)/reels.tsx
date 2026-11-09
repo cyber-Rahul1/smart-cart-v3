@@ -39,7 +39,7 @@ export default function Reels() {
               <Image source={{ uri: item.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={250} />
               <LinearGradient colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.75)"]} style={StyleSheet.absoluteFill} />
               <View style={[s.top, { top: insets.top + spacing.sm }]}>
-                <Text style={s.topTitle}>Ads & Reels</Text>
+                <Text style={s.topTitle}>Trending</Text>
                 {item.sponsored ? <View testID={`reel-sponsored-${item.id}`} style={s.sp}><Text style={s.spText}>Sponsored</Text></View> : null}
               </View>
               <View style={[s.side, { bottom: bottomChrome + 140 }]}>
