@@ -572,7 +572,10 @@ const useStyles = makeStyles((c) => ({
   },
   bannerContainer: {
     height: 190,
-    width: "100%",
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    borderRadius: radius.lg,
+    overflow: "hidden",
     position: "relative",
   },
   bannerImage: {
