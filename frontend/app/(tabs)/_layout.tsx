@@ -1,16 +1,30 @@
-import { Redirect, Tabs, useRouter, useSegments } from "expo-router";
-import { BottomTabBar, BottomTabBarProps } from "expo-router/js-tabs";
+import { Redirect } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import React, { useRef } from "react";
-import { Platform, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Dimensions,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/src/auth";
 import { ROLE_HOME, usesNativeTabs } from "@/src/navigation";
-import { useTheme } from "@/src/theme";
+import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Ionicons, IconName } from "@/src/ui";
 import { TabBarVisibilityProvider, useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+
+import HomeScreen from "./index";
+import Reels from "./reels";
+import CartScreen from "./cart";
+import Account from "./account";
 
 const TABS: { name: string; title: string; icon: IconName; active: IconName; sf: string }[] = [
   { name: "index", title: "Home", icon: "home-outline", active: "home", sf: "house.fill" },
@@ -19,67 +33,42 @@ const TABS: { name: string; title: string; icon: IconName; active: IconName; sf:
   { name: "account", title: "Account", icon: "person-circle-outline", active: "person-circle", sf: "person.crop.circle.fill" },
 ];
 
-function AnimatedTabBar(props: BottomTabBarProps) {
-  const { tabBarTranslateY } = useTabBarVisibility();
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: tabBarTranslateY.value }],
-  }));
-
-  return (
-    <Animated.View style={[{ position: "absolute", bottom: 0, left: 0, right: 0 }, animStyle]}>
-      <BottomTabBar {...props} />
-    </Animated.View>
-  );
-}
-
 function TabsContent() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
-  const router = useRouter();
-  const segments = useSegments();
+  const insets = useSafeAreaInsets();
+  const {
+    tabBarTranslateY,
+    activeTabIndex,
+    setActiveTabIndex,
+    setScrollPageToHandler,
+  } = useTabBarVisibility();
 
-  // Find currently active tab index from segments
-  const activeTabName = (segments[1] as string) || "index";
-  const currentIndex = TABS.findIndex((t) => t.name === activeTabName);
-  const currentIndexRef = useRef(currentIndex);
-  currentIndexRef.current = currentIndex >= 0 ? currentIndex : 0;
+  const [pageWidth, setPageWidth] = useState(Dimensions.get("window").width);
+  const flatListRef = useRef<FlatList<any>>(null);
 
-  // Track swipe navigation to avoid multiple rapid navigations in a single gesture
-  const isNavigatingRef = useRef(false);
-
-  const panGesture = Gesture.Pan()
-    .runOnJS(true)
-    .activeOffsetX([-25, 25])
-    .failOffsetY([-20, 20])
-    .onBegin(() => {
-      isNavigatingRef.current = false;
-    })
-    .onUpdate((e) => {
-      if (isNavigatingRef.current) return;
-
-      const curIdx = currentIndexRef.current;
-      const SWIPE_THRESHOLD = 50;
-
-      // Swiping Right to Left -> Go to next tab
-      if (e.translationX < -SWIPE_THRESHOLD && e.velocityX < -200) {
-        if (curIdx < TABS.length - 1) {
-          isNavigatingRef.current = true;
-          const nextTab = TABS[curIdx + 1];
-          router.navigate(nextTab.name === "index" ? "/(tabs)" : (`/(tabs)/${nextTab.name}` as any));
-        }
+  // Expose scrollPageTo to context so any child or button can programmatically swipe
+  useEffect(() => {
+    setScrollPageToHandler((index: number) => {
+      setActiveTabIndex(index);
+      if (pageWidth > 0) {
+        flatListRef.current?.scrollToOffset({ offset: index * pageWidth, animated: true });
       }
-      // Swiping Left to Right -> Go to previous tab
-      else if (e.translationX > SWIPE_THRESHOLD && e.velocityX > 200) {
-        if (curIdx > 0) {
-          isNavigatingRef.current = true;
-          const prevTab = TABS[curIdx - 1];
-          router.navigate(prevTab.name === "index" ? "/(tabs)" : (`/(tabs)/${prevTab.name}` as any));
-        }
-      }
-    })
-    .onEnd(() => {
-      isNavigatingRef.current = false;
     });
+  }, [pageWidth]);
+
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (pageWidth <= 0) return;
+    const offset = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(offset / pageWidth);
+    if (idx >= 0 && idx < TABS.length && idx !== activeTabIndex) {
+      setActiveTabIndex(idx);
+    }
+  };
+
+  const animTabBarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: tabBarTranslateY.value }],
+  }));
 
   if (!loading && !user) return <Redirect href="/login" />;
   if (user && ROLE_HOME[user.role]) return <Redirect href={ROLE_HOME[user.role] as any} />;
@@ -97,41 +86,112 @@ function TabsContent() {
     );
   }
 
+  const renderPage = (tabName: string) => {
+    switch (tabName) {
+      case "index":
+        return <HomeScreen />;
+      case "reels":
+        return <Reels />;
+      case "cart":
+        return <CartScreen />;
+      case "account":
+        return <Account />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <GestureDetector gesture={panGesture}>
-      <View style={{ flex: 1 }}>
-        <Tabs
-          tabBar={(props) => <AnimatedTabBar {...props} />}
-          screenOptions={{
-            headerShown: false,
-            animation: "shift",
-            tabBarActiveTintColor: colors.brandPrimary,
-            tabBarInactiveTintColor: colors.muted,
-            tabBarStyle: {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              ...(Platform.OS === "web" ? { height: 64 } : {}),
-            },
-            tabBarItemStyle: { alignSelf: "center" },
-            tabBarLabelStyle: { fontWeight: "700", fontSize: 11 },
-          }}
-        >
-          {TABS.map((t) => (
-            <Tabs.Screen
+    <View
+      style={{ flex: 1, backgroundColor: colors.surface }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && w !== pageWidth) setPageWidth(w);
+      }}
+    >
+      {/* Interactive Carousel Paging for Tabs */}
+      <FlatList
+        ref={flatListRef}
+        data={TABS}
+        keyExtractor={(item) => item.name}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        removeClippedSubviews={Platform.OS === "android"}
+        renderItem={({ item }) => (
+          <View style={{ width: pageWidth, flex: 1 }}>
+            {renderPage(item.name)}
+          </View>
+        )}
+      />
+
+      {/* Synchronized Custom Bottom Tab Bar */}
+      <Animated.View
+        style={[
+          {
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-around",
+            paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.xs,
+            height: insets.bottom > 0 ? insets.bottom + 52 : 60,
+          },
+          animTabBarStyle,
+        ]}
+      >
+        {TABS.map((t, idx) => {
+          const focused = activeTabIndex === idx;
+          const color = focused ? colors.brandPrimary : colors.muted;
+          return (
+            <Pressable
               key={t.name}
-              name={t.name}
-              options={{
-                title: t.title,
-                tabBarButtonTestID: `tab-${t.name}`,
-                tabBarIcon: ({ focused, color }) => (
-                  <Ionicons name={focused ? t.active : t.icon} size={24} color={color} />
-                ),
+              testID={`tab-${t.name}`}
+              onPress={() => {
+                setActiveTabIndex(idx);
+                flatListRef.current?.scrollToOffset({
+                  offset: idx * pageWidth,
+                  animated: true,
+                });
               }}
-            />
-          ))}
-        </Tabs>
-      </View>
-    </GestureDetector>
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 6,
+                gap: 2,
+              }}
+            >
+              <Ionicons
+                name={focused ? t.active : t.icon}
+                size={24}
+                color={color}
+              />
+              <Text
+                style={{
+                  color,
+                  fontWeight: "700",
+                  fontSize: 11,
+                }}
+              >
+                {t.title}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </Animated.View>
+    </View>
   );
 }
 

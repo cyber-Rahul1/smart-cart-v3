@@ -1,17 +1,41 @@
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, ReactNode, useState } from "react";
 import { SharedValue, useSharedValue } from "react-native-reanimated";
 
 interface TabBarVisibilityContextType {
   tabBarTranslateY: SharedValue<number>;
+  activeTabIndex: number;
+  setActiveTabIndex: (idx: number | ((prev: number) => number)) => void;
+  scrollPageTo: (idx: number) => void;
+  setScrollPageToHandler: (fn: (idx: number) => void) => void;
 }
 
 const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null>(null);
 
 export function TabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const tabBarTranslateY = useSharedValue(0);
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [scrollPageToFn, setScrollPageToFn] = useState<((idx: number) => void) | null>(null);
+
+  const scrollPageTo = (idx: number) => {
+    if (scrollPageToFn) {
+      scrollPageToFn(idx);
+    }
+  };
+
+  const setScrollPageToHandler = (fn: (idx: number) => void) => {
+    setScrollPageToFn(() => fn);
+  };
 
   return (
-    <TabBarVisibilityContext.Provider value={{ tabBarTranslateY }}>
+    <TabBarVisibilityContext.Provider
+      value={{
+        tabBarTranslateY,
+        activeTabIndex,
+        setActiveTabIndex,
+        scrollPageTo,
+        setScrollPageToHandler,
+      }}
+    >
       {children}
     </TabBarVisibilityContext.Provider>
   );
