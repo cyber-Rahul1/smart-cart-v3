@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { SellerRow, SellerTile } from "@/src/components/seller-card";
+import { SellerFullCard, SellerTile } from "@/src/components/seller-card";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Address, Seller } from "@/src/types";
@@ -129,7 +129,7 @@ export default function HomeScreen() {
           </ScrollView>
 
           <SectionTitle title="All shops nearby" />
-          {q.data!.nearby.map((sl) => <SellerRow key={sl.id} s={sl} testID={`home-nearby-${sl.id}`} />)}
+          {q.data!.nearby.map((sl) => <SellerFullCard key={sl.id} s={sl} testID={`home-nearby-${sl.id}`} />)}
         </ScrollView>
       )}
     </View>
