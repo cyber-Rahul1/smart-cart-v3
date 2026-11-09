@@ -21,7 +21,14 @@ import { api, ApiError } from "@/src/api";
 import { rupee } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Address, DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
-import { EmptyState, ErrorState, IconName, Ionicons, Loader, useToast } from "@/src/ui";
+import { EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast } from "@/src/ui";
+import { SellerRow } from "@/src/components/seller-card";
+
+const TITLES: Record<string, [string, string]> = {
+  food: ["Food", "Restaurants & cloud kitchens near you"],
+  grocery: ["Groceries", "Kirana, fresh produce & dairy"],
+  new: ["Discover", "Explore newly opened shops near you"],
+};
 
 const CATEGORIES: { key: string; label: string; icon: IconName }[] = [
   { key: "all", label: "All", icon: "sparkles-outline" },
@@ -39,6 +46,18 @@ export default function DiscoverScreen() {
   const s = useStyles();
   const qc = useQueryClient();
   const toast = useToast();
+
+  const isScheduleMode = !!params.schedule;
+  const isDiscoverMode = !params.schedule && (!params.type || params.type === "new");
+
+  // Query for category listing when in schedule mode or standard category mode
+  const listCategory = params.type || "food";
+  const categoryQuery = useQuery({
+    queryKey: ["sellers", listCategory],
+    queryFn: () => api<Seller[]>(`/sellers?category=${listCategory}`),
+    enabled: isScheduleMode,
+  });
+  const [listTitle, listSub] = TITLES[listCategory] ?? ["Shops", ""];
 
   const [selectedCat, setSelectedCat] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,6 +84,7 @@ export default function DiscoverScreen() {
   } = useInfiniteQuery<DiscoverResponse>({
     queryKey: ["discover-feed", selectedCat, activeSearch],
     initialPageParam: 0,
+    enabled: isDiscoverMode,
     queryFn: ({ pageParam = 0 }) => {
       const qParams = new URLSearchParams();
       if (selectedCat && selectedCat !== "all") qParams.append("category", selectedCat);
@@ -309,6 +329,90 @@ export default function DiscoverScreen() {
       </View>
     );
   };
+
+  if (isScheduleMode) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+        <Header title={listTitle} subtitle={listSub} />
+        <View
+          testID="listing-schedule-banner"
+          style={{
+            margin: spacing.lg,
+            marginBottom: spacing.xs,
+            padding: spacing.md,
+            borderRadius: radius.md,
+            backgroundColor: colors.pastelLilac,
+            flexDirection: "row",
+            gap: spacing.sm,
+            alignItems: "center",
+          }}
+        >
+          <Ionicons name="time-outline" size={20} color={colors.onPastelLilac} />
+          <Text
+            style={{
+              color: colors.onPastelLilac,
+              flex: 1,
+              fontSize: font.sm + 1,
+              fontWeight: "600",
+              lineHeight: 20,
+            }}
+          >
+            Add items, then choose a delivery slot in your cart.
+          </Text>
+        </View>
+
+        {categoryQuery.isLoading ? (
+          <Loader />
+        ) : categoryQuery.isError ? (
+          <ErrorState
+            message={(categoryQuery.error as Error)?.message || "Failed to load shops"}
+            onRetry={() => categoryQuery.refetch()}
+          />
+        ) : (
+          <FlatList
+            testID={`listing-${listCategory}`}
+            data={categoryQuery.data}
+            keyExtractor={(s) => s.id}
+            contentContainerStyle={{
+              paddingVertical: spacing.sm,
+              paddingBottom: insets.bottom + spacing.xl,
+            }}
+            renderItem={({ item }) => (
+              <View>
+                <SellerRow s={item} testID={`listing-seller-${item.id}`} />
+                {listCategory === "new" ? (
+                  <Text
+                    style={{
+                      marginLeft: 136,
+                      marginTop: -spacing.sm,
+                      marginBottom: spacing.sm,
+                      color: colors.onPastelMint,
+                      fontSize: font.sm,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Opened{" "}
+                    {new Date(item.opened_on).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                    })}{" "}
+                    · {item.address}
+                  </Text>
+                ) : null}
+              </View>
+            )}
+            ListEmptyComponent={
+              <EmptyState
+                icon="storefront-outline"
+                title="No shops here yet"
+                body="We're onboarding more local businesses in your area."
+              />
+            }
+          />
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={s.root}>
