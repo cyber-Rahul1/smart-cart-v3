@@ -49,10 +49,13 @@ class CreateOrderIn(BaseModel):
     currency: str = "INR"
 
 class VerifyPaymentIn(BaseModel):
-    order_id: str
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
+    order_id: Optional[str] = None
+    razorpay_order_id: Optional[str] = None
+    provider_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    provider_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+    signature: Optional[str] = None
 
 class RefundIn(BaseModel):
     payment_id: str
@@ -66,25 +69,77 @@ class RefundIn(BaseModel):
 async def health():
     return {"status": "ok", "service": "payment-service"}
 
+@app.get("/api/payments/methods")
+async def methods(user=Depends(current_user)):
+    return {
+        "online": True,
+        "online_mode": "test" if razorpay_client.has_active_credentials else "demo",
+        "cod": True,
+        "cod_limit": 3000
+    }
+
 @app.post("/api/payments/orders/create")
-async def create_payment_order(body: CreateOrderIn, user=Depends(current_user)):
+@app.post("/api/payments/initiate")
+async def create_payment_order(body: Dict[str, Any], user=Depends(current_user)):
     """
     Creates an authoritative Razorpay order in paise and stores a pending relational record.
+    Supports both create_payment_order (with amount_paise) and initiate (with order_id lookup).
     """
+    order_id = body.get("order_id")
+    if not order_id:
+        raise HTTPException(400, "order_id is required")
+
+    amount_paise = body.get("amount_paise")
+    currency = body.get("currency", "INR")
+
+    # If amount_paise not explicitly provided, look up order from Mongo
+    order_doc = None
+    if not amount_paise:
+        from core import db
+        order_doc = await db.orders.find_one({"id": order_id, "user_id": user["id"]}, {"_id": 0})
+        if not order_doc:
+            raise HTTPException(404, "Order not found")
+        if order_doc.get("payment_status") == "paid":
+            raise HTTPException(400, "Order already paid")
+        if order_doc.get("status") == "cancelled":
+            raise HTTPException(400, "Order cancelled")
+        amount_paise = int(round(order_doc["bill"]["total"] * 100))
+
     rzp_order = razorpay_client.create_order(
-        amount_paise=body.amount_paise,
-        currency=body.currency,
-        receipt=f"rec_{body.order_id[:12]}"
+        amount_paise=amount_paise,
+        currency=currency,
+        receipt=f"rec_{order_id[:12]}"
     )
 
     db_session = SessionLocal()
     try:
+        # Ensure OrderRelational exists before referencing it
+        existing_order = db_session.query(OrderRelational).filter(OrderRelational.id == order_id).first()
+        if not existing_order and order_doc:
+            bill = order_doc.get("bill", {})
+            rel_order = OrderRelational(
+                id=order_id,
+                seller_id=order_doc.get("seller_id", ""),
+                user_id=user["id"],
+                address_id=order_doc.get("address_id", ""),
+                kind=order_doc.get("kind", "individual"),
+                status=order_doc.get("status", "pending_payment"),
+                payment_status=order_doc.get("payment_status", "pending"),
+                subtotal_paise=int(round(bill.get("subtotal", 0) * 100)),
+                delivery_fee_paise=int(round(bill.get("delivery_fee", 0) * 100)),
+                discount_paise=int(round(bill.get("discount", 0) * 100)),
+                tax_paise=int(round(bill.get("tax", 0) * 100)),
+                total_paise=amount_paise,
+            )
+            db_session.add(rel_order)
+            db_session.flush()
+
         p = PaymentRelational(
             id=str(new_id()),
-            order_id=body.order_id,
+            order_id=order_id,
             user_id=user["id"],
-            amount_paise=body.amount_paise,
-            currency=body.currency,
+            amount_paise=amount_paise,
+            currency=currency,
             method="online",
             status="initiated",
             provider="razorpay",
@@ -92,11 +147,33 @@ async def create_payment_order(body: CreateOrderIn, user=Depends(current_user)):
         )
         db_session.add(p)
         db_session.commit()
+
+        # Also sync to Mongo payments collection if mongo order exists
+        if order_doc:
+            from core import db, now, iso
+            await db.payments.insert_one({
+                "id": p.id,
+                "order_id": order_id,
+                "user_id": user["id"],
+                "amount": amount_paise / 100.0,
+                "amount_paise": amount_paise,
+                "currency": currency,
+                "provider": "razorpay",
+                "provider_order_id": rzp_order["id"],
+                "razorpay_order_id": rzp_order["id"],
+                "status": "created",
+                "created_at": iso(now())
+            })
+
         return {
+            "id": p.id,
             "payment_id": p.id,
+            "order_id": order_id,
+            "provider_order_id": rzp_order["id"],
             "razorpay_order_id": rzp_order["id"],
-            "amount_paise": body.amount_paise,
-            "currency": body.currency,
+            "amount": amount_paise / 100.0,
+            "amount_paise": amount_paise,
+            "currency": currency,
             "key_id": razorpay_client.key_id
         }
     except Exception as e:
@@ -107,14 +184,22 @@ async def create_payment_order(body: CreateOrderIn, user=Depends(current_user)):
         db_session.close()
 
 @app.post("/api/payments/verify")
+@app.post("/api/payments/verify-signature")
 async def verify_payment(body: VerifyPaymentIn, user=Depends(current_user)):
     """
     Server-side HMAC-SHA256 signature verification over razorpay_order_id|razorpay_payment_id.
     """
+    order_id = body.razorpay_order_id or body.provider_order_id
+    payment_id = body.razorpay_payment_id or body.provider_payment_id
+    sig = body.razorpay_signature or body.signature
+
+    if not order_id or not payment_id or not sig:
+        raise HTTPException(400, "Missing order_id, payment_id, or signature for verification")
+
     valid = razorpay_client.verify_payment_signature(
-        razorpay_order_id=body.razorpay_order_id,
-        razorpay_payment_id=body.razorpay_payment_id,
-        razorpay_signature=body.razorpay_signature
+        razorpay_order_id=order_id,
+        razorpay_payment_id=payment_id,
+        razorpay_signature=sig
     )
     if not valid:
         raise HTTPException(400, "Payment signature verification failed. Forged or corrupted payload.")
@@ -122,14 +207,14 @@ async def verify_payment(body: VerifyPaymentIn, user=Depends(current_user)):
     db_session = SessionLocal()
     try:
         p = db_session.query(PaymentRelational).filter(
-            PaymentRelational.provider_order_id == body.razorpay_order_id
+            PaymentRelational.provider_order_id == order_id
         ).first()
         if not p or p.user_id != user["id"]:
             raise HTTPException(404, "Payment record not found")
 
         p.status = "captured"
-        p.provider_payment_id = body.razorpay_payment_id
-        p.provider_signature = body.razorpay_signature
+        p.provider_payment_id = payment_id
+        p.provider_signature = sig
 
         # Atomic double-entry ledger bookkeeping
         ledger_debit = FinancialLedgerEntry(
@@ -139,7 +224,7 @@ async def verify_payment(body: VerifyPaymentIn, user=Depends(current_user)):
             account="gateway_receivable",
             entry_type="DEBIT",
             amount_paise=p.amount_paise,
-            description=f"Captured via Razorpay payment {body.razorpay_payment_id}"
+            description=f"Captured via Razorpay payment {payment_id}"
         )
         commission_paise = int(p.amount_paise * 0.10)
         seller_net_paise = p.amount_paise - commission_paise
@@ -163,6 +248,18 @@ async def verify_payment(body: VerifyPaymentIn, user=Depends(current_user)):
         )
         db_session.add_all([ledger_debit, ledger_seller, ledger_platform])
         db_session.commit()
+
+        # Update Mongo order status to confirmed
+        from core import db, now, iso
+        await db.payments.update_one(
+            {"provider_order_id": order_id},
+            {"$set": {"status": "captured", "provider_payment_id": payment_id, "captured_at": iso(now())}}
+        )
+        await db.orders.update_one(
+            {"id": p.order_id, "status": "pending_payment"},
+            {"$set": {"payment_status": "paid", "status": "confirmed", "payment_id": p.id, "payment_method": "online"},
+             "$push": {"history": {"status": "confirmed", "at": iso(now())}}}
+        )
 
         return {"status": "paid", "payment_id": p.id, "order_id": p.order_id}
     except HTTPException:
