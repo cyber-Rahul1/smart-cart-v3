@@ -54,10 +54,9 @@ export default function HomeScreen() {
   const def = addr.data?.find((a) => a.is_default);
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
 
-  // Header animation values
+  // Header animation values: animate collapse of address row
   const [locRowHeight, setLocRowHeight] = useState(56);
-  const headerTranslateY = useSharedValue(0);
-  const headerOpacity = useSharedValue(1);
+  const collapseProgress = useSharedValue(0); // 0: fully expanded, 1: fully collapsed
 
   // Scroll tracking ref to compute delta
   const lastScrollY = useRef(0);
@@ -77,24 +76,21 @@ export default function HomeScreen() {
       // At the very top, always show header and tab bar
       if (isHiddenRef.current) {
         isHiddenRef.current = false;
-        headerTranslateY.value = withTiming(0, TIMING_CONFIG);
-        headerOpacity.value = withTiming(1, TIMING_CONFIG);
+        collapseProgress.value = withTiming(0, TIMING_CONFIG);
         tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
       }
     } else if (diff > 12 && currentY > 50) {
       // User is scrolling content UP (finger moving up) -> hide top address & bottom tab bar
       if (!isHiddenRef.current) {
         isHiddenRef.current = true;
-        headerTranslateY.value = withTiming(-(locRowHeight + spacing.sm), TIMING_CONFIG);
-        headerOpacity.value = withTiming(0, TIMING_CONFIG);
+        collapseProgress.value = withTiming(1, TIMING_CONFIG);
         tabBarTranslateY.value = withTiming(100, TIMING_CONFIG);
       }
     } else if (diff < -12) {
       // User is scrolling content DOWN (finger moving down) -> reveal both smoothly
       if (isHiddenRef.current) {
         isHiddenRef.current = false;
-        headerTranslateY.value = withTiming(0, TIMING_CONFIG);
-        headerOpacity.value = withTiming(1, TIMING_CONFIG);
+        collapseProgress.value = withTiming(0, TIMING_CONFIG);
         tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
       }
     }
@@ -102,10 +98,13 @@ export default function HomeScreen() {
     lastScrollY.current = currentY;
   };
 
-  const locRowAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: headerTranslateY.value }],
-    opacity: headerOpacity.value,
-  }));
+  const locRowAnimStyle = useAnimatedStyle(() => {
+    const totalShift = locRowHeight + spacing.sm;
+    return {
+      marginTop: -collapseProgress.value * totalShift,
+      opacity: 1 - collapseProgress.value,
+    };
+  });
 
   return (
     <View style={s.root}>
