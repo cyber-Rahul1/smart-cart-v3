@@ -18,17 +18,308 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ApiError } from "@/src/api";
-import { rupee } from "@/src/format";
+import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Address, DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
-import { EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast } from "@/src/ui";
-import { SellerRow } from "@/src/components/seller-card";
+import { EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
 
 const TITLES: Record<string, [string, string]> = {
   food: ["Food", "Restaurants & cloud kitchens near you"],
   grocery: ["Groceries", "Kirana, fresh produce & dairy"],
   new: ["Discover", "Explore newly opened shops near you"],
 };
+
+/** Shop card with preview items and "View Items >" header */
+function ShopWithItemsCard({
+  seller,
+  onAddToCart,
+  addingPid,
+}: {
+  seller: Seller;
+  onAddToCart: (p: Product) => void;
+  addingPid: string | null;
+}) {
+  const { colors } = useTheme();
+
+  // Fetch shop products
+  const productsQuery = useQuery({
+    queryKey: ["seller-products", seller.id],
+    queryFn: () => api<{ seller: Seller; products: Product[] }>(`/sellers/${seller.id}`),
+    staleTime: 60000,
+  });
+
+  const products = productsQuery.data?.products ?? [];
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surface,
+        marginBottom: spacing.lg,
+        paddingBottom: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.divider,
+      }}
+    >
+      {/* 1. Header Row */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.sm,
+        }}
+      >
+        <View style={{ flex: 1, marginRight: spacing.md }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View
+              style={{
+                backgroundColor: colors.surfaceTertiary,
+                borderRadius: 4,
+                paddingHorizontal: 4,
+                paddingVertical: 1,
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.muted }}>Ad</Text>
+            </View>
+            <Text
+              style={{
+                fontSize: font.xl,
+                fontWeight: "900",
+                color: colors.onSurface,
+                flexShrink: 1,
+                letterSpacing: -0.3,
+              }}
+              numberOfLines={1}
+            >
+              {seller.name}
+            </Text>
+          </View>
+
+          {/* Rating, Count, ETA Row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                backgroundColor: "#228B22",
+                borderRadius: radius.sm - 2,
+                paddingHorizontal: 5,
+                paddingVertical: 2,
+              }}
+            >
+              <Ionicons name="star" size={11} color="#FFFFFF" />
+              <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>
+                {seller.rating ? seller.rating.toFixed(1) : "4.2"}
+              </Text>
+            </View>
+            <Text style={{ fontSize: font.sm, color: colors.muted, fontWeight: "600" }}>
+              (10K+) • {seller.eta_min ? `${seller.eta_min - 5 > 0 ? seller.eta_min - 5 : 10}-${seller.eta_min} mins` : "15-20 mins"}
+            </Text>
+          </View>
+
+          {/* Offer text */}
+          {seller.offer ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+              <Ionicons name="pricetag" size={13} color="#FC8019" />
+              <Text style={{ fontSize: font.sm, color: colors.onSurfaceSecondary, fontWeight: "700" }}>
+                {seller.offer}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+              <Ionicons name="pricetag" size={13} color="#FC8019" />
+              <Text style={{ fontSize: font.sm, color: colors.onSurfaceSecondary, fontWeight: "700" }}>
+                50% off upto ₹100
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* View Items > button */}
+        <Pressable
+          hitSlop={8}
+          onPress={() => router.push(`/seller/${seller.id}`)}
+          style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}
+        >
+          <Text style={{ color: colors.brandPrimary, fontWeight: "800", fontSize: font.base }}>
+            View Items
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.brandPrimary} />
+        </Pressable>
+      </View>
+
+      {/* 2. Items Horizontal Carousel */}
+      {productsQuery.isLoading ? (
+        <View style={{ height: 230, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator color={colors.brandPrimary} />
+        </View>
+      ) : products.length === 0 ? (
+        <Pressable
+          onPress={() => router.push(`/seller/${seller.id}`)}
+          style={{
+            marginHorizontal: spacing.lg,
+            marginTop: spacing.md,
+            height: 120,
+            borderRadius: radius.md,
+            backgroundColor: colors.surfaceSecondary,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+          }}
+        >
+          <Ionicons name="restaurant-outline" size={28} color={colors.muted} />
+          <Text style={{ color: colors.muted, fontSize: font.sm, fontWeight: "600" }}>
+            Tap to explore full shop menu
+          </Text>
+        </Pressable>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.md,
+            gap: spacing.md,
+          }}
+        >
+          {products.slice(0, 8).map((p) => {
+            const isAdding = addingPid === p.id;
+            return (
+              <View
+                key={p.id}
+                style={{
+                  width: 170,
+                  backgroundColor: colors.surface,
+                }}
+              >
+                {/* Product Image */}
+                <View
+                  style={{
+                    width: 170,
+                    height: 140,
+                    borderRadius: radius.lg,
+                    overflow: "hidden",
+                    backgroundColor: colors.surfaceTertiary,
+                  }}
+                >
+                  <Image
+                    source={{ uri: mediaUri(p.image || seller.image) }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                </View>
+
+                {/* Veg / Non-veg marker */}
+                <View style={{ marginTop: spacing.sm }}>
+                  <VegMark veg={p.veg} />
+                </View>
+
+                {/* Product Title */}
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: font.base,
+                    fontWeight: "700",
+                    color: colors.onSurface,
+                    marginTop: 4,
+                    minHeight: 38,
+                    lineHeight: 19,
+                  }}
+                >
+                  {p.name}
+                </Text>
+
+                {/* Price and ADD button row */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: spacing.xs,
+                  }}
+                >
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: font.sm,
+                        color: colors.muted,
+                        textDecorationLine: "line-through",
+                      }}
+                    >
+                      {rupee(Math.round(p.price * 1.35))}
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: "#FFEB3B",
+                        paddingHorizontal: 4,
+                        paddingVertical: 1,
+                        borderRadius: 3,
+                        alignSelf: "flex-start",
+                        marginTop: 1,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: font.base,
+                          fontWeight: "900",
+                          color: "#1A1A1A",
+                        }}
+                      >
+                        {rupee(p.price)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* ADD button */}
+                  <Pressable
+                    disabled={isAdding}
+                    onPress={() => onAddToCart(p)}
+                    style={({ pressed }) => [
+                      {
+                        borderWidth: 1,
+                        borderColor: colors.borderStrong,
+                        backgroundColor: colors.surface,
+                        borderRadius: radius.md,
+                        paddingHorizontal: 16,
+                        paddingVertical: 7,
+                        minWidth: 64,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        shadowColor: "#000",
+                        shadowOpacity: 0.05,
+                        shadowRadius: 3,
+                        shadowOffset: { width: 0, height: 1 },
+                        elevation: 1,
+                      },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    {isAdding ? (
+                      <ActivityIndicator size="small" color={colors.success} />
+                    ) : (
+                      <Text
+                        style={{
+                          color: colors.success,
+                          fontWeight: "800",
+                          fontSize: font.sm + 1,
+                        }}
+                      >
+                        ADD
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
 
 const CATEGORIES: { key: string; label: string; icon: IconName }[] = [
   { key: "all", label: "All", icon: "sparkles-outline" },
@@ -48,6 +339,8 @@ export default function DiscoverScreen() {
   const toast = useToast();
 
   const isScheduleMode = !!params.schedule;
+  const isFoodMode = params.type === "food";
+  const isListViewMode = isScheduleMode || isFoodMode;
   const isDiscoverMode = !params.schedule && (!params.type || params.type === "new");
 
   // Query for category listing when in schedule mode or standard category mode
@@ -55,7 +348,7 @@ export default function DiscoverScreen() {
   const categoryQuery = useQuery({
     queryKey: ["sellers", listCategory],
     queryFn: () => api<Seller[]>(`/sellers?category=${listCategory}`),
-    enabled: isScheduleMode,
+    enabled: isListViewMode,
   });
   const [listTitle, listSub] = TITLES[listCategory] ?? ["Shops", ""];
 
@@ -330,36 +623,38 @@ export default function DiscoverScreen() {
     );
   };
 
-  if (isScheduleMode) {
+  if (isListViewMode) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface }}>
         <Header title={listTitle} subtitle={listSub} />
-        <View
-          testID="listing-schedule-banner"
-          style={{
-            margin: spacing.lg,
-            marginBottom: spacing.xs,
-            padding: spacing.md,
-            borderRadius: radius.md,
-            backgroundColor: colors.pastelLilac,
-            flexDirection: "row",
-            gap: spacing.sm,
-            alignItems: "center",
-          }}
-        >
-          <Ionicons name="time-outline" size={20} color={colors.onPastelLilac} />
-          <Text
+        {isScheduleMode ? (
+          <View
+            testID="listing-schedule-banner"
             style={{
-              color: colors.onPastelLilac,
-              flex: 1,
-              fontSize: font.sm + 1,
-              fontWeight: "600",
-              lineHeight: 20,
+              margin: spacing.lg,
+              marginBottom: spacing.xs,
+              padding: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.pastelLilac,
+              flexDirection: "row",
+              gap: spacing.sm,
+              alignItems: "center",
             }}
           >
-            Add items, then choose a delivery slot in your cart.
-          </Text>
-        </View>
+            <Ionicons name="time-outline" size={20} color={colors.onPastelLilac} />
+            <Text
+              style={{
+                color: colors.onPastelLilac,
+                flex: 1,
+                fontSize: font.sm + 1,
+                fontWeight: "600",
+                lineHeight: 20,
+              }}
+            >
+              Add items, then choose a delivery slot in your cart.
+            </Text>
+          </View>
+        ) : null}
 
         {categoryQuery.isLoading ? (
           <Loader />
@@ -378,28 +673,11 @@ export default function DiscoverScreen() {
               paddingBottom: insets.bottom + spacing.xl,
             }}
             renderItem={({ item }) => (
-              <View>
-                <SellerRow s={item} testID={`listing-seller-${item.id}`} />
-                {listCategory === "new" ? (
-                  <Text
-                    style={{
-                      marginLeft: 136,
-                      marginTop: -spacing.sm,
-                      marginBottom: spacing.sm,
-                      color: colors.onPastelMint,
-                      fontSize: font.sm,
-                      fontWeight: "700",
-                    }}
-                  >
-                    Opened{" "}
-                    {new Date(item.opened_on).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                    })}{" "}
-                    · {item.address}
-                  </Text>
-                ) : null}
-              </View>
+              <ShopWithItemsCard
+                seller={item}
+                onAddToCart={(p) => addToCart(p, item)}
+                addingPid={addingPid}
+              />
             )}
             ListEmptyComponent={
               <EmptyState
