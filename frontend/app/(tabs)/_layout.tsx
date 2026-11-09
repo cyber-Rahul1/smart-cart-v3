@@ -48,50 +48,58 @@ function TabsContent() {
   const [pageWidth, setPageWidth] = useState(Dimensions.get("window").width);
   const flatListRef = useRef<FlatList<any>>(null);
 
+  const isProgrammaticScrollRef = useRef(false);
+
   // Expose scrollPageTo to context so any child or button can programmatically swipe
   useEffect(() => {
     setScrollPageToHandler((index: number) => {
       setActiveTabIndex(index);
       if (pageWidth > 0) {
+        isProgrammaticScrollRef.current = true;
         flatListRef.current?.scrollToOffset({ offset: index * pageWidth, animated: true });
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 500);
       }
     });
   }, [pageWidth]);
 
-  const isScrollingRef = useRef(false);
-
   const snapToNearest = (offsetX: number, velocityX: number = 0) => {
-    if (pageWidth <= 0) return;
-    let targetIdx: number;
+    if (pageWidth <= 0 || isProgrammaticScrollRef.current) return;
     const rawIdx = offsetX / pageWidth;
+    let targetIdx: number;
 
     if (Math.abs(velocityX) > 0.3) {
-      // Meaningful velocity gesture: flick in velocity direction
       targetIdx = velocityX > 0 ? Math.ceil(rawIdx) : Math.floor(rawIdx);
     } else {
-      // Position based threshold: snap to whichever page is closer (<= 0.5 snaps back, > 0.5 snaps forward)
       targetIdx = Math.round(rawIdx);
     }
 
     targetIdx = Math.max(0, Math.min(TABS.length - 1, targetIdx));
-    flatListRef.current?.scrollToOffset({
-      offset: targetIdx * pageWidth,
-      animated: true,
-    });
+    const targetOffset = targetIdx * pageWidth;
+
+    // Only scroll if not already closely settled at targetOffset
+    if (Math.abs(offsetX - targetOffset) > 2) {
+      flatListRef.current?.scrollToOffset({
+        offset: targetOffset,
+        animated: true,
+      });
+    }
+
     if (targetIdx !== activeTabIndex) {
       setActiveTabIndex(targetIdx);
     }
   };
 
   const onScrollEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (isProgrammaticScrollRef.current) return;
     const offsetX = e.nativeEvent.contentOffset.x;
     const velocityX = e.nativeEvent.velocity?.x ?? 0;
-    // On Android, if velocity is low or drag ends slowly, momentum scroll may not fire.
-    // Ensure we snap immediately to nearest page so pages never get stuck in between.
     snapToNearest(offsetX, velocityX);
   };
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (isProgrammaticScrollRef.current) return;
     const offsetX = e.nativeEvent.contentOffset.x;
     snapToNearest(offsetX, 0);
   };

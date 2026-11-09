@@ -19,28 +19,19 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
   const tabBarTranslateY = useSharedValue(0);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [isPagerScrollEnabled, setPagerScrollEnabledState] = useState(true);
-  const lockCountRef = React.useRef(0);
   const [scrollPageToFn, setScrollPageToFn] = useState<((idx: number) => void) | null>(null);
 
+  const setPagerScrollEnabled = React.useCallback((enabled: boolean) => {
+    setPagerScrollEnabledState(enabled);
+  }, []);
+
   const disablePagerScroll = React.useCallback(() => {
-    lockCountRef.current += 1;
     setPagerScrollEnabledState(false);
   }, []);
 
   const enablePagerScroll = React.useCallback(() => {
-    lockCountRef.current = Math.max(0, lockCountRef.current - 1);
-    if (lockCountRef.current === 0) {
-      setPagerScrollEnabledState(true);
-    }
+    setPagerScrollEnabledState(true);
   }, []);
-
-  const setPagerScrollEnabled = React.useCallback((enabled: boolean) => {
-    if (enabled) {
-      enablePagerScroll();
-    } else {
-      disablePagerScroll();
-    }
-  }, [enablePagerScroll, disablePagerScroll]);
 
   const scrollPageTo = (idx: number) => {
     if (scrollPageToFn) {

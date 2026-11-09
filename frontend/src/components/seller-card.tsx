@@ -214,7 +214,7 @@ export function SellerFullCard({
                 <Ionicons
                   name="bookmark"
                   size={20}
-                  color="rgba(0, 0, 0, 0.38)"
+                  color="rgba(0, 0, 0, 0.18)"
                   style={StyleSheet.absoluteFill}
                 />
                 <Ionicons
