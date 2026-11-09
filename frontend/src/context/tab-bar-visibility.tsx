@@ -7,6 +7,8 @@ interface TabBarVisibilityContextType {
   setActiveTabIndex: (idx: number | ((prev: number) => number)) => void;
   scrollPageTo: (idx: number) => void;
   setScrollPageToHandler: (fn: (idx: number) => void) => void;
+  isPagerScrollEnabled: boolean;
+  setPagerScrollEnabled: (enabled: boolean) => void;
 }
 
 const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null>(null);
@@ -14,6 +16,7 @@ const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null
 export function TabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const tabBarTranslateY = useSharedValue(0);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [isPagerScrollEnabled, setPagerScrollEnabled] = useState(true);
   const [scrollPageToFn, setScrollPageToFn] = useState<((idx: number) => void) | null>(null);
 
   const scrollPageTo = (idx: number) => {
@@ -34,6 +37,8 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
         setActiveTabIndex,
         scrollPageTo,
         setScrollPageToHandler,
+        isPagerScrollEnabled,
+        setPagerScrollEnabled,
       }}
     >
       {children}

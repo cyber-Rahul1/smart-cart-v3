@@ -42,6 +42,7 @@ function TabsContent() {
     activeTabIndex,
     setActiveTabIndex,
     setScrollPageToHandler,
+    isPagerScrollEnabled,
   } = useTabBarVisibility();
 
   const [pageWidth, setPageWidth] = useState(Dimensions.get("window").width);
@@ -116,6 +117,7 @@ function TabsContent() {
         keyExtractor={(item) => item.name}
         horizontal
         pagingEnabled
+        scrollEnabled={isPagerScrollEnabled}
         showsHorizontalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"

@@ -17,6 +17,7 @@ import { mediaUri } from "@/src/format";
 import { Seller } from "@/src/types";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Ionicons } from "@/src/ui";
+import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
   const st = useStyles();
@@ -62,6 +63,7 @@ export function SellerTile({ s, testID, rank }: { s: Seller; testID: string; ran
 export function SellerFullCard({ s, testID }: { s: Seller; testID: string }) {
   const st = useStyles();
   const { colors } = useTheme();
+  const { setPagerScrollEnabled } = useTabBarVisibility();
   const [cardWidth, setCardWidth] = useState<number>(Dimensions.get("window").width - spacing.lg * 2);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isFavorited, setIsFavorited] = useState(false);
@@ -130,10 +132,22 @@ export function SellerFullCard({ s, testID }: { s: Seller; testID: string }) {
           data={images}
           horizontal
           pagingEnabled
+          nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           keyExtractor={(_, i) => `${s.id}-img-${i}`}
-          onScrollBeginDrag={() => setUserInteracting(true)}
-          onMomentumScrollEnd={onMomentumScrollEnd}
+          onTouchStart={() => setPagerScrollEnabled(false)}
+          onTouchEnd={() => setPagerScrollEnabled(true)}
+          onScrollBeginDrag={() => {
+            setUserInteracting(true);
+            setPagerScrollEnabled(false);
+          }}
+          onScrollEndDrag={() => {
+            setPagerScrollEnabled(true);
+          }}
+          onMomentumScrollEnd={(e) => {
+            onMomentumScrollEnd(e);
+            setPagerScrollEnabled(true);
+          }}
           renderItem={({ item }) => (
             <View style={{ width: cardWidth, height: 190 }}>
               <Image

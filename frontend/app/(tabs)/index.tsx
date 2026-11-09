@@ -46,7 +46,7 @@ export default function HomeScreen() {
   const s = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { tabBarTranslateY } = useTabBarVisibility();
+  const { tabBarTranslateY, setPagerScrollEnabled } = useTabBarVisibility();
 
   const q = useQuery({ queryKey: ["home"], queryFn: () => api<Home>("/home") });
   const addr = useQuery({ queryKey: ["addresses"], queryFn: () => api<Address[]>("/addresses") });
@@ -169,7 +169,17 @@ export default function HomeScreen() {
           </Pressable>
 
           <SectionTitle title="Offers for you" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            onTouchStart={() => setPagerScrollEnabled(false)}
+            onTouchEnd={() => setPagerScrollEnabled(true)}
+            onScrollBeginDrag={() => setPagerScrollEnabled(false)}
+            onScrollEndDrag={() => setPagerScrollEnabled(true)}
+            onMomentumScrollEnd={() => setPagerScrollEnabled(true)}
+            contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+          >
             {q.data!.offers.map((o, i) => (
               <View key={o.code} testID={`home-offer-${o.code}`} style={[s.offer, { backgroundColor: [colors.brandTertiary, colors.pastelMint, colors.pastelLilac][i % 3] }]}>
                 <Ionicons name="pricetag" size={18} color={colors.brandPrimary} />
@@ -188,12 +198,32 @@ export default function HomeScreen() {
           </Pressable>
 
           <SectionTitle title="Trending near you" action="See all" testID="home-trending-see-all" onAction={() => router.push("/listing/food")} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            onTouchStart={() => setPagerScrollEnabled(false)}
+            onTouchEnd={() => setPagerScrollEnabled(true)}
+            onScrollBeginDrag={() => setPagerScrollEnabled(false)}
+            onScrollEndDrag={() => setPagerScrollEnabled(true)}
+            onMomentumScrollEnd={() => setPagerScrollEnabled(true)}
+            contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+          >
             {q.data!.trending.map((sl, i) => <SellerTile key={sl.id} s={sl} rank={i + 1} testID={`home-trending-${sl.id}`} />)}
           </ScrollView>
 
           <SectionTitle title="Newly opened" action="See all" testID="home-new-see-all" onAction={() => router.push("/listing/new")} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            onTouchStart={() => setPagerScrollEnabled(false)}
+            onTouchEnd={() => setPagerScrollEnabled(true)}
+            onScrollBeginDrag={() => setPagerScrollEnabled(false)}
+            onScrollEndDrag={() => setPagerScrollEnabled(true)}
+            onMomentumScrollEnd={() => setPagerScrollEnabled(true)}
+            contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+          >
             {q.data!.new_shops.map((sl) => <SellerTile key={sl.id} s={sl} testID={`home-new-${sl.id}`} />)}
           </ScrollView>
 
@@ -207,7 +237,17 @@ export default function HomeScreen() {
           </Pressable>
 
           <SectionTitle title="Recommended for you" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            onTouchStart={() => setPagerScrollEnabled(false)}
+            onTouchEnd={() => setPagerScrollEnabled(true)}
+            onScrollBeginDrag={() => setPagerScrollEnabled(false)}
+            onScrollEndDrag={() => setPagerScrollEnabled(true)}
+            onMomentumScrollEnd={() => setPagerScrollEnabled(true)}
+            contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+          >
             {q.data!.recommended.map((sl) => <SellerTile key={sl.id} s={sl} testID={`home-rec-${sl.id}`} />)}
           </ScrollView>
 
