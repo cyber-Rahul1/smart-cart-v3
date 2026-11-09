@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated as RNAnimated,
   Dimensions,
   FlatList,
   NativeScrollEvent,
@@ -60,16 +61,25 @@ export function SellerTile({ s, testID, rank }: { s: Seller; testID: string; ran
 }
 
 /** Full-width modern card with auto-scrolling & swipeable image carousel */
-export function SellerFullCard({ s, testID }: { s: Seller; testID: string }) {
+export function SellerFullCard({
+  s,
+  testID,
+  isActive = true,
+}: {
+  s: Seller;
+  testID: string;
+  isActive?: boolean;
+}) {
   const st = useStyles();
   const { colors } = useTheme();
   const { setPagerScrollEnabled } = useTabBarVisibility();
   const [cardWidth, setCardWidth] = useState<number>(Dimensions.get("window").width - spacing.lg * 2);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isFavorited, setIsFavorited] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [userInteracting, setUserInteracting] = useState(false);
 
   const listRef = useRef<FlatList<string>>(null);
+  const progressAnim = useRef(new RNAnimated.Value(0)).current;
 
   // Collect images: gallery or fallback to s.image
   const images = useMemo(() => {
@@ -89,22 +99,41 @@ export function SellerFullCard({ s, testID }: { s: Seller; testID: string }) {
   }, [s.gallery, s.banner_url, s.image]);
 
   const hasMultiple = images.length > 1;
+  const CAROUSEL_DURATION = 3500;
 
-  // Auto-scroll carousel every 3.5 seconds if multiple images and not actively swiping
+  // Animate active dot progress and handle carousel advance only when isActive and not user-interacting
   useEffect(() => {
-    if (!hasMultiple || userInteracting) return;
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => {
-        const next = (prev + 1) % images.length;
-        if (cardWidth > 0) {
-          listRef.current?.scrollToOffset({ offset: next * cardWidth, animated: true });
-        }
-        return next;
-      });
-    }, 3500);
+    if (!hasMultiple) return;
 
-    return () => clearInterval(interval);
-  }, [hasMultiple, images.length, cardWidth, userInteracting]);
+    if (!isActive || userInteracting) {
+      progressAnim.stopAnimation();
+      progressAnim.setValue(0);
+      return;
+    }
+
+    progressAnim.setValue(0);
+    const anim = RNAnimated.timing(progressAnim, {
+      toValue: 1,
+      duration: CAROUSEL_DURATION,
+      useNativeDriver: false,
+    });
+
+    anim.start(({ finished }) => {
+      if (finished && isActive && !userInteracting) {
+        setActiveIndex((prev) => {
+          const next = (prev + 1) % images.length;
+          if (cardWidth > 0) {
+            listRef.current?.scrollToOffset({ offset: next * cardWidth, animated: true });
+          }
+          return next;
+        });
+      }
+    });
+
+    return () => {
+      anim.stop();
+    };
+  }, [hasMultiple, isActive, userInteracting, activeIndex, images.length, cardWidth, progressAnim]);
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (cardWidth <= 0) return;
@@ -162,56 +191,32 @@ export function SellerFullCard({ s, testID }: { s: Seller; testID: string }) {
 
         {/* Gradient shadow overlay for text and badges */}
         <LinearGradient
-          colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.65)"]}
+          colors={["rgba(0,0,0,0.4)", "transparent", "rgba(0,0,0,0.65)"]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
 
-        {/* Top Header Row on Image: Pagination Dots (center) + Heart & More icons (right) */}
+        {/* Top Header Row on Image: Bookmark/Save Icon at top-right */}
         <View style={st.imageTopRow} pointerEvents="box-none">
-          <View style={{ width: 60 }} />
-          {hasMultiple ? (
-            <View style={st.dotsContainer}>
-              {images.map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    st.dot,
-                    i === activeIndex ? st.dotActive : st.dotInactive,
-                  ]}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
-
-          <View style={st.topActionIcons}>
-            <Pressable
-              hitSlop={10}
-              onPress={(e) => {
-                e.stopPropagation();
-                setIsFavorited((prev) => !prev);
-              }}
-              style={st.iconBtn}
-            >
-              <Ionicons
-                name={isFavorited ? "heart" : "heart-outline"}
-                size={22}
-                color={isFavorited ? colors.error : colors.onSurfaceInverse}
-              />
-            </Pressable>
-            <View style={st.iconBtn}>
-              <Ionicons
-                name="ellipsis-vertical"
-                size={20}
-                color={colors.onSurfaceInverse}
-              />
-            </View>
-          </View>
+          <View style={{ flex: 1 }} />
+          <Pressable
+            testID={`${testID}-save-btn`}
+            hitSlop={10}
+            onPress={(e) => {
+              e.stopPropagation();
+              setIsSaved((prev) => !prev);
+            }}
+            style={st.saveIconBtn}
+          >
+            <Ionicons
+              name={isSaved ? "bookmark" : "bookmark-outline"}
+              size={22}
+              color={isSaved ? colors.brandPrimary : colors.onSurfaceInverse}
+            />
+          </Pressable>
         </View>
 
-        {/* Bottom Bar on Image: Offer badge (bottom-left) + ETA pill (bottom-right) */}
+        {/* Bottom Bar on Image: Offer badge (bottom-left) + Carousel Dots with progress (bottom-right) */}
         <View style={st.imageBottomRow} pointerEvents="none">
           {s.offer ? (
             <View style={st.fullCardOfferBadge}>
@@ -224,11 +229,33 @@ export function SellerFullCard({ s, testID }: { s: Seller; testID: string }) {
             <View />
           )}
 
-          <View style={st.etaPill}>
-            <Text style={st.etaText}>
-              {s.eta_min ? `${s.eta_min} MINS` : "20-30 MINS"}
-            </Text>
-          </View>
+          {/* Carousel dots in bottom right corner with duration animation */}
+          {hasMultiple ? (
+            <View style={st.bottomDotsContainer}>
+              {images.map((_, i) => {
+                const isCurrent = i === activeIndex;
+                return (
+                  <View key={i} style={st.dotTrack}>
+                    {isCurrent ? (
+                      <RNAnimated.View
+                        style={[
+                          st.dotFill,
+                          {
+                            width: progressAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ["0%", "100%"],
+                            }),
+                          },
+                        ]}
+                      />
+                    ) : i < activeIndex ? (
+                      <View style={[st.dotFill, { width: "100%" }]} />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -321,36 +348,13 @@ const useStyles = makeStyles((c) => ({
     right: spacing.md,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
   },
-  dotsContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-  },
-  dot: {
-    height: 5,
-    borderRadius: 2.5,
-  },
-  dotActive: {
-    width: 14,
-    backgroundColor: c.onSurfaceInverse,
-  },
-  dotInactive: {
-    width: 5,
-    backgroundColor: "rgba(255,255,255,0.45)",
-  },
-  topActionIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  iconBtn: {
-    padding: 4,
-    borderRadius: radius.pill,
-    backgroundColor: "rgba(0,0,0,0.2)",
+  saveIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.32)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -377,21 +381,26 @@ const useStyles = makeStyles((c) => ({
     fontSize: 11,
     fontWeight: "800",
   },
-  etaPill: {
-    backgroundColor: c.surface,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: radius.sm,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
+  bottomDotsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
   },
-  etaText: {
-    color: c.onSurface,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 0.5,
+  dotTrack: {
+    width: 14,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    overflow: "hidden",
+  },
+  dotFill: {
+    height: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 2,
   },
   fullCardBody: {
     padding: spacing.md,

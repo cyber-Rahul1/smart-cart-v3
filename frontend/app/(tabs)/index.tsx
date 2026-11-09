@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
+  Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -59,6 +60,8 @@ export default function HomeScreen() {
 
   const [vegOnly, setVegOnly] = useState(false);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const cardLayoutsRef = useRef<{ [key: string]: { y: number; height: number } }>({});
 
   // Header animation values: animate collapse of address row
   const [locRowHeight, setLocRowHeight] = useState(56);
@@ -102,6 +105,29 @@ export default function HomeScreen() {
     }
 
     lastScrollY.current = currentY;
+
+    // Determine which full card is centered / most visible in the viewport
+    const viewportHeight = Dimensions.get("window").height;
+    const viewportCenter = currentY + viewportHeight / 2;
+    let closestId: string | null = null;
+    let minDistance = Infinity;
+
+    for (const [id, layout] of Object.entries(cardLayoutsRef.current)) {
+      const cardCenter = layout.y + layout.height / 2;
+      const distance = Math.abs(viewportCenter - cardCenter);
+      // Ensure card is substantially inside the visible area
+      const cardTop = layout.y;
+      const cardBottom = layout.y + layout.height;
+      const isVisible = cardBottom > currentY + 100 && cardTop < currentY + viewportHeight - 100;
+      if (isVisible && distance < minDistance) {
+        minDistance = distance;
+        closestId = id;
+      }
+    }
+
+    if (closestId !== activeCardId) {
+      setActiveCardId(closestId);
+    }
   };
 
   const locRowAnimStyle = useAnimatedStyle(() => {
@@ -313,7 +339,25 @@ export default function HomeScreen() {
           </ScrollView>
 
           <SectionTitle title="All shops nearby" />
-          {q.data!.nearby.map((sl) => <SellerFullCard key={sl.id} s={sl} testID={`home-nearby-${sl.id}`} />)}
+          {q.data!.nearby.map((sl) => (
+            <View
+              key={sl.id}
+              onLayout={(e) => {
+                const layout = e.nativeEvent.layout;
+                cardLayoutsRef.current[sl.id] = { y: layout.y, height: layout.height };
+                // If no active card yet and nearby shops loaded, set first one as candidate
+                if (!activeCardId && q.data?.nearby?.[0]?.id === sl.id) {
+                  setActiveCardId(sl.id);
+                }
+              }}
+            >
+              <SellerFullCard
+                s={sl}
+                testID={`home-nearby-${sl.id}`}
+                isActive={activeCardId === sl.id}
+              />
+            </View>
+          ))}
         </ScrollView>
       )}
     </View>
