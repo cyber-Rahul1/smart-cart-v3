@@ -208,11 +208,28 @@ export function SellerFullCard({
             }}
             style={st.saveIconBtn}
           >
-            <Ionicons
-              name={isSaved ? "bookmark" : "bookmark-outline"}
-              size={22}
-              color={isSaved ? colors.brandPrimary : colors.onSurfaceInverse}
-            />
+            {/* If not saved, show solid translucent gray bookmark fill with white outline on top */}
+            {!isSaved ? (
+              <View style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons
+                  name="bookmark"
+                  size={20}
+                  color="rgba(0, 0, 0, 0.38)"
+                  style={StyleSheet.absoluteFill}
+                />
+                <Ionicons
+                  name="bookmark-outline"
+                  size={22}
+                  color="#FFFFFF"
+                />
+              </View>
+            ) : (
+              <Ionicons
+                name="bookmark"
+                size={22}
+                color={colors.brandPrimary}
+              />
+            )}
           </Pressable>
         </View>
 
@@ -357,8 +374,6 @@ const useStyles = makeStyles((c) => ({
   saveIconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.32)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -389,17 +404,20 @@ const useStyles = makeStyles((c) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   activeDotTrack: {
     width: 16,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: "rgba(255,255,255,0.35)",
+    backgroundColor: "rgba(255,255,255,0.45)",
     overflow: "hidden",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 2,
   },
   activeDotFill: {
     height: "100%",
@@ -410,7 +428,12 @@ const useStyles = makeStyles((c) => ({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: "rgba(255,255,255,0.4)",
+    backgroundColor: "rgba(255,255,255,0.55)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 2,
   },
   fullCardBody: {
     padding: spacing.md,
