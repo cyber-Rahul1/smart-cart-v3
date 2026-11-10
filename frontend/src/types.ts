@@ -3,6 +3,7 @@ export type Seller = {
   distance_km: number; eta_min: number; prep_time_min: number; is_new: boolean; offer?: string | null; min_order: number;
   fssai_status: string; address: string; opened_on: string; trend_score?: number;
   banner_url?: string; description?: string; gallery?: string[]; highlights?: string[]; open?: boolean;
+  reviews_count?: number; phone?: string;
 };
 export type ShowcaseItem = {
   seller: Seller;

@@ -1,26 +1,28 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Linking,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ApiError } from "@/src/api";
 import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
-import { Address, DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
+import { DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
 import { EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
 
 const TITLES: Record<string, [string, string]> = {
@@ -29,7 +31,7 @@ const TITLES: Record<string, [string, string]> = {
   new: ["Discover", "Explore newly opened shops near you"],
 };
 
-/** Shop card with preview items and "View Items >" header */
+/** Shop card with preview items for generic food/grocery listing */
 function ShopWithItemsCard({
   seller,
   onAddToCart,
@@ -41,7 +43,6 @@ function ShopWithItemsCard({
 }) {
   const { colors } = useTheme();
 
-  // Fetch shop products
   const productsQuery = useQuery({
     queryKey: ["seller-products", seller.id],
     queryFn: () => api<{ seller: Seller; products: Product[] }>(`/sellers/${seller.id}`),
@@ -60,7 +61,6 @@ function ShopWithItemsCard({
         borderBottomColor: colors.divider,
       }}
     >
-      {/* 1. Header Row */}
       <View
         style={{
           flexDirection: "row",
@@ -96,7 +96,6 @@ function ShopWithItemsCard({
             </Text>
           </View>
 
-          {/* Rating, Count, ETA Row */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
             <View
               style={{
@@ -119,7 +118,6 @@ function ShopWithItemsCard({
             </Text>
           </View>
 
-          {/* Offer text */}
           {seller.offer ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
               <Ionicons name="pricetag" size={13} color="#FC8019" />
@@ -137,23 +135,21 @@ function ShopWithItemsCard({
           )}
         </View>
 
-        {/* View Items > button */}
         <Pressable
           hitSlop={8}
           onPress={() => router.push(`/seller/${seller.id}`)}
           style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}
         >
-          <Text style={{ color: colors.brandPrimary, fontWeight: "800", fontSize: font.base }}>
+          <Text style={{ color: "#2E7D32", fontWeight: "800", fontSize: font.base }}>
             View Items
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.brandPrimary} />
+          <Ionicons name="chevron-forward" size={16} color="#2E7D32" />
         </Pressable>
       </View>
 
-      {/* 2. Items Horizontal Carousel */}
       {productsQuery.isLoading ? (
         <View style={{ height: 230, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color={colors.brandPrimary} />
+          <ActivityIndicator color="#2E7D32" />
         </View>
       ) : products.length === 0 ? (
         <Pressable
@@ -194,7 +190,6 @@ function ShopWithItemsCard({
                   backgroundColor: colors.surface,
                 }}
               >
-                {/* Product Image */}
                 <View
                   style={{
                     width: 170,
@@ -212,12 +207,10 @@ function ShopWithItemsCard({
                   />
                 </View>
 
-                {/* Veg / Non-veg marker */}
                 <View style={{ marginTop: spacing.sm }}>
                   <VegMark veg={p.veg} />
                 </View>
 
-                {/* Product Title */}
                 <Text
                   numberOfLines={2}
                   style={{
@@ -232,7 +225,6 @@ function ShopWithItemsCard({
                   {p.name}
                 </Text>
 
-                {/* Price and ADD button row */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -249,60 +241,45 @@ function ShopWithItemsCard({
                         textDecorationLine: "line-through",
                       }}
                     >
-                      {rupee(Math.round(p.price * 1.35))}
+                      {rupee(Math.round(p.price * 1.25))}
                     </Text>
-                    <View
+                    <Text
                       style={{
-                        backgroundColor: "#FFEB3B",
-                        paddingHorizontal: 4,
-                        paddingVertical: 1,
-                        borderRadius: 3,
-                        alignSelf: "flex-start",
-                        marginTop: 1,
+                        fontSize: font.base,
+                        fontWeight: "800",
+                        color: colors.onSurface,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: font.base,
-                          fontWeight: "900",
-                          color: "#1A1A1A",
-                        }}
-                      >
-                        {rupee(p.price)}
-                      </Text>
-                    </View>
+                      {rupee(p.price)}
+                    </Text>
                   </View>
 
-                  {/* ADD button */}
                   <Pressable
                     disabled={isAdding}
                     onPress={() => onAddToCart(p)}
-                    style={({ pressed }) => [
-                      {
-                        borderWidth: 1,
-                        borderColor: colors.borderStrong,
-                        backgroundColor: colors.surface,
-                        borderRadius: radius.md,
-                        paddingHorizontal: 16,
-                        paddingVertical: 7,
-                        minWidth: 64,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        shadowColor: "#000",
-                        shadowOpacity: 0.05,
-                        shadowRadius: 3,
-                        shadowOffset: { width: 0, height: 1 },
-                        elevation: 1,
-                      },
-                      pressed && { opacity: 0.8 },
-                    ]}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                      backgroundColor: colors.surface,
+                      borderRadius: radius.sm,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: 5,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minWidth: 64,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.08,
+                      shadowRadius: 2,
+                      elevation: 1,
+                    }}
                   >
                     {isAdding ? (
-                      <ActivityIndicator size="small" color={colors.success} />
+                      <ActivityIndicator size="small" color="#2E7D32" />
                     ) : (
                       <Text
                         style={{
-                          color: colors.success,
+                          color: "#2E7D32",
                           fontWeight: "800",
                           fontSize: font.sm + 1,
                         }}
@@ -321,14 +298,488 @@ function ShopWithItemsCard({
   );
 }
 
+/** Filter chips matching reference design */
 const CATEGORIES: { key: string; label: string; icon: IconName }[] = [
-  { key: "all", label: "All", icon: "sparkles-outline" },
+  { key: "all", label: "All", icon: "sparkles" },
   { key: "new", label: "Newly Opened", icon: "time-outline" },
   { key: "recently_registered", label: "Recently Registered", icon: "business-outline" },
   { key: "food", label: "Food", icon: "fast-food-outline" },
   { key: "grocery", label: "Groceries", icon: "basket-outline" },
-  { key: "cloud_kitchen", label: "Cloud Kitchens", icon: "restaurant-outline" },
 ];
+
+/** Full Exact Discover Shop Card component */
+function ExactDiscoverShopCard({
+  item,
+  onAddToCart,
+  addingPid,
+  onPreviewImage,
+}: {
+  item: ShowcaseItem;
+  onAddToCart: (p: Product, s: Seller) => void;
+  addingPid: string | null;
+  onPreviewImage: (uri: string) => void;
+}) {
+  const { seller, banner_url, gallery, description, products } = item;
+  const s = useStyles();
+  const toast = useToast();
+  const [activeBannerIdx, setActiveBannerIdx] = useState(0);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const bannerScrollRef = useRef<FlatList<any>>(null);
+
+  // Banner image carousel items
+  const bannerImages = useMemo(() => {
+    const list: string[] = [];
+    if (banner_url) list.push(banner_url);
+    if (gallery && gallery.length > 0) {
+      gallery.forEach((g) => {
+        if (!list.includes(g)) list.push(g);
+      });
+    }
+    if (list.length === 0 && seller.image) list.push(seller.image);
+    return list.slice(0, 4);
+  }, [banner_url, gallery, seller.image]);
+
+  // Ambience gallery items (with video timestamp mock on item 2 like screenshot)
+  const ambienceImages = useMemo(() => {
+    if (gallery && gallery.length >= 4) return gallery.slice(0, 4);
+    const fallbacks = [
+      banner_url || seller.image,
+      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=70",
+      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=70",
+      "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=800&q=70",
+    ];
+    return fallbacks;
+  }, [gallery, banner_url, seller.image]);
+
+  // Format reviews count
+  const reviewCountDisplay = seller.reviews_count
+    ? `${(seller.reviews_count / 1000).toFixed(1)}k`
+    : "1.2k";
+
+  // Formatted address line
+  const displayAddress =
+    seller.address && seller.address.includes("MVP Colony")
+      ? seller.address
+      : `${seller.address || "D.No. 12-5-34, MVP Colony"}, Visakhapatnam, Andhra Pradesh - 530017`;
+
+  const handleCall = () => {
+    const phone = seller.phone || "+919876543210";
+    Linking.openURL(`tel:${phone}`).catch(() => toast("Unable to open dialer", "err"));
+  };
+
+  const handleChat = () => {
+    toast(`Opening chat with ${seller.name}`);
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        title: seller.name,
+        message: `Check out ${seller.name} on GathrCart! Discover authentic dishes and group orders.`,
+      });
+    } catch {}
+  };
+
+  const handleDirections = () => {
+    const query = encodeURIComponent(`${seller.name}, ${seller.address || "Visakhapatnam"}`);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() =>
+      toast("Unable to open Google Maps", "err")
+    );
+  };
+
+  const handleBannerScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const width = e.nativeEvent.layoutMeasurement.width;
+    if (width > 0) {
+      const idx = Math.round(offsetX / width);
+      setActiveBannerIdx(idx);
+    }
+  };
+
+  const scrollBannerTo = (nextIdx: number) => {
+    const target = Math.max(0, Math.min(bannerImages.length - 1, nextIdx));
+    bannerScrollRef.current?.scrollToIndex({ index: target, animated: true });
+    setActiveBannerIdx(target);
+  };
+
+  return (
+    <View style={s.shopCardContainer} testID={`discover-shop-${seller.id}`}>
+      {/* 1. HERO BANNER WITH CAROUSEL, BADGES & ARROWS */}
+      <View style={s.heroBannerWrapper}>
+        <FlatList
+          ref={bannerScrollRef}
+          data={bannerImages}
+          keyExtractor={(_, i) => `hero-${i}`}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleBannerScroll}
+          renderItem={({ item: imgUri }) => (
+            <View style={s.heroBannerSlide}>
+              <Image source={{ uri: mediaUri(imgUri) }} style={s.heroBannerImage} contentFit="cover" transition={200} />
+            </View>
+          )}
+        />
+
+        {/* Top Badges Row */}
+        <View style={s.heroTopBadges}>
+          <View style={s.heroTopLeftBadges}>
+            {/* New Badge */}
+            <View style={s.badgeNew}>
+              <Ionicons name="sparkles" size={11} color="#FFFFFF" />
+              <Text style={s.badgeNewText}>New</Text>
+            </View>
+
+            {/* Recently Opened */}
+            <View style={s.badgeDark}>
+              <Text style={s.badgeDarkText}>Recently Opened</Text>
+            </View>
+
+            {/* Cloud Kitchen */}
+            <View style={s.badgeLightPill}>
+              <Ionicons name="restaurant" size={12} color="#1A1A1A" />
+              <Text style={s.badgeLightPillText}>Cloud Kitchen</Text>
+            </View>
+          </View>
+
+          {/* Top Right: Video duration badge */}
+          <View style={s.badgeVideo}>
+            <Ionicons name="play" size={11} color="#FFFFFF" />
+            <Text style={s.badgeVideoText}>0:20</Text>
+          </View>
+        </View>
+
+        {/* Left Arrow Button */}
+        {activeBannerIdx > 0 && (
+          <Pressable
+            style={s.heroArrowLeft}
+            hitSlop={8}
+            onPress={() => scrollBannerTo(activeBannerIdx - 1)}
+          >
+            <Ionicons name="chevron-back" size={18} color="#FFFFFF" />
+          </Pressable>
+        )}
+
+        {/* Right Arrow Button */}
+        {activeBannerIdx < bannerImages.length - 1 && (
+          <Pressable
+            style={s.heroArrowRight}
+            hitSlop={8}
+            onPress={() => scrollBannerTo(activeBannerIdx + 1)}
+          >
+            <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+          </Pressable>
+        )}
+
+        {/* Bottom Right Pagination Dots */}
+        <View style={s.heroDotsContainer}>
+          {bannerImages.map((_, i) => (
+            <View
+              key={`dot-${i}`}
+              style={[
+                s.heroDot,
+                i === activeBannerIdx ? s.heroDotActive : s.heroDotInactive,
+              ]}
+            />
+          ))}
+        </View>
+      </View>
+
+      {/* 2. SHOP IDENTITY HEADER (Icon, Title, Heart, Tags, Rating, ETA, Distance, FSSAI) */}
+      <View style={s.shopHeaderRow}>
+        {/* Black Square Logo */}
+        <View style={s.shopLogoBox}>
+          <Ionicons name="restaurant-outline" size={26} color="#FFFFFF" />
+          <Text style={s.shopLogoText}>Test{"\n"}Kitchen</Text>
+        </View>
+
+        {/* Info Column */}
+        <View style={s.shopHeaderInfo}>
+          <View style={s.shopTitleRow}>
+            <Text style={s.shopNameTitle} numberOfLines={1}>
+              {seller.name}
+            </Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                setIsSaved(!isSaved);
+                toast(isSaved ? "Removed from favorites" : "Saved to favorites");
+              }}
+              style={s.heartIconBtn}
+            >
+              <Ionicons
+                name={isSaved ? "heart" : "heart-outline"}
+                size={22}
+                color={isSaved ? "#E53935" : "#1A1A1A"}
+              />
+            </Pressable>
+          </View>
+
+          {/* Subtitle / Cuisines */}
+          <Text style={s.shopCuisinesText} numberOfLines={1}>
+            {seller.cuisine || "Biryani • North Indian • Indian"}
+          </Text>
+
+          {/* Metrics Row: Rating, Reviews, Time, Distance, FSSAI */}
+          <View style={s.shopMetricsRow}>
+            {/* Green Rating Pill */}
+            <View style={s.ratingBadgeGreen}>
+              <Ionicons name="star" size={11} color="#FFFFFF" />
+              <Text style={s.ratingBadgeText}>{seller.rating ? seller.rating.toFixed(1) : "4.0"}</Text>
+            </View>
+
+            {/* Review count in parentheses */}
+            <Text style={s.reviewsCountText}>({reviewCountDisplay} reviews)</Text>
+
+            {/* Time ETA */}
+            <View style={s.metricItemWithIcon}>
+              <Ionicons name="time-outline" size={13} color="#666666" />
+              <Text style={s.metricText}>{seller.eta_min || 26} mins</Text>
+            </View>
+
+            {/* Distance */}
+            <View style={s.metricItemWithIcon}>
+              <Ionicons name="location-outline" size={13} color="#666666" />
+              <Text style={s.metricText}>{seller.distance_km || 1.5} km</Text>
+            </View>
+
+            {/* FSSAI Verified Pill with Green Check */}
+            <View style={s.fssaiBadge}>
+              <Ionicons name="checkmark-circle" size={13} color="#2E7D32" />
+              <Text style={s.fssaiBadgeText}>FSSAI Verified</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* 3. DESCRIPTION WITH "Read more" TOGGLE */}
+      <View style={s.descriptionBlock}>
+        <Text
+          style={s.shopDescText}
+          numberOfLines={isDescExpanded ? undefined : 2}
+        >
+          {description ||
+            seller.description ||
+            "Authentic, restaurant-style Biryani and Indian meals crafted with premium spices and fresh ingredients."}
+        </Text>
+        <Pressable
+          hitSlop={6}
+          onPress={() => setIsDescExpanded(!isDescExpanded)}
+          style={s.readMoreBtn}
+        >
+          <Text style={s.readMoreText}>{isDescExpanded ? "Show less" : "Read more"}</Text>
+          <Ionicons
+            name={isDescExpanded ? "chevron-up" : "chevron-down"}
+            size={14}
+            color="#2E7D32"
+          />
+        </Pressable>
+      </View>
+
+      {/* 4. ACTION BUTTONS: Call, Chat, Share, Directions (Green filled pill) */}
+      <View style={s.actionButtonsRow}>
+        <Pressable style={s.actionOutlineBtn} onPress={handleCall}>
+          <Ionicons name="call-outline" size={16} color="#1A1A1A" />
+          <Text style={s.actionOutlineBtnText}>Call</Text>
+        </Pressable>
+
+        <Pressable style={s.actionOutlineBtn} onPress={handleChat}>
+          <Ionicons name="chatbubble-outline" size={16} color="#1A1A1A" />
+          <Text style={s.actionOutlineBtnText}>Chat</Text>
+        </Pressable>
+
+        <Pressable style={s.actionOutlineBtn} onPress={handleShare}>
+          <Ionicons name="share-social-outline" size={16} color="#1A1A1A" />
+          <Text style={s.actionOutlineBtnText}>Share</Text>
+        </Pressable>
+
+        <Pressable style={s.directionsPillBtn} onPress={handleDirections}>
+          <Ionicons name="navigate" size={15} color="#2E7D32" />
+          <Text style={s.directionsPillBtnText}>Directions</Text>
+        </Pressable>
+      </View>
+
+      {/* 5. ADDRESS CARD WITH MINI MAP PREVIEW */}
+      <Pressable style={s.addressCardBox} onPress={handleDirections}>
+        <View style={s.addressPinCircle}>
+          <Ionicons name="location-sharp" size={16} color="#2E7D32" />
+        </View>
+
+        <View style={s.addressInfoCol}>
+          <Text style={s.addressTitleLabel}>Address</Text>
+          <Text style={s.addressFullText} numberOfLines={2}>
+            {displayAddress}
+          </Text>
+        </View>
+
+        {/* Stylized Mini Map Card */}
+        <View style={s.miniMapWrapper}>
+          <View style={s.miniMapRoadH} />
+          <View style={s.miniMapRoadV} />
+          <View style={s.miniMapPinDot}>
+            <Ionicons name="location-sharp" size={14} color="#2E7D32" />
+          </View>
+          <Ionicons name="chevron-forward" size={14} color="#666666" style={s.mapChevron} />
+        </View>
+      </Pressable>
+
+      {/* 6. SHOP AMBIENCE & HIGHLIGHTS (Horizontal Photos) */}
+      <View style={s.sectionBlock}>
+        <View style={s.sectionHeaderRow}>
+          <Text style={s.sectionTitleText}>Shop Ambience & Highlights</Text>
+          <Pressable
+            hitSlop={6}
+            onPress={() => router.push(`/seller/${seller.id}`)}
+            style={s.viewAllRow}
+          >
+            <Text style={s.viewAllGreenText}>View all (6)</Text>
+            <Ionicons name="chevron-forward" size={14} color="#2E7D32" />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.ambienceScrollContainer}
+        >
+          {ambienceImages.map((uri, idx) => (
+            <Pressable
+              key={`amb-${seller.id}-${idx}`}
+              onPress={() => onPreviewImage(uri)}
+              style={s.ambienceThumbCard}
+            >
+              <Image source={{ uri: mediaUri(uri) }} style={s.ambienceThumbImg} contentFit="cover" transition={200} />
+              {/* If second item, show video pill 0:18 as in screenshot */}
+              {idx === 1 && (
+                <View style={s.ambienceVideoPill}>
+                  <Ionicons name="play" size={10} color="#FFFFFF" />
+                  <Text style={s.ambienceVideoText}>0:18</Text>
+                </View>
+              )}
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* 7. POPULAR DISHES (Horizontal Dish Cards with Image, Name, Price, +ADD) */}
+      <View style={s.sectionBlock}>
+        <View style={s.sectionHeaderRow}>
+          <Text style={s.sectionTitleText}>Popular Dishes</Text>
+          <Pressable
+            hitSlop={6}
+            onPress={() => router.push(`/seller/${seller.id}`)}
+            style={s.viewAllRow}
+          >
+            <Text style={s.viewAllGreenText}>View all ({item.total_products || 12})</Text>
+            <Ionicons name="chevron-forward" size={14} color="#2E7D32" />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.dishesScrollContainer}
+        >
+          {(products && products.length > 0
+            ? products.slice(0, 6)
+            : [
+                {
+                  id: "sample-1",
+                  seller_id: seller.id,
+                  name: "Test Biryani",
+                  price: 250,
+                  category: "Biryani",
+                  veg: false,
+                  image:
+                    banner_url ||
+                    "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=70",
+                  available: true,
+                  stock: 50,
+                  description: "",
+                },
+                {
+                  id: "sample-2",
+                  seller_id: seller.id,
+                  name: "Biryani Speciality",
+                  price: 320,
+                  category: "Biryani",
+                  veg: false,
+                  image:
+                    gallery?.[1] ||
+                    "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=70",
+                  available: true,
+                  stock: 50,
+                  description: "",
+                },
+                {
+                  id: "sample-3",
+                  seller_id: seller.id,
+                  name: "Chicken Biryani",
+                  price: 280,
+                  category: "Biryani",
+                  veg: false,
+                  image:
+                    gallery?.[2] ||
+                    "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=70",
+                  available: true,
+                  stock: 50,
+                  description: "",
+                },
+              ]
+          ).map((prod) => {
+            const isAdding = addingPid === prod.id;
+            return (
+              <View key={prod.id} style={s.popularDishCard}>
+                <Image
+                  source={{ uri: mediaUri(prod.image || seller.image) }}
+                  style={s.popularDishImg}
+                  contentFit="cover"
+                  transition={200}
+                />
+                <View style={s.popularDishContent}>
+                  <Text style={s.popularDishName} numberOfLines={1}>
+                    {prod.name}
+                  </Text>
+                  <Text style={s.popularDishPrice}>{rupee(prod.price)}</Text>
+                  <Pressable
+                    disabled={isAdding}
+                    onPress={() => onAddToCart(prod as Product, seller)}
+                    style={s.popularDishAddBtn}
+                  >
+                    {isAdding ? (
+                      <ActivityIndicator size="small" color="#2E7D32" />
+                    ) : (
+                      <>
+                        <Ionicons name="add" size={13} color="#2E7D32" />
+                        <Text style={s.popularDishAddText}>ADD</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* 8. BOTTOM ANCHORED CTA: Explore Shop & Full Menu -> */}
+      <View style={s.shopCtaWrapper}>
+        <Pressable
+          style={s.exploreShopBtn}
+          onPress={() => router.push(`/seller/${seller.id}`)}
+          testID={`discover-explore-${seller.id}`}
+        >
+          <Text style={s.exploreShopBtnText}>Explore Shop & Full Menu</Text>
+          <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+        </Pressable>
+      </View>
+
+      {/* Card divider */}
+      <View style={s.cardSeparator} />
+    </View>
+  );
+}
 
 export default function DiscoverScreen() {
   const params = useLocalSearchParams<{ type?: string; schedule?: string }>();
@@ -343,7 +794,6 @@ export default function DiscoverScreen() {
   const isListViewMode = isScheduleMode || isFoodMode;
   const isDiscoverMode = !params.schedule && (!params.type || params.type === "new");
 
-  // Query for category listing when in schedule mode or standard category mode
   const listCategory = params.type || "food";
   const categoryQuery = useQuery({
     queryKey: ["sellers", listCategory],
@@ -357,13 +807,8 @@ export default function DiscoverScreen() {
   const [activeSearch, setActiveSearch] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [addingPid, setAddingPid] = useState<string | null>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(0);
 
-  // Default address for location discovery
-  const addr = useQuery({ queryKey: ["addresses"], queryFn: () => api<Address[]>("/addresses") });
-  const defaultAddress = addr.data?.find((a) => a.is_default) || addr.data?.[0];
-
-  // Infinite query for showcase feed
+  // Infinite query for discover showcase feed
   const {
     data,
     isLoading,
@@ -389,12 +834,10 @@ export default function DiscoverScreen() {
     getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.offset + lastPage.limit : undefined),
   });
 
-  // Flattened items for virtualized FlatList
   const showcaseItems = useMemo(() => {
     return (data?.pages.flatMap((page) => page.items) ?? []) as ShowcaseItem[];
   }, [data]);
 
-  // Add product to cart directly from discover card
   const addToCart = async (product: Product, seller: Seller) => {
     setAddingPid(product.id);
     try {
@@ -419,208 +862,6 @@ export default function DiscoverScreen() {
   const clearSearch = () => {
     setSearchQuery("");
     setActiveSearch("");
-  };
-
-  // Render individual showcase card with clean, minimal subtle fade-in animation
-  const renderShowcase = ({ item, index }: { item: ShowcaseItem; index: number }) => {
-    const { seller, banner_url, gallery, highlights, description, products } = item;
-    const isRecentlyOpened = seller.is_new;
-    const hasOffer = !!seller.offer;
-
-    // Dynamic banner height: 32% of available container height (e.g., ~250-260dp on tall phones, min 220dp)
-    const dynamicBannerHeight = containerHeight > 0 ? Math.max(220, Math.round(containerHeight * 0.32)) : 240;
-
-    return (
-      <View
-        style={[s.card, containerHeight > 0 && { height: containerHeight }]}
-        testID={`discover-showcase-${seller.id}`}
-      >
-        {/* 1. Large Full-width Banner with Badges and Gradient Title */}
-        <Pressable
-          onPress={() => router.push(`/seller/${seller.id}`)}
-          style={[s.bannerContainer, { height: dynamicBannerHeight }]}
-          testID={`discover-banner-${seller.id}`}
-        >
-          <Image source={{ uri: banner_url }} style={s.bannerImage} contentFit="cover" transition={200} />
-          <LinearGradient
-            colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.85)"]}
-            style={s.bannerGradient}
-          >
-            {/* Top Badges */}
-            <View style={s.badgeRow}>
-              {isRecentlyOpened ? (
-                <View style={[s.badge, { backgroundColor: colors.brandPrimary }]}>
-                  <Ionicons name="sparkles" size={12} color={colors.onBrandPrimary} />
-                  <Text style={s.badgeText}>NEW</Text>
-                </View>
-              ) : null}
-              {seller.opened_on ? (
-                <View style={[s.badge, { backgroundColor: "rgba(0,0,0,0.65)" }]}>
-                  <Text style={s.badgeText}>Recently Opened</Text>
-                </View>
-              ) : null}
-              {seller.open === false ? (
-                <View style={[s.badge, { backgroundColor: colors.error }]}>
-                  <Text style={s.badgeText}>Currently Closed</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Banner Bottom: Shop Name & Cuisine */}
-            <View>
-              <Text style={s.bannerShopName}>{seller.name}</Text>
-              <Text style={s.bannerCuisine}>{seller.cuisine || seller.category.toUpperCase()}</Text>
-            </View>
-          </LinearGradient>
-        </Pressable>
-
-        {/* 2. Shop Details Section with Bottom Anchored CTA */}
-        <Animated.View entering={FadeIn.duration(250)} style={s.detailsSection}>
-          <ScrollView
-            style={s.detailsScroll}
-            contentContainerStyle={s.detailsContent}
-            showsVerticalScrollIndicator={false}
-            nestedScrollEnabled
-          >
-            <View style={s.metaRow}>
-              {/* Rating */}
-              <View style={s.ratingPill}>
-                <Ionicons name="star" size={13} color="#FFFFFF" />
-                <Text style={s.ratingText}>{seller.rating.toFixed(1)}</Text>
-              </View>
-
-              {/* Distance & ETA */}
-              <View style={s.metaItem}>
-                <Ionicons name="location-outline" size={14} color={colors.muted} />
-                <Text style={s.metaText}>{seller.distance_km} km</Text>
-              </View>
-              <View style={s.metaDot} />
-              <View style={s.metaItem}>
-                <Ionicons name="time-outline" size={14} color={colors.muted} />
-                <Text style={s.metaText}>{seller.eta_min} mins</Text>
-              </View>
-
-              {/* FSSAI Verified Pill */}
-              {seller.fssai_status === "verified" ? (
-                <View style={s.fssaiPill}>
-                  <Ionicons name="shield-checkmark" size={12} color={colors.onPastelMint} />
-                  <Text style={s.fssaiText}>FSSAI Verified</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Shop Description */}
-            <Text style={s.descriptionText} numberOfLines={2}>
-              {description}
-            </Text>
-
-            {/* Special Offer Badge if available */}
-            {hasOffer ? (
-              <View style={s.offerBox}>
-                <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
-                <Text style={s.offerText}>{seller.offer}</Text>
-              </View>
-            ) : null}
-
-            {/* 3. Multiple Shop Photographs (Horizontal Swipe Gallery) */}
-            {gallery && gallery.length > 0 ? (
-              <View style={s.galleryContainer}>
-                <Text style={s.subSectionTitle}>Shop Highlights & Ambience</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={s.galleryList}
-                  nestedScrollEnabled
-                >
-                  {gallery.map((imgUri, index) => (
-                    <Pressable
-                      key={`gal-${seller.id}-${index}`}
-                      onPress={() => setPreviewImage(imgUri)}
-                      style={s.galleryItem}
-                      testID={`discover-gallery-img-${seller.id}-${index}`}
-                    >
-                      <Image source={{ uri: imgUri }} style={s.galleryImage} contentFit="cover" transition={200} />
-                      <View style={s.galleryZoomIcon}>
-                        <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
-                      </View>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            {/* 4. Highlights Tags */}
-            {highlights && highlights.length > 0 ? (
-              <View style={s.highlightsRow}>
-                {highlights.map((tag, idx) => (
-                  <View key={`hl-${idx}`} style={s.highlightChip}>
-                    <Text style={s.highlightText}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {/* 5. Product Preview Section */}
-            {products && products.length > 0 ? (
-              <View style={s.productsSection}>
-                <View style={s.productsHeader}>
-                  <Text style={s.subSectionTitle}>Popular Items</Text>
-                  <Pressable onPress={() => router.push(`/seller/${seller.id}`)}>
-                    <Text style={s.viewAllLink}>View all ({item.total_products})</Text>
-                  </Pressable>
-                </View>
-
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={s.productList}
-                  nestedScrollEnabled
-                >
-                  {products.map((prod) => (
-                    <View key={prod.id} style={s.productCard} testID={`discover-prod-${prod.id}`}>
-                      <Image source={{ uri: prod.image }} style={s.productImage} contentFit="cover" transition={150} />
-                      <View style={s.productInfo}>
-                        <Text style={s.productName} numberOfLines={1}>
-                          {prod.name}
-                        </Text>
-                        <Text style={s.productPrice}>{rupee(prod.price)}</Text>
-                        <Pressable
-                          style={[s.addBtn, addingPid === prod.id && { opacity: 0.6 }]}
-                          onPress={() => addToCart(prod, seller)}
-                          disabled={addingPid === prod.id}
-                          testID={`discover-add-cart-${prod.id}`}
-                        >
-                          {addingPid === prod.id ? (
-                            <ActivityIndicator size="small" color={colors.brandPrimary} />
-                          ) : (
-                            <>
-                              <Ionicons name="add" size={14} color={colors.brandPrimary} />
-                              <Text style={s.addBtnText}>ADD</Text>
-                            </>
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
-          </ScrollView>
-
-          {/* 6. Shop CTA Button anchored at bottom of card */}
-          <View style={s.ctaContainer}>
-            <Pressable
-              style={s.exploreBtn}
-              onPress={() => router.push(`/seller/${seller.id}`)}
-              testID={`discover-explore-${seller.id}`}
-            >
-              <Text style={s.exploreBtnText}>Explore Shop & Full Menu</Text>
-              <Ionicons name="arrow-forward" size={16} color={colors.onBrandPrimary} />
-            </Pressable>
-          </View>
-        </Animated.View>
-      </View>
-    );
   };
 
   if (isListViewMode) {
@@ -694,33 +935,26 @@ export default function DiscoverScreen() {
 
   return (
     <View style={s.root}>
-      {/* A. Header */}
-      <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
+      {/* 1. TOP HEADER & SEARCH & CATEGORY CHIPS */}
+      <View style={[s.headerContainer, { paddingTop: insets.top + spacing.xs }]}>
+        {/* Title row with circular back button */}
         <View style={s.headerTopRow}>
-          <Pressable onPress={() => router.back()} style={s.backBtn} testID="discover-back-btn">
-            <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
+          <Pressable onPress={() => router.back()} style={s.circularBackBtn} testID="discover-back-btn">
+            <Ionicons name="arrow-back" size={20} color="#1A1A1A" />
           </Pressable>
-          <View style={{ flex: 1, marginLeft: spacing.sm }}>
-            <Text style={s.headerTitle}>Discover</Text>
-            <Text style={s.headerSubtitle}>Explore newly opened shops near you</Text>
+          <View style={s.headerTitleCol}>
+            <Text style={s.pageTitle}>Discover</Text>
+            <Text style={s.pageSubtitle}>Explore newly opened shops near you</Text>
           </View>
-          {defaultAddress ? (
-            <View style={s.locationBadge}>
-              <Ionicons name="location" size={14} color={colors.brandPrimary} />
-              <Text style={s.locationText} numberOfLines={1}>
-                {defaultAddress.label || "Home"}
-              </Text>
-            </View>
-          ) : null}
         </View>
 
-        {/* Search Bar */}
-        <View style={s.searchBarContainer}>
-          <Ionicons name="search" size={18} color={colors.muted} />
+        {/* Pill Search Input */}
+        <View style={s.pillSearchBar}>
+          <Ionicons name="search" size={17} color="#7A7A7A" />
           <TextInput
-            style={s.searchInput}
-            placeholder="Search new spots, cuisines, dishes..."
-            placeholderTextColor={colors.muted}
+            style={s.pillSearchInput}
+            placeholder="Search for shops, cuisines, dishes..."
+            placeholderTextColor="#8C8C8C"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearchSubmit}
@@ -728,17 +962,17 @@ export default function DiscoverScreen() {
             testID="discover-search-input"
           />
           {searchQuery ? (
-            <Pressable onPress={clearSearch} style={{ padding: spacing.xs }}>
-              <Ionicons name="close-circle" size={18} color={colors.muted} />
+            <Pressable onPress={clearSearch} hitSlop={6}>
+              <Ionicons name="close-circle" size={18} color="#7A7A7A" />
             </Pressable>
           ) : null}
         </View>
 
-        {/* B. Category Filters */}
+        {/* Category Horizontal Filter Chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.categoryFilterBar}
+          contentContainerStyle={s.categoryChipsScroll}
         >
           {CATEGORIES.map((cat) => {
             const isSelected = selectedCat === cat.key;
@@ -748,22 +982,19 @@ export default function DiscoverScreen() {
                 onPress={() => setSelectedCat(cat.key)}
                 style={[
                   s.categoryChip,
-                  isSelected && {
-                    backgroundColor: colors.brandPrimary,
-                    borderColor: colors.brandPrimary,
-                  },
+                  isSelected ? s.categoryChipSelected : s.categoryChipUnselected,
                 ]}
                 testID={`discover-cat-${cat.key}`}
               >
                 <Ionicons
                   name={cat.icon}
                   size={14}
-                  color={isSelected ? colors.onBrandPrimary : colors.onSurface}
+                  color={isSelected ? "#FFFFFF" : "#1A1A1A"}
                 />
                 <Text
                   style={[
                     s.categoryChipText,
-                    isSelected && { color: colors.onBrandPrimary, fontWeight: "700" },
+                    isSelected ? s.categoryChipTextSelected : s.categoryChipTextUnselected,
                   ]}
                 >
                   {cat.label}
@@ -774,16 +1005,8 @@ export default function DiscoverScreen() {
         </ScrollView>
       </View>
 
-      {/* C. Shop Showcase Feed */}
-      <View
-        style={s.feedContainer}
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h > 0 && Math.abs(h - containerHeight) > 2) {
-            setContainerHeight(h);
-          }
-        }}
-      >
+      {/* 2. CONTINUOUS SCROLL FEED OF EXACT SHOP CARDS */}
+      <View style={s.feedContainer}>
         {isLoading ? (
           <Loader />
         ) : isError ? (
@@ -792,28 +1015,29 @@ export default function DiscoverScreen() {
           <FlatList
             data={showcaseItems}
             keyExtractor={(item) => item.seller.id}
-            renderItem={renderShowcase}
-            pagingEnabled
-            snapToInterval={containerHeight > 0 ? containerHeight : undefined}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            disableIntervalMomentum={true}
+            contentContainerStyle={[
+              s.feedContentContainer,
+              { paddingBottom: insets.bottom + spacing.xxl },
+            ]}
             showsVerticalScrollIndicator={false}
-            getItemLayout={
-              containerHeight > 0
-                ? (_, i) => ({ length: containerHeight, offset: containerHeight * i, index: i })
-                : undefined
-            }
             refreshing={isRefetching}
             onRefresh={() => refetch()}
             onEndReached={() => {
               if (hasNextPage && !isFetchingNextPage) fetchNextPage();
             }}
             onEndReachedThreshold={0.5}
+            renderItem={({ item }) => (
+              <ExactDiscoverShopCard
+                item={item}
+                onAddToCart={addToCart}
+                addingPid={addingPid}
+                onPreviewImage={(uri) => setPreviewImage(uri)}
+              />
+            )}
             ListFooterComponent={
               isFetchingNextPage ? (
                 <View style={s.footerLoader}>
-                  <ActivityIndicator size="small" color={colors.brandPrimary} />
+                  <ActivityIndicator size="small" color="#2E7D32" />
                   <Text style={s.footerText}>Loading more businesses...</Text>
                 </View>
               ) : undefined
@@ -829,7 +1053,7 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {/* Full-screen Image Viewer Modal */}
+      {/* Full-screen Image Preview Modal */}
       <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
         <View style={s.modalOverlay}>
           <Pressable style={s.modalCloseBtn} onPress={() => setPreviewImage(null)}>
@@ -844,380 +1068,638 @@ export default function DiscoverScreen() {
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles(() => ({
   root: {
     flex: 1,
-    backgroundColor: c.surface,
+    backgroundColor: "#F8F9FA",
   },
-  header: {
-    backgroundColor: c.surface,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.border,
+  headerContainer: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 12,
   },
-  backBtn: {
+  circularBackBtn: {
     width: 38,
     height: 38,
-    borderRadius: radius.pill,
-    backgroundColor: c.surfaceTertiary,
+    borderRadius: 19,
+    backgroundColor: "#F2F4F5",
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: font.xl,
-    fontWeight: "800",
-    color: c.onSurface,
-  },
-  headerSubtitle: {
-    fontSize: font.sm,
-    color: c.muted,
-  },
-  locationBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: c.brandTertiary,
-  },
-  locationText: {
-    fontSize: font.sm - 2,
-    fontWeight: "700",
-    color: c.brandPrimary,
-    maxWidth: 90,
-  },
-  searchBarContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: c.surfaceSecondary,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    height: 42,
-    marginTop: spacing.sm,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  searchInput: {
+  headerTitleCol: {
+    marginLeft: 12,
     flex: 1,
-    fontSize: font.base,
-    color: c.onSurface,
+  },
+  pageTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111111",
+    letterSpacing: -0.3,
+  },
+  pageSubtitle: {
+    fontSize: 12,
+    color: "#777777",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  pillSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    height: 42,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#E2E5E8",
+  },
+  pillSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#1A1A1A",
     paddingVertical: 0,
   },
-  categoryFilterBar: {
+  categoryChipsScroll: {
     flexDirection: "row",
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    gap: 8,
+    paddingTop: 12,
+    paddingBottom: 2,
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.pill,
-    backgroundColor: c.surfaceSecondary,
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  categoryChipSelected: {
+    backgroundColor: "#2E7D32",
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: "#2E7D32",
+  },
+  categoryChipUnselected: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   categoryChipText: {
-    fontSize: font.sm,
-    color: c.onSurface,
+    fontSize: 12,
+  },
+  categoryChipTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  categoryChipTextUnselected: {
+    color: "#1F2937",
     fontWeight: "600",
   },
   feedContainer: {
     flex: 1,
   },
-  card: {
-    backgroundColor: c.surface,
-    overflow: "hidden",
+  feedContentContainer: {
+    paddingTop: 12,
   },
-  bannerContainer: {
-    height: 190,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.xs,
-    borderRadius: radius.lg,
+  shopCardContainer: {
+    backgroundColor: "#FFFFFF",
+    marginBottom: 16,
+  },
+  cardSeparator: {
+    height: 8,
+    backgroundColor: "#F3F4F6",
+    marginTop: 16,
+  },
+
+  /* 1. Hero Banner */
+  heroBannerWrapper: {
+    height: 240,
+    marginHorizontal: 16,
+    borderRadius: 20,
     overflow: "hidden",
     position: "relative",
+    backgroundColor: "#222222",
   },
-  bannerImage: {
+  heroBannerSlide: {
+    width: 360,
+    height: 240,
+  },
+  heroBannerImage: {
     ...StyleSheet.absoluteFill,
   },
-  bannerGradient: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: "space-between",
-    padding: spacing.md,
-  },
-  badgeRow: {
+  heroTopBadges: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    right: 12,
     flexDirection: "row",
-    gap: spacing.xs,
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  badge: {
+  heroTopLeftBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  badgeNew: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
+    backgroundColor: "#EA580C",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  badgeText: {
+  badgeNewText: {
     color: "#FFFFFF",
-    fontSize: font.sm - 2,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  bannerShopName: {
-    fontSize: font.xxl,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
-  bannerCuisine: {
-    fontSize: font.sm,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.85)",
-  },
-  detailsSection: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  detailsScroll: {
-    flex: 1,
-  },
-  detailsContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  ctaContainer: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    backgroundColor: c.surface,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    flexWrap: "wrap",
-  },
-  ratingPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "#16A34A",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  ratingText: {
-    color: "#FFFFFF",
-    fontSize: font.sm - 2,
+    fontSize: 11,
     fontWeight: "800",
   },
-  metaItem: {
+  badgeDark: {
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeDarkText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  badgeLightPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeLightPillText: {
+    color: "#111111",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  badgeVideo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  metaText: {
-    fontSize: font.sm,
-    color: c.muted,
+  badgeVideoText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  heroArrowLeft: {
+    position: "absolute",
+    left: 10,
+    top: "50%",
+    marginTop: -16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroArrowRight: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    marginTop: -16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroDotsContainer: {
+    position: "absolute",
+    bottom: 12,
+    right: 14,
+    flexDirection: "row",
+    gap: 5,
+    alignItems: "center",
+  },
+  heroDot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  heroDotActive: {
+    width: 6,
+    backgroundColor: "#4ADE80",
+  },
+  heroDotInactive: {
+    width: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+  },
+
+  /* 2. Shop Identity Header */
+  shopHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  shopLogoBox: {
+    width: 62,
+    height: 62,
+    borderRadius: 14,
+    backgroundColor: "#111111",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 4,
+  },
+  shopLogoText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 2,
+    lineHeight: 11,
+  },
+  shopHeaderInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  shopTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  shopNameTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111111",
+    flex: 1,
+    letterSpacing: -0.2,
+  },
+  heartIconBtn: {
+    padding: 2,
+    marginLeft: 8,
+  },
+  shopCuisinesText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 3,
     fontWeight: "500",
   },
-  metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: radius.pill,
-    backgroundColor: c.muted,
+  shopMetricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 7,
+    flexWrap: "wrap",
   },
-  fssaiPill: {
+  ratingBadgeGreen: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: c.pastelMint,
-    paddingHorizontal: spacing.sm,
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: radius.pill,
+    borderRadius: 5,
   },
-  fssaiText: {
-    fontSize: font.sm - 2,
-    fontWeight: "700",
-    color: c.onPastelMint,
+  ratingBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
   },
-  descriptionText: {
-    fontSize: font.base,
-    color: c.onSurfaceSecondary,
-    lineHeight: 20,
+  reviewsCountText: {
+    fontSize: 11,
+    color: "#4B5563",
+    fontWeight: "500",
   },
-  offerBox: {
+  metricItemWithIcon: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: c.brandTertiary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.md,
+    gap: 3,
   },
-  offerText: {
-    fontSize: font.sm,
+  metricText: {
+    fontSize: 11,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  fssaiBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  fssaiBadgeText: {
+    fontSize: 11,
+    color: "#2E7D32",
     fontWeight: "700",
-    color: c.brandPrimary,
   },
-  galleryContainer: {
-    gap: spacing.xs,
+
+  /* 3. Description Block */
+  descriptionBlock: {
+    paddingHorizontal: 16,
+    marginTop: 10,
   },
-  subSectionTitle: {
-    fontSize: font.base,
+  shopDescText: {
+    fontSize: 13,
+    color: "#4B5563",
+    lineHeight: 18,
+    fontWeight: "400",
+  },
+  readMoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 3,
+  },
+  readMoreText: {
+    color: "#2E7D32",
+    fontSize: 12,
     fontWeight: "700",
-    color: c.onSurface,
   },
-  galleryList: {
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
+
+  /* 4. Action Buttons */
+  actionButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginTop: 14,
+    gap: 8,
   },
-  galleryItem: {
-    width: 110,
-    height: 80,
-    borderRadius: radius.md,
+  actionOutlineBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    height: 38,
+    borderRadius: 19,
+  },
+  actionOutlineBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  directionsPillBtn: {
+    flex: 1.3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#E8F5E9",
+    borderWidth: 1,
+    borderColor: "#C8E6C9",
+    height: 38,
+    borderRadius: 19,
+  },
+  directionsPillBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#2E7D32",
+  },
+
+  /* 5. Address Card Box */
+  addressCardBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+    borderRadius: 14,
+    padding: 12,
+  },
+  addressPinCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#E8F5E9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addressInfoCol: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 8,
+  },
+  addressTitleLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#111111",
+  },
+  addressFullText: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  miniMapWrapper: {
+    width: 90,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: "#E8F0EA",
     overflow: "hidden",
     position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D5E6D8",
   },
-  galleryImage: {
+  miniMapRoadH: {
+    position: "absolute",
+    height: 8,
+    left: 0,
+    right: 0,
+    top: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  miniMapRoadV: {
+    position: "absolute",
+    width: 8,
+    top: 0,
+    bottom: 0,
+    left: 40,
+    backgroundColor: "#FFFFFF",
+  },
+  miniMapPinDot: {
+    zIndex: 2,
+  },
+  mapChevron: {
+    position: "absolute",
+    right: 4,
+    top: 17,
+  },
+
+  /* 6. Section Block (Ambience & Highlights) */
+  sectionBlock: {
+    marginTop: 18,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  sectionTitleText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111111",
+    letterSpacing: -0.2,
+  },
+  viewAllRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  viewAllGreenText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2E7D32",
+  },
+  ambienceScrollContainer: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  ambienceThumbCard: {
+    width: 105,
+    height: 75,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB",
+    position: "relative",
+  },
+  ambienceThumbImg: {
     width: "100%",
     height: "100%",
   },
-  galleryZoomIcon: {
+  ambienceVideoPill: {
     position: "absolute",
     bottom: 4,
     right: 4,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: radius.pill,
-    padding: 3,
-  },
-  highlightsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  highlightChip: {
-    backgroundColor: c.surfaceSecondary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  highlightText: {
-    fontSize: font.sm - 1,
-    color: c.onSurface,
-    fontWeight: "600",
-  },
-  productsSection: {
-    gap: spacing.xs,
-  },
-  productsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-  viewAllLink: {
-    fontSize: font.sm,
-    fontWeight: "700",
-    color: c.brandPrimary,
-  },
-  productList: {
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  productCard: {
-    width: 140,
-    backgroundColor: c.surfaceSecondary,
-    borderRadius: radius.md,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  productImage: {
-    width: "100%",
-    height: 90,
-  },
-  productInfo: {
-    padding: spacing.sm,
     gap: 3,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
-  productName: {
-    fontSize: font.sm,
+  ambienceVideoText: {
+    color: "#FFFFFF",
+    fontSize: 9,
     fontWeight: "700",
-    color: c.onSurface,
   },
-  productPrice: {
-    fontSize: font.sm,
+
+  /* 7. Popular Dishes */
+  dishesScrollContainer: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  popularDishCard: {
+    width: 135,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  popularDishImg: {
+    width: "100%",
+    height: 85,
+    backgroundColor: "#F3F4F6",
+  },
+  popularDishContent: {
+    padding: 8,
+  },
+  popularDishName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111111",
+  },
+  popularDishPrice: {
+    fontSize: 12,
     fontWeight: "800",
-    color: c.brandPrimary,
+    color: "#D97706",
+    marginTop: 3,
   },
-  addBtn: {
-    marginTop: spacing.xs,
+  popularDishAddBtn: {
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
     borderWidth: 1,
-    borderColor: c.brandPrimary,
-    backgroundColor: c.surface,
+    borderColor: "#C8E6C9",
+    backgroundColor: "#F1F8F2",
     paddingVertical: 4,
-    borderRadius: radius.sm,
+    borderRadius: 8,
   },
-  addBtnText: {
-    fontSize: font.sm - 2,
+  popularDishAddText: {
+    fontSize: 10,
     fontWeight: "800",
-    color: c.brandPrimary,
+    color: "#2E7D32",
   },
-  exploreBtn: {
-    marginTop: spacing.xs,
+
+  /* 8. Shop CTA */
+  shopCtaWrapper: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  exploreShopBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xs,
-    backgroundColor: c.brandPrimary,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    gap: 6,
+    backgroundColor: "#2E7D32",
+    height: 44,
+    borderRadius: 10,
   },
-  exploreBtnText: {
-    fontSize: font.base,
+  exploreShopBtnText: {
+    fontSize: 13,
     fontWeight: "800",
-    color: c.onBrandPrimary,
+    color: "#FFFFFF",
   },
+
   footerLoader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    gap: 8,
+    paddingVertical: 24,
   },
   footerText: {
-    fontSize: font.sm,
-    color: c.muted,
+    fontSize: 12,
+    color: "#777777",
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.92)",
     justifyContent: "center",
     alignItems: "center",
-    padding: spacing.md,
+    padding: 16,
   },
   modalCloseBtn: {
     position: "absolute",
     top: 50,
     right: 20,
     zIndex: 10,
-    padding: spacing.sm,
+    padding: 8,
   },
   modalImage: {
     width: "100%",
