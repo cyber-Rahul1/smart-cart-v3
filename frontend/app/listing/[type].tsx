@@ -390,13 +390,21 @@ function ExactDiscoverShopCard({
     seller.description ||
     "Authentic, restaurant-style Biryani and Indian meals crafted with premium spices and fresh ingredients.";
 
-  // Count words to determine if text is long enough to warrant a "Read more" button
-  const wordCount = useMemo(() => {
-    return fullDescription.trim().split(/\s+/).filter(Boolean).length;
+  // Words array
+  const words = useMemo(() => {
+    return fullDescription.trim().split(/\s+/).filter(Boolean);
   }, [fullDescription]);
 
-  // Only show "Read more" if description is longer than 15 words or ~100 characters
-  const canExpand = wordCount > 15 || fullDescription.length > 100;
+  const WORD_LIMIT = 20;
+  const canExpand = words.length > WORD_LIMIT;
+
+  // When collapsed and expandable, slice to the word limit with an ellipsis
+  const displayedDescription = useMemo(() => {
+    if (!canExpand || isDescExpanded) {
+      return fullDescription;
+    }
+    return words.slice(0, WORD_LIMIT).join(" ") + "...";
+  }, [fullDescription, words, canExpand, isDescExpanded]);
 
   // Ambience gallery items (with video timestamp mock on item 2 like screenshot)
   const ambienceImages = useMemo(() => {
@@ -620,11 +628,8 @@ function ExactDiscoverShopCard({
 
         {/* 3. DESCRIPTION WITH CONDITIONAL "Read more" TOGGLE */}
         <View style={s.descriptionBlock}>
-          <Text
-            style={s.shopDescText}
-            numberOfLines={canExpand && !isDescExpanded ? 2 : undefined}
-          >
-            {fullDescription}
+          <Text style={s.shopDescText}>
+            {displayedDescription}
           </Text>
           {canExpand && (
             <Pressable
