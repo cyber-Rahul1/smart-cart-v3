@@ -385,6 +385,19 @@ function ExactDiscoverShopCard({
     };
   }, [hasMultiple, isActive, userInteracting, activeBannerIdx, bannerImages.length, bannerWidth, progressAnim]);
 
+  const fullDescription =
+    description ||
+    seller.description ||
+    "Authentic, restaurant-style Biryani and Indian meals crafted with premium spices and fresh ingredients.";
+
+  // Count words to determine if text is long enough to warrant a "Read more" button
+  const wordCount = useMemo(() => {
+    return fullDescription.trim().split(/\s+/).filter(Boolean).length;
+  }, [fullDescription]);
+
+  // Only show "Read more" if description is longer than 15 words or ~100 characters
+  const canExpand = wordCount > 15 || fullDescription.length > 100;
+
   // Ambience gallery items (with video timestamp mock on item 2 like screenshot)
   const ambienceImages = useMemo(() => {
     if (gallery && gallery.length >= 4) return gallery.slice(0, 4);
@@ -605,28 +618,28 @@ function ExactDiscoverShopCard({
           </View>
         </View>
 
-        {/* 3. DESCRIPTION WITH "Read more" TOGGLE */}
+        {/* 3. DESCRIPTION WITH CONDITIONAL "Read more" TOGGLE */}
         <View style={s.descriptionBlock}>
           <Text
             style={s.shopDescText}
-            numberOfLines={isDescExpanded ? undefined : 2}
+            numberOfLines={canExpand && !isDescExpanded ? 2 : undefined}
           >
-            {description ||
-              seller.description ||
-              "Authentic, restaurant-style Biryani and Indian meals crafted with premium spices and fresh ingredients."}
+            {fullDescription}
           </Text>
-          <Pressable
-            hitSlop={6}
-            onPress={() => setIsDescExpanded(!isDescExpanded)}
-            style={s.readMoreBtn}
-          >
-            <Text style={s.readMoreText}>{isDescExpanded ? "Show less" : "Read more"}</Text>
-            <Ionicons
-              name={isDescExpanded ? "chevron-up" : "chevron-down"}
-              size={14}
-              color="#FC8019"
-            />
-          </Pressable>
+          {canExpand && (
+            <Pressable
+              hitSlop={6}
+              onPress={() => setIsDescExpanded(!isDescExpanded)}
+              style={s.readMoreBtn}
+            >
+              <Text style={s.readMoreText}>{isDescExpanded ? "Show less" : "Read more"}</Text>
+              <Ionicons
+                name={isDescExpanded ? "chevron-up" : "chevron-down"}
+                size={14}
+                color="#FC8019"
+              />
+            </Pressable>
+          )}
         </View>
 
         {/* 4. ACTION BUTTONS: Call, Chat, Share, Directions (Brand filled pill) */}
