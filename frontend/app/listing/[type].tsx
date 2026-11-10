@@ -141,16 +141,16 @@ function ShopWithItemsCard({
           onPress={() => router.push(`/seller/${seller.id}`)}
           style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}
         >
-          <Text style={{ color: "#2E7D32", fontWeight: "800", fontSize: font.base }}>
+          <Text style={{ color: "#FC8019", fontWeight: "800", fontSize: font.base }}>
             View Items
           </Text>
-          <Ionicons name="chevron-forward" size={16} color="#2E7D32" />
+          <Ionicons name="chevron-forward" size={16} color="#FC8019" />
         </Pressable>
       </View>
 
       {productsQuery.isLoading ? (
         <View style={{ height: 230, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#2E7D32" />
+          <ActivityIndicator color="#FC8019" />
         </View>
       ) : products.length === 0 ? (
         <Pressable
@@ -276,11 +276,11 @@ function ShopWithItemsCard({
                     }}
                   >
                     {isAdding ? (
-                      <ActivityIndicator size="small" color="#2E7D32" />
+                      <ActivityIndicator size="small" color="#FC8019" />
                     ) : (
                       <Text
                         style={{
-                          color: "#2E7D32",
+                          color: "#FC8019",
                           fontWeight: "800",
                           fontSize: font.sm + 1,
                         }}
@@ -556,14 +556,14 @@ function ExactDiscoverShopCard({
                 hitSlop={8}
                 onPress={() => {
                   setIsSaved(!isSaved);
-                  toast(isSaved ? "Removed from favorites" : "Saved to favorites");
+                  toast(isSaved ? "Removed from saved" : "Saved to your list");
                 }}
-                style={s.heartIconBtn}
+                style={s.saveIconBtn}
               >
                 <Ionicons
-                  name={isSaved ? "heart" : "heart-outline"}
+                  name={isSaved ? "bookmark" : "bookmark-outline"}
                   size={22}
-                  color={isSaved ? "#E53935" : "#1A1A1A"}
+                  color={isSaved ? "#FC8019" : "#1A1A1A"}
                 />
               </Pressable>
             </View>
@@ -624,12 +624,12 @@ function ExactDiscoverShopCard({
             <Ionicons
               name={isDescExpanded ? "chevron-up" : "chevron-down"}
               size={14}
-              color="#2E7D32"
+              color="#FC8019"
             />
           </Pressable>
         </View>
 
-        {/* 4. ACTION BUTTONS: Call, Chat, Share, Directions (Green filled pill) */}
+        {/* 4. ACTION BUTTONS: Call, Chat, Share, Directions (Brand filled pill) */}
         <View style={s.actionButtonsRow}>
           <Pressable style={s.actionOutlineBtn} onPress={handleCall}>
             <Ionicons name="call-outline" size={16} color="#1A1A1A" />
@@ -647,7 +647,7 @@ function ExactDiscoverShopCard({
           </Pressable>
 
           <Pressable style={s.directionsPillBtn} onPress={handleDirections}>
-            <Ionicons name="navigate" size={15} color="#2E7D32" />
+            <Ionicons name="navigate" size={15} color="#FC8019" />
             <Text style={s.directionsPillBtnText}>Directions</Text>
           </Pressable>
         </View>
@@ -655,7 +655,7 @@ function ExactDiscoverShopCard({
         {/* 5. ADDRESS CARD WITH MINI MAP PREVIEW */}
         <Pressable style={s.addressCardBox} onPress={handleDirections}>
           <View style={s.addressPinCircle}>
-            <Ionicons name="location-sharp" size={16} color="#2E7D32" />
+            <Ionicons name="location-sharp" size={16} color="#FC8019" />
           </View>
 
           <View style={s.addressInfoCol}>
@@ -670,24 +670,16 @@ function ExactDiscoverShopCard({
             <View style={s.miniMapRoadH} />
             <View style={s.miniMapRoadV} />
             <View style={s.miniMapPinDot}>
-              <Ionicons name="location-sharp" size={14} color="#2E7D32" />
+              <Ionicons name="location-sharp" size={14} color="#FC8019" />
             </View>
             <Ionicons name="chevron-forward" size={14} color="#666666" style={s.mapChevron} />
           </View>
         </Pressable>
 
-        {/* 6. SHOP AMBIENCE & HIGHLIGHTS (Horizontal Photos) */}
+        {/* 6. SHOP AMBIENCE & HIGHLIGHTS (Horizontal Photos - View All removed per request) */}
         <View style={s.sectionBlock}>
           <View style={s.sectionHeaderRow}>
             <Text style={s.sectionTitleText}>Shop Ambience & Highlights</Text>
-            <Pressable
-              hitSlop={6}
-              onPress={() => router.push(`/seller/${seller.id}`)}
-              style={s.viewAllRow}
-            >
-              <Text style={s.viewAllGreenText}>View all (6)</Text>
-              <Ionicons name="chevron-forward" size={14} color="#2E7D32" />
-            </Pressable>
           </View>
 
           <ScrollView
@@ -724,8 +716,8 @@ function ExactDiscoverShopCard({
               onPress={() => router.push(`/seller/${seller.id}`)}
               style={s.viewAllRow}
             >
-              <Text style={s.viewAllGreenText}>View all ({item.total_products || 12})</Text>
-              <Ionicons name="chevron-forward" size={14} color="#2E7D32" />
+              <Text style={s.viewAllOrangeText}>View all ({item.total_products || 12})</Text>
+              <Ionicons name="chevron-forward" size={14} color="#FC8019" />
             </Pressable>
           </View>
 
@@ -802,10 +794,10 @@ function ExactDiscoverShopCard({
                       style={s.popularDishAddBtn}
                     >
                       {isAdding ? (
-                        <ActivityIndicator size="small" color="#2E7D32" />
+                        <ActivityIndicator size="small" color="#FC8019" />
                       ) : (
                         <>
-                          <Ionicons name="add" size={13} color="#2E7D32" />
+                          <Ionicons name="add" size={13} color="#FC8019" />
                           <Text style={s.popularDishAddText}>ADD</Text>
                         </>
                       )}
@@ -1126,7 +1118,7 @@ export default function DiscoverScreen() {
             ListFooterComponent={
               isFetchingNextPage ? (
                 <View style={s.footerLoader}>
-                  <ActivityIndicator size="small" color="#2E7D32" />
+                  <ActivityIndicator size="small" color="#FC8019" />
                   <Text style={s.footerText}>Loading more businesses...</Text>
                 </View>
               ) : undefined
@@ -1230,9 +1222,9 @@ const useStyles = makeStyles(() => ({
     borderRadius: 20,
   },
   categoryChipSelected: {
-    backgroundColor: "#2E7D32",
+    backgroundColor: "#FC8019",
     borderWidth: 1,
-    borderColor: "#2E7D32",
+    borderColor: "#FC8019",
   },
   categoryChipUnselected: {
     backgroundColor: "#FFFFFF",
@@ -1357,7 +1349,7 @@ const useStyles = makeStyles(() => ({
   },
   activeDotFill: {
     height: "100%",
-    backgroundColor: "#4ADE80",
+    backgroundColor: "#FC8019",
     borderRadius: 3,
   },
   inactiveRoundDot: {
@@ -1407,8 +1399,8 @@ const useStyles = makeStyles(() => ({
     flex: 1,
     letterSpacing: -0.2,
   },
-  heartIconBtn: {
-    padding: 2,
+  saveIconBtn: {
+    padding: 4,
     marginLeft: 8,
   },
   shopCuisinesText: {
@@ -1486,7 +1478,7 @@ const useStyles = makeStyles(() => ({
     marginTop: 3,
   },
   readMoreText: {
-    color: "#2E7D32",
+    color: "#FC8019",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -1522,16 +1514,16 @@ const useStyles = makeStyles(() => ({
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#FFF0E5",
     borderWidth: 1,
-    borderColor: "#C8E6C9",
+    borderColor: "#FFD8BF",
     height: 38,
     borderRadius: 19,
   },
   directionsPillBtnText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#2E7D32",
+    color: "#FC8019",
   },
 
   /* 5. Address Card Box */
@@ -1550,7 +1542,7 @@ const useStyles = makeStyles(() => ({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#FFF0E5",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1574,13 +1566,13 @@ const useStyles = makeStyles(() => ({
     width: 90,
     height: 48,
     borderRadius: 10,
-    backgroundColor: "#E8F0EA",
+    backgroundColor: "#FFF3EB",
     overflow: "hidden",
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#D5E6D8",
+    borderColor: "#FFE0CC",
   },
   miniMapRoadH: {
     position: "absolute",
@@ -1629,10 +1621,10 @@ const useStyles = makeStyles(() => ({
     alignItems: "center",
     gap: 2,
   },
-  viewAllGreenText: {
+  viewAllOrangeText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#2E7D32",
+    color: "#FC8019",
   },
   ambienceScrollContainer: {
     paddingHorizontal: 16,
@@ -1707,15 +1699,15 @@ const useStyles = makeStyles(() => ({
     justifyContent: "center",
     gap: 2,
     borderWidth: 1,
-    borderColor: "#C8E6C9",
-    backgroundColor: "#F1F8F2",
+    borderColor: "#FFD8BF",
+    backgroundColor: "#FFF8F2",
     paddingVertical: 4,
     borderRadius: 8,
   },
   popularDishAddText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#2E7D32",
+    color: "#FC8019",
   },
 
   /* 8. Shop CTA */
@@ -1736,7 +1728,7 @@ const useStyles = makeStyles(() => ({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#2E7D32",
+    backgroundColor: "#FC8019",
     height: 44,
     borderRadius: 10,
   },
