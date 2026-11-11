@@ -24,12 +24,12 @@ import { useAuth } from "@/src/auth";
 import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
-import { Button, ErrorState, Ionicons, Loader, Sheet, Stepper, useToast, VegMark } from "@/src/ui";
+import { AppImage, Button, ErrorState, Ionicons, Loader, Sheet, Stepper, useToast, VegMark } from "@/src/ui";
 
 type ModeItem = { id: string; product_id: string; qty: number; user_id: string; flat?: string };
 
 const HERO_HEIGHT = 240;
-const CARD_PEEK = 40; // amount the card overlaps the bottom of hero
+const ESTIMATED_CARD_HEIGHT = 175;
 
 export default function SellerScreen() {
   const { id, gc, bk } = useLocalSearchParams<{ id: string; gc?: string; bk?: string }>();
@@ -40,7 +40,12 @@ export default function SellerScreen() {
   const toast = useToast();
   const [conflict, setConflict] = useState<{ product_id: string; qty: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const { user } = useAuth();
+
+  const toggleSection = (title: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [title]: !prev[title] }));
+  };
 
   const scrollY = useSharedValue(0);
 
@@ -80,37 +85,74 @@ export default function SellerScreen() {
     }
   };
 
-  // Scroll distance needed for the card to travel from its initial position to the top
-  const maxScroll = Math.max(1, HERO_HEIGHT - CARD_PEEK - insets.top);
+  // The bottom edge of the hero image is at HERO_HEIGHT (240).
+  // The card is centered vertically on that bottom edge:
+  const halfCard = ESTIMATED_CARD_HEIGHT / 2;
+  const initialCardTop = HERO_HEIGHT - halfCard;
+  const dockTargetTop = insets.top;
+  const maxScroll = Math.max(1, initialCardTop - dockTargetTop);
 
-  // Animated style for the floating card: translates up, scales to full width (0 margins), and flattens top border radius
+  // Smooth, jitter-free animation driven directly on the UI thread via transform translateY
   const cardAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
 
-    // Stick to top once y >= maxScroll
-    const translateY = y >= maxScroll ? y - maxScroll : 0;
+    // translateY moves the card up with scroll until it docks cleanly at insets.top
+    const translateY = -Math.min(y, maxScroll);
 
-    // Horizontal margin smoothly shrinks from spacing.lg (16) to 0 (full screen width)
-    const marginHorizontal = interpolate(progress, [0, 1], [spacing.lg, 0]);
+    // Smooth horizontal expansion from spacing.lg (16) to 0 (full screen width)
+    const left = interpolate(progress, [0, 1], [spacing.lg, 0]);
+    const right = interpolate(progress, [0, 1], [spacing.lg, 0]);
 
-    // Border radius smoothly flattens at the top
+    // Border radius smoothly flattens top corners upon docking
     const borderTopLeftRadius = interpolate(progress, [0, 1], [radius.lg, 0]);
     const borderTopRightRadius = interpolate(progress, [0, 1], [radius.lg, 0]);
     const borderBottomLeftRadius = interpolate(progress, [0, 1], [radius.lg, radius.md]);
     const borderBottomRightRadius = interpolate(progress, [0, 1], [radius.lg, radius.md]);
 
-    // Subtle elevation shadow fades out as it docks to top header
-    const elevation = interpolate(progress, [0, 1], [4, 2]);
-
     return {
       transform: [{ translateY }],
-      marginHorizontal,
+      left,
+      right,
       borderTopLeftRadius,
       borderTopRightRadius,
       borderBottomLeftRadius,
       borderBottomRightRadius,
-      elevation,
+    };
+  });
+
+  // Animated styles for back buttons crossfade & slide transition
+  // Floating round button fades out as card docks (progress 0.6 -> 0.95)
+  const floatingBackBtnAnimStyle = useAnimatedStyle(() => {
+    const y = scrollY.value;
+    const progress = Math.min(1, Math.max(0, y / maxScroll));
+    const opacity = interpolate(progress, [0.5, 0.9], [1, 0]);
+    const scale = interpolate(progress, [0.5, 0.9], [1, 0.8]);
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  // Title row inline back button on the card slides in from left & fades in as card docks (progress 0.75 -> 1)
+  const cardBackBtnAnimStyle = useAnimatedStyle(() => {
+    const y = scrollY.value;
+    const progress = Math.min(1, Math.max(0, y / maxScroll));
+    const opacity = interpolate(progress, [0.75, 1], [0, 1]);
+    const translateX = interpolate(progress, [0.75, 1], [-16, 0]);
+    return {
+      opacity,
+      transform: [{ translateX }],
+    };
+  });
+
+  // Animated title style: shifts right by 32dp when docked so the inline back button sits comfortably beside it
+  const cardTitleAnimStyle = useAnimatedStyle(() => {
+    const y = scrollY.value;
+    const progress = Math.min(1, Math.max(0, y / maxScroll));
+    const paddingLeft = interpolate(progress, [0.75, 1], [0, 32]);
+    return {
+      paddingLeft,
     };
   });
 
@@ -130,8 +172,13 @@ export default function SellerScreen() {
   if (q.isLoading) return <Loader />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   const { seller, products } = q.data!;
-  const sections = Object.entries(products.reduce<Record<string, Product[]>>((acc, p) => ((acc[p.category] ??= []).push(p), acc), {}))
+  const rawSections = Object.entries(products.reduce<Record<string, Product[]>>((acc, p) => ((acc[p.category] ??= []).push(p), acc), {}))
     .map(([title, data]) => ({ title, data }));
+  const sections = rawSections.map((s) => ({
+    ...s,
+    data: collapsedSections[s.title] ? [] : s.data,
+    totalCount: s.data.length,
+  }));
   const modeLabel = mode === "group" ? `Adding to shared cart: ${group.data?.name ?? ""}` : mode === "basket" ? `Adding to Flat ${basket.data?.my_flat ?? ""} · ${basket.data?.title ?? ""}` : null;
 
   return (
@@ -139,8 +186,9 @@ export default function SellerScreen() {
       {/* 1. FIXED BACKGROUND HERO IMAGE */}
       <View style={s.fixedHeroContainer} pointerEvents="none">
         <Animated.View style={[StyleSheet.absoluteFill, bgImageAnimStyle]}>
-          <Image
+          <AppImage
             source={{ uri: mediaUri(seller.image) }}
+            fallbackType={seller.category === "grocery" ? "groceries" : "shop"}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={200}
@@ -149,21 +197,28 @@ export default function SellerScreen() {
         <View style={s.heroDarkGradient} />
       </View>
 
-      {/* 2. FLOATING FIXED BACK BUTTON (Always accessible at top left) */}
-      <View style={[s.fixedBackButtonWrapper, { top: insets.top + spacing.sm }]}>
+      {/* 2. FLOATING FIXED BACK BUTTON (Visible over hero, fades out when card docks at the top) */}
+      <Animated.View style={[s.fixedBackButtonWrapper, { top: insets.top + spacing.sm }, floatingBackBtnAnimStyle]}>
         <Pressable
           testID="seller-back-button"
           onPress={() => router.back()}
           style={s.roundBackBtn}
           hitSlop={8}
         >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
+          <Ionicons name="chevron-back" size={18} color={colors.onSurface} />
         </Pressable>
-      </View>
+      </Animated.View>
 
-      {/* 3. SCROLLABLE MENU & SECTIONS WITH ANIMATED FLOATING CARD */}
+      {/* 3. SCROLLABLE MENU & SECTIONS:
+             Covers the full screen with zIndex: 10 (above the fixed background hero image at zIndex: 0).
+             Sections and items scroll smoothly ON TOP of the background image,
+             but UNDER the floating card (which has zIndex: 30).
+             ListHeaderComponent has:
+               - Transparent spacer of height HERO_HEIGHT (hero is visible behind at initial view)
+               - White spacer of height halfCard (so content starts cleanly below the centered card) */}
       <SectionList
         testID="seller-menu-list"
+        style={s.sectionList}
         sections={sections}
         keyExtractor={(p) => p.id}
         stickySectionHeadersEnabled={false}
@@ -172,53 +227,37 @@ export default function SellerScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
         ListHeaderComponent={
-          <View style={s.listHeaderWrapper}>
-            {/* Transparent spacer so hero image is visible behind */}
-            <View style={{ height: HERO_HEIGHT - CARD_PEEK }} />
-
-            {/* SMOOTHLY DOCKING & FULL-WIDTH SCALING CARD */}
-            <Animated.View style={[s.floatingCard, cardAnimStyle]}>
-              <Text testID="seller-name" style={s.name}>{seller.name}</Text>
-              <Text style={s.cuisine}>{seller.cuisine} · {seller.address}</Text>
-
-              <View style={s.metaRow}>
-                <View style={s.rating}>
-                  <Ionicons name="star" size={12} color={colors.onSuccess} />
-                  <Text style={s.ratingText}>{seller.rating}</Text>
-                </View>
-                <Text style={s.meta}>{seller.eta_min} mins · {seller.distance_km} km · Prep {seller.prep_time_min} min</Text>
-              </View>
-
-              {seller.offer ? (
-                <View style={s.offer}>
-                  <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
-                  <Text style={s.offerText}>{seller.offer}</Text>
-                </View>
-              ) : null}
-
-              {seller.fssai_status === "verified" ? (
-                <Text style={s.fssai}>FSSAI verified · Min order {rupee(seller.min_order)}</Text>
-              ) : (
-                <Text style={s.fssai}>Min order {rupee(seller.min_order)}</Text>
-              )}
-
-              {modeLabel ? (
-                <View testID="seller-mode-banner" style={s.mode}>
-                  <Ionicons name={mode === "group" ? "people" : "business"} size={16} color={colors.onPastelLilac} />
-                  <Text style={s.modeText}>{modeLabel}</Text>
-                </View>
-              ) : null}
-            </Animated.View>
+          <View pointerEvents="none">
+            {/* Transparent region allowing the hero background image to show through */}
+            <View style={{ height: HERO_HEIGHT }} />
+            {/* White spacer behind bottom half of card, so first section starts right below the card */}
+            <View style={{ height: halfCard + spacing.sm, backgroundColor: colors.surface }} />
           </View>
         }
-        renderSectionHeader={({ section }) => (
-          <View style={s.sectionHeaderBox}>
-            <Text style={s.sectionTitle}>{section.title} ({section.data.length})</Text>
-          </View>
-        )}
+        renderSectionHeader={({ section }) => {
+          const isCollapsed = !!collapsedSections[section.title];
+          return (
+            <Pressable
+              testID={`section-toggle-${section.title}`}
+              style={s.sectionHeaderBox}
+              onPress={() => toggleSection(section.title)}
+            >
+              <Text style={s.sectionTitle}>
+                {section.title} ({section.totalCount})
+              </Text>
+              <View style={s.collapseIconBox}>
+                <Ionicons
+                  name={isCollapsed ? "chevron-down" : "chevron-up"}
+                  size={20}
+                  color={colors.onSurface}
+                />
+              </View>
+            </Pressable>
+          );
+        }}
         renderItem={({ item: p }) => (
           <View style={s.item} testID={`product-${p.id}`}>
-            <View style={{ flex: 1, gap: 4 }}>
+            <View style={{ flex: 1, gap: 6, paddingRight: spacing.sm }}>
               <VegMark veg={p.veg} />
               <Text style={s.pname}>{p.name}</Text>
               <Text style={s.pprice}>{rupee(p.price)}</Text>
@@ -227,14 +266,67 @@ export default function SellerScreen() {
               </Text>
             </View>
             <View style={{ alignItems: "center" }}>
-              <Image source={{ uri: mediaUri(p.image) }} style={s.pimg} contentFit="cover" transition={150} />
-              <View style={{ marginTop: -18 }}>
+              <AppImage
+                source={{ uri: mediaUri(p.image) }}
+                fallbackType={seller.category === "grocery" ? "groceries" : "food"}
+                style={s.pimg}
+                contentFit="cover"
+                transition={150}
+              />
+              <View style={{ marginTop: -20 }}>
                 <Stepper testID={`product-stepper-${p.id}`} qty={qtyOf(p.id)} disabled={!p.available || busy === p.id} onChange={(n) => change(p, n)} />
               </View>
             </View>
           </View>
         )}
       />
+
+      {/* 4. DOCKED / FLOATING CARD (Vertically centered on the bottom edge of hero image; translates & docks smoothly without wiggling) */}
+      <Animated.View style={[s.floatingCard, { top: initialCardTop }, cardAnimStyle]} pointerEvents="box-none">
+        <View style={s.cardTitleRow}>
+          {/* Animated back button positioned absolutely; slides & fades in beside title once docked */}
+          <Animated.View style={[s.cardBackBtnWrapper, cardBackBtnAnimStyle]}>
+            <Pressable
+              testID="seller-docked-back-button"
+              onPress={() => router.back()}
+              style={s.cardBackBtn}
+              hitSlop={8}
+            >
+              <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
+            </Pressable>
+          </Animated.View>
+          <Animated.Text testID="seller-name" style={[s.name, cardTitleAnimStyle]} numberOfLines={1}>{seller.name}</Animated.Text>
+        </View>
+        <Text style={s.cuisine}>{seller.cuisine} · {seller.address}</Text>
+
+        <View style={s.metaRow}>
+          <View style={s.rating}>
+            <Ionicons name="star" size={12} color={colors.onSuccess} />
+            <Text style={s.ratingText}>{seller.rating}</Text>
+          </View>
+          <Text style={s.meta}>{seller.eta_min} mins · {seller.distance_km} km · Prep {seller.prep_time_min} min</Text>
+        </View>
+
+        {seller.offer ? (
+          <View style={s.offer}>
+            <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
+            <Text style={s.offerText}>{seller.offer}</Text>
+          </View>
+        ) : null}
+
+        {seller.fssai_status === "verified" ? (
+          <Text style={s.fssai}>FSSAI verified · Min order {rupee(seller.min_order)}</Text>
+        ) : (
+          <Text style={s.fssai}>Min order {rupee(seller.min_order)}</Text>
+        )}
+
+        {modeLabel ? (
+          <View testID="seller-mode-banner" style={s.mode}>
+            <Ionicons name={mode === "group" ? "people" : "business"} size={16} color={colors.onPastelLilac} />
+            <Text style={s.modeText}>{modeLabel}</Text>
+          </View>
+        ) : null}
+      </Animated.View>
 
       {totalQty > 0 ? (
         <View style={[s.bar, { bottom: insets.bottom + spacing.lg }]}>
@@ -278,12 +370,13 @@ const useStyles = makeStyles((c) => ({
   fixedBackButtonWrapper: {
     position: "absolute",
     left: spacing.lg,
-    zIndex: 20,
+    zIndex: 50,
+    elevation: 10,
   },
   roundBackBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: c.surface,
     alignItems: "center",
     justifyContent: "center",
@@ -294,11 +387,11 @@ const useStyles = makeStyles((c) => ({
     elevation: 4,
   },
 
-  /* List & Floating Card */
-  listHeaderWrapper: {
-    zIndex: 10,
-  },
+  /* Floating Card docked/scaled */
   floatingCard: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
     backgroundColor: c.surface,
     padding: spacing.lg,
     gap: 6,
@@ -306,9 +399,33 @@ const useStyles = makeStyles((c) => ({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    zIndex: 15,
+    zIndex: 30,
+    elevation: 6,
   },
-  name: { fontSize: font.xxl, fontWeight: "800", color: c.onSurface, letterSpacing: -0.3 },
+  sectionList: {
+    flex: 1,
+    zIndex: 10,
+  },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+  },
+  cardBackBtnWrapper: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  cardBackBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  name: { fontSize: font.xxl, fontWeight: "800", color: c.onSurface, letterSpacing: -0.3, flexShrink: 1 },
   cuisine: { color: c.muted },
   metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   rating: { flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: c.success, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
@@ -323,28 +440,41 @@ const useStyles = makeStyles((c) => ({
   sectionHeaderBox: {
     backgroundColor: c.surface,
     zIndex: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   sectionTitle: {
     fontSize: font.lg,
     fontWeight: "800",
     color: c.onSurface,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
+    flex: 1,
+  },
+  collapseIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: c.surfaceTertiary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   item: {
     flexDirection: "row",
+    alignItems: "center",
     gap: spacing.lg,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.xl,
     borderBottomWidth: 1,
     borderBottomColor: c.divider,
     backgroundColor: c.surface,
   },
-  pname: { fontSize: font.lg, fontWeight: "700", color: c.onSurface },
-  pprice: { fontWeight: "700", color: c.onSurface },
-  pdesc: { color: c.muted, fontSize: font.sm + 1 },
-  pimg: { width: 116, height: 104, borderRadius: radius.md, backgroundColor: c.surfaceTertiary },
+  pname: { fontSize: font.xl, fontWeight: "800", color: c.onSurface, letterSpacing: -0.2 },
+  pprice: { fontSize: font.lg, fontWeight: "700", color: c.onSurface },
+  pdesc: { color: c.muted, fontSize: font.base, lineHeight: 20 },
+  pimg: { width: 136, height: 122, borderRadius: radius.lg, backgroundColor: c.surfaceTertiary },
   bar: { position: "absolute", left: spacing.lg, right: spacing.lg },
   barInner: { height: 56, borderRadius: radius.md, backgroundColor: c.success, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg },
   barText: { color: c.onSuccess, fontWeight: "800", fontSize: font.base + 1 },

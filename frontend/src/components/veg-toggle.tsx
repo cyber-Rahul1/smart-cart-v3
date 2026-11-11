@@ -1,8 +1,8 @@
-import { useState } from "react";
+import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 
 import { font, radius, spacing, useTheme } from "@/src/theme";
-import { VegMark } from "@/src/ui";
 
 interface VegToggleProps {
   value: boolean; // true = Veg only, false = All / Off
@@ -10,112 +10,94 @@ interface VegToggleProps {
   testID?: string;
 }
 
-export function VegToggle({ value, onToggle, testID = "veg-toggle" }: VegToggleProps) {
+export function VegToggle({ value, onToggle, testID = "home-veg-toggle" }: VegToggleProps) {
   const { colors } = useTheme();
+
+  const knobStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: withTiming(value ? 14 : 0, { duration: 160 }) }],
+  }), [value]);
 
   return (
     <Pressable
       testID={testID}
-      onPress={() => onToggle(!value)}
-      style={({ pressed }) => [
-        styles.container,
-        {
-          backgroundColor: value ? colors.brandTertiary : colors.surface,
-          borderColor: value ? colors.brandPrimary : colors.border,
-        },
-        pressed && { transform: [{ scale: 0.96 }] },
-      ]}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
-      accessibilityLabel="Veg food filter"
+      aria-checked={value}
+      accessibilityLabel="Veg only"
+      onPress={() => onToggle(!value)}
+      style={({ pressed }) => [
+        styles.veg,
+        value && { borderColor: colors.success },
+        pressed && { transform: [{ scale: 0.96 }] },
+      ]}
     >
-      <Text
-        style={[
-          styles.label,
-          {
-            color: value ? colors.brandPrimary : colors.onSurfaceSecondary,
-          },
-        ]}
-      >
-        VEG
-      </Text>
-
-      {/* Switch pill with green dot indicator matching Swiggy/Zomato style */}
-      <View
-        style={[
-          styles.switchTrack,
-          {
-            backgroundColor: value ? "#E6F6EE" : colors.surfaceTertiary,
-            borderColor: value ? colors.success : colors.border,
-            justifyContent: value ? "flex-end" : "flex-start",
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.switchThumb,
-            {
-              borderColor: value ? colors.success : colors.muted,
-              backgroundColor: colors.surface,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.innerDot,
-              {
-                backgroundColor: value ? colors.success : "transparent",
-              },
-            ]}
-          />
-        </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <Text style={[styles.vegLabel, value && { color: colors.success }]}>VEG</Text>
+        {value ? (
+          <View style={[styles.vegIconBorder, { borderColor: colors.success }]}>
+            <View style={[styles.vegIconDot, { backgroundColor: colors.success }]} />
+          </View>
+        ) : null}
+      </View>
+      <View style={[styles.track, { backgroundColor: value ? colors.success : colors.borderStrong }]}>
+        <Animated.View style={[styles.knob, knobStyle]} />
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    height: 48,
-    paddingHorizontal: spacing.sm + 2,
-    borderRadius: radius.md,
+  veg: {
+    height: 50,
+    borderRadius: radius.lg,
     borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    paddingHorizontal: spacing.md,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-    minWidth: 54,
+    gap: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  label: {
+  vegLabel: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "900",
+    color: "#7A7A7A",
     letterSpacing: 0.8,
   },
-  switchTrack: {
+  vegIconBorder: {
+    width: 10,
+    height: 10,
+    borderWidth: 1.2,
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  vegIconDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  track: {
     width: 32,
     height: 18,
     borderRadius: 9,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 1,
+    padding: 2,
+    justifyContent: "center",
   },
-  switchThumb: {
+  knob: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  innerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
 });
-

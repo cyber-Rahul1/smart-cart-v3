@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
@@ -13,7 +13,7 @@ import { VoiceSearchModal } from "@/src/components/voice-search-modal";
 import { rupee, mediaUri } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
-import { Chip, EmptyState, Ionicons, Loader, VegMark } from "@/src/ui";
+import { Chip, EmptyState, Ionicons, Loader, VegMark, AppImage } from "@/src/ui";
 
 const SUGGEST = ["Biryani", "Pizza", "Milk", "Rolls", "Dosa", "Rice", "Eggs", "Burger"];
 const SEARCH_PLACEHOLDERS = [
@@ -62,93 +62,137 @@ export default function Search() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
-      {/* Top Search Bar Row */}
+      {/* Top Header Card matching Home & Highlight search */}
       <View
         style={{
           paddingTop: insets.top + spacing.sm,
-          paddingHorizontal: spacing.md,
+          paddingHorizontal: spacing.lg,
           paddingBottom: spacing.md,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.sm,
+          backgroundColor: colors.surface,
           borderBottomWidth: 1,
           borderBottomColor: colors.divider,
         }}
       >
-        <Pressable
-          testID="search-back-button"
-          onPress={() => router.back()}
-          style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
-        </Pressable>
-
-        {/* Input box with magnifying glass, animated placeholder, divider, and mic button */}
-        <View
-          style={{
-            flex: 1,
-            height: 48,
-            borderRadius: radius.md,
-            backgroundColor: colors.surfaceSecondary,
-            borderWidth: 1,
-            borderColor: colors.border,
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: spacing.md,
-            gap: spacing.sm,
-          }}
-        >
-          <Ionicons name="search" size={18} color={colors.muted} />
-
-          <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
-            {!text ? <AnimatedPlaceholder placeholders={SEARCH_PLACEHOLDERS} /> : null}
-            <TextInput
-              testID="search-input"
-              autoFocus={!params.q}
-              value={text}
-              onChangeText={setText}
-              style={{
-                fontSize: font.base + 1,
-                color: colors.onSurface,
-                height: 46,
-                padding: 0,
-              }}
-              returnKeyType="search"
-            />
-          </View>
-
-          {text ? (
-            <Pressable testID="search-clear" onPress={() => setText("")}>
-              <Ionicons name="close-circle" size={18} color={colors.muted} />
-            </Pressable>
-          ) : null}
-
-          {/* Vertical divider before Mic */}
-          <View style={{ width: 1, height: 22, backgroundColor: colors.border }} />
-
-          {/* Mic Button */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <Pressable
-            testID="search-voice-mic-button"
-            onPress={() => setVoiceModalVisible(true)}
+            testID="search-back-button"
+            onPress={() => router.back()}
+            hitSlop={12}
             style={({ pressed }) => [
               {
-                padding: 4,
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
                 alignItems: "center",
                 justifyContent: "center",
+                borderWidth: 1,
+                borderColor: colors.border,
               },
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Ionicons name="mic" size={20} color={colors.brandPrimary} />
+            <Ionicons name="arrow-back" size={20} color={colors.onSurface} />
           </Pressable>
+
+          {/* Search bar matching Home search */}
+          <View
+            style={{
+              flex: 1,
+              height: 50,
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.9)",
+              backgroundColor: "rgba(255, 255, 255, 0.92)",
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: spacing.lg,
+              gap: spacing.sm,
+              shadowColor: colors.onSurface,
+              shadowOpacity: 0.08,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 3,
+            }}
+          >
+            <Ionicons name="search" size={18} color={colors.brandPrimary} />
+
+            <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
+              {!text ? <AnimatedPlaceholder placeholders={SEARCH_PLACEHOLDERS} /> : null}
+              <TextInput
+                testID="search-input"
+                autoFocus={!params.q}
+                value={text}
+                onChangeText={setText}
+                cursorColor={colors.brandPrimary}
+                selectionColor={colors.brandPrimary}
+                style={{
+                  fontSize: font.base + 1,
+                  color: colors.onSurface,
+                  height: 46,
+                  padding: 0,
+                }}
+                returnKeyType="search"
+              />
+            </View>
+
+            {text ? (
+              <Pressable testID="search-clear" onPress={() => setText("")} hitSlop={8} style={{ padding: 4 }}>
+                <Ionicons name="close-circle" size={18} color={colors.muted} />
+              </Pressable>
+            ) : null}
+
+            {/* Vertical divider before Mic */}
+            <View style={{ width: 1, height: 20, backgroundColor: "rgba(255, 128, 25, 0.15)" }} />
+
+            {/* Mic Button */}
+            <Pressable
+              testID="search-voice-mic-button"
+              onPress={() => setVoiceModalVisible(true)}
+              hitSlop={8}
+              style={({ pressed }) => [
+                {
+                  padding: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Ionicons name="mic" size={20} color={colors.brandPrimary} />
+            </Pressable>
+          </View>
+
+          {/* Veg / Non-veg Filter Toggle Beside Search */}
+          <VegToggle
+            value={vegOnly}
+            onToggle={(val) => setVegOnly(val)}
+            testID="search-veg-toggle"
+          />
         </View>
 
-        {/* Veg / Non-veg Filter Toggle Beside Search */}
-        <VegToggle
-          value={vegOnly}
-          onToggle={(val) => setVegOnly(val)}
-          testID="search-veg-toggle"
-        />
+        {/* Veg mode banner if turned on */}
+        {vegOnly && (
+          <View
+            style={{
+              marginTop: spacing.sm,
+              backgroundColor: "#E8F5E9",
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: "#C8E6C9",
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Ionicons name="leaf" size={15} color="#15803D" />
+            <Text style={{ fontSize: font.sm, color: "#166534", fontWeight: "700" }}>
+              {q.isFetching ? "Filtering..." : "Veg mode on · showing veg items and shops"}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Voice Search Modal */}
@@ -219,8 +263,9 @@ export default function Search() {
                 alignItems: "center",
               }}
             >
-              <Image
+              <AppImage
                 source={{ uri: mediaUri(p.image) }}
+                fallbackType={p.category === "grocery" || p.category === "groceries" ? "groceries" : "food"}
                 style={{ width: 56, height: 56, borderRadius: radius.md }}
               />
               <View style={{ flex: 1 }}>

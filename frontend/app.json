@@ -22,7 +22,15 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.emergent.gathrcartdev.cvzmks",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "statusBar": {
+        "translucent": true,
+        "backgroundColor": "transparent",
+        "barStyle": "dark-content"
+      }
     },
     "web": {
       "bundler": "metro",

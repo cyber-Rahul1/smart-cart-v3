@@ -20,8 +20,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+import { AppImage, FallbackType } from "@/src/components/app-image";
 
-export { Ionicons };
+export { Ionicons, AppImage };
+export type { FallbackType };
 export type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
 /* ---------------- Button ---------------- */
@@ -210,24 +212,87 @@ export function BillRow({ label, value, bold, accent, testID }: { label: string;
 export function Sheet({ visible, onClose, title, children, testID }: { visible: boolean; onClose: () => void; title: string; children: ReactNode; testID?: string }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const [showModal, setShowModal] = useState(visible);
+  const slideAnim = useRef(new Animated.Value(600)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setShowModal(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 600,
+          duration: 240,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setShowModal(false);
+      });
+    }
+  }, [visible]);
+
+  if (!showModal) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <Pressable style={{ flex: 1, backgroundColor: colors.scrim }} onPress={onClose} testID={`${testID}-backdrop`} />
-        <View testID={testID} style={{ backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
-          paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: insets.bottom + spacing.lg, maxHeight: "88%" }}>
-          <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, marginBottom: spacing.md }} />
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: spacing.md }}>
-            <Text style={{ flex: 1, fontSize: font.xl, fontWeight: "800", color: colors.onSurface }}>{title}</Text>
-            <Pressable testID={`${testID}-close`} onPress={onClose} hitSlop={10} style={{ width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}>
-              <Ionicons name="close" size={24} color={colors.onSurfaceSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
-            {children}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+    <Modal visible={showModal} transparent animationType="none" onRequestClose={onClose}>
+      <View style={{ flex: 1 }}>
+        {/* Dimmed backdrop fades in directly behind the sheet */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: colors.scrim, opacity: fadeAnim },
+          ]}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} testID={`${testID}-backdrop`} />
+        </Animated.View>
+
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }} pointerEvents="box-none">
+          <Pressable style={{ flex: 1 }} onPress={onClose} />
+          {/* Sheet slides up from the bottom */}
+          <Animated.View
+            testID={testID}
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: radius.lg,
+              borderTopRightRadius: radius.lg,
+              paddingHorizontal: spacing.lg,
+              paddingTop: spacing.md,
+              paddingBottom: insets.bottom + spacing.lg,
+              maxHeight: "88%",
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+            <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, marginBottom: spacing.md }} />
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: spacing.md }}>
+              <Text style={{ flex: 1, fontSize: font.xl, fontWeight: "800", color: colors.onSurface }}>{title}</Text>
+              <Pressable testID={`${testID}-close`} onPress={onClose} hitSlop={10} style={{ width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}>
+                <Ionicons name="close" size={24} color={colors.onSurfaceSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
+              {children}
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated as RNAnimated,
+  Dimensions,
   FlatList,
   Linking,
   Modal,
@@ -24,7 +25,16 @@ import { api, ApiError } from "@/src/api";
 import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
-import { EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
+import { AppImage, EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import { AnimatedPlaceholder } from "@/src/components/animated-placeholder";
+import { VegToggle } from "@/src/components/veg-toggle";
+import { VoiceSearchModal } from "@/src/components/voice-search-modal";
 
 const TITLES: Record<string, [string, string]> = {
   food: ["Food", "Restaurants & cloud kitchens near you"],
@@ -32,15 +42,19 @@ const TITLES: Record<string, [string, string]> = {
   new: ["Discover", "Explore newly opened shops near you"],
 };
 
+import { LinearGradient } from "expo-linear-gradient";
+
 /** Shop card with preview items for generic food/grocery listing */
 function ShopWithItemsCard({
   seller,
   onAddToCart,
   addingPid,
+  vegOnly = false,
 }: {
   seller: Seller;
   onAddToCart: (p: Product) => void;
   addingPid: string | null;
+  vegOnly?: boolean;
 }) {
   const { colors } = useTheme();
 
@@ -50,115 +64,160 @@ function ShopWithItemsCard({
     staleTime: 60000,
   });
 
-  const products = productsQuery.data?.products ?? [];
+  const rawProducts = productsQuery.data?.products ?? [];
+  const products = vegOnly ? rawProducts.filter((p) => p.veg) : rawProducts;
 
   return (
     <View
       style={{
-        backgroundColor: colors.surface,
-        marginBottom: spacing.lg,
-        paddingBottom: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
+        marginBottom: spacing.xs,
       }}
     >
+      {/* 1. CLEAN SHOP HEADER (No box background or border) */}
       <View
         style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.sm,
+          paddingHorizontal: spacing.md,
+          backgroundColor: "transparent",
         }}
       >
-        <View style={{ flex: 1, marginRight: spacing.md }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingTop: spacing.xs,
+            paddingBottom: 4,
+          }}
+        >
+          {/* Shop Avatar & Name info */}
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: spacing.sm }}>
             <View
               style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                overflow: "hidden",
+                borderWidth: 1.5,
+                borderColor: colors.border,
                 backgroundColor: colors.surfaceTertiary,
-                borderRadius: 4,
-                paddingHorizontal: 4,
-                paddingVertical: 1,
               }}
             >
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.muted }}>Ad</Text>
+              <AppImage
+                source={{ uri: mediaUri(seller.image) }}
+                fallbackType={seller.category === "grocery" ? "groceries" : "shop"}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+              />
             </View>
-            <Text
-              style={{
-                fontSize: font.xl,
-                fontWeight: "900",
-                color: colors.onSurface,
-                flexShrink: 1,
-                letterSpacing: -0.3,
-              }}
-              numberOfLines={1}
-            >
-              {seller.name}
-            </Text>
+
+            <View style={{ marginLeft: 10, flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text
+                  style={{
+                    fontSize: font.lg + 1,
+                    fontWeight: "900",
+                    color: colors.onSurface,
+                    letterSpacing: -0.2,
+                    flexShrink: 1,
+                  }}
+                  numberOfLines={1}
+                >
+                  {seller.name}
+                </Text>
+              </View>
+
+              {/* Rating + Time row */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 2,
+                    backgroundColor: "#16A34A",
+                    borderRadius: 5,
+                    paddingHorizontal: 5,
+                    paddingVertical: 1.5,
+                  }}
+                >
+                  <Ionicons name="star" size={10} color="#FFFFFF" />
+                  <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>
+                    {seller.rating ? seller.rating.toFixed(1) : "4.2"}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: font.sm, color: colors.muted, fontWeight: "600" }}>
+                  {seller.eta_min ? `${seller.eta_min - 5 > 0 ? seller.eta_min - 5 : 10}-${seller.eta_min} mins` : "15-20 mins"}
+                </Text>
+              </View>
+            </View>
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-            <View
-              style={{
+          {/* View All Button Pill */}
+          <Pressable
+            hitSlop={8}
+            onPress={() => router.push(`/seller/${seller.id}`)}
+            style={({ pressed }) => [
+              {
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 3,
-                backgroundColor: "#228B22",
-                borderRadius: radius.sm - 2,
-                paddingHorizontal: 5,
-                paddingVertical: 2,
-              }}
-            >
-              <Ionicons name="star" size={11} color="#FFFFFF" />
-              <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>
-                {seller.rating ? seller.rating.toFixed(1) : "4.2"}
-              </Text>
-            </View>
-            <Text style={{ fontSize: font.sm, color: colors.muted, fontWeight: "600" }}>
-              (10K+) • {seller.eta_min ? `${seller.eta_min - 5 > 0 ? seller.eta_min - 5 : 10}-${seller.eta_min} mins` : "15-20 mins"}
+                gap: 4,
+                backgroundColor: colors.surface,
+                paddingVertical: 5,
+                paddingHorizontal: 12,
+                borderRadius: radius.pill,
+                borderWidth: 1,
+                borderColor: "rgba(252, 128, 25, 0.25)",
+              },
+              pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
+            ]}
+          >
+            <Text style={{ color: "#FC8019", fontWeight: "800", fontSize: font.sm + 0.5 }}>
+              View All
             </Text>
-          </View>
-
-          {seller.offer ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-              <Ionicons name="pricetag" size={13} color="#FC8019" />
-              <Text style={{ fontSize: font.sm, color: colors.onSurfaceSecondary, fontWeight: "700" }}>
-                {seller.offer}
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-              <Ionicons name="pricetag" size={13} color="#FC8019" />
-              <Text style={{ fontSize: font.sm, color: colors.onSurfaceSecondary, fontWeight: "700" }}>
-                50% off upto ₹100
-              </Text>
-            </View>
-          )}
+            <Ionicons name="arrow-forward" size={13} color="#FC8019" />
+          </Pressable>
         </View>
 
-        <Pressable
-          hitSlop={8}
-          onPress={() => router.push(`/seller/${seller.id}`)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 }}
+        {/* Promo offer strip */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            paddingTop: 3,
+            paddingBottom: 2,
+          }}
         >
-          <Text style={{ color: "#FC8019", fontWeight: "800", fontSize: font.base }}>
-            View Items
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color="#FC8019" />
-        </Pressable>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              backgroundColor: "rgba(252, 128, 25, 0.1)",
+              paddingHorizontal: 8,
+              paddingVertical: 2.5,
+              borderRadius: radius.pill,
+            }}
+          >
+            <Ionicons name="pricetag" size={12} color="#FC8019" />
+            <Text style={{ fontSize: 11, color: "#FC8019", fontWeight: "800" }}>
+              {seller.offer || "50% off upto ₹100"}
+            </Text>
+          </View>
+        </View>
       </View>
 
+      {/* 2. FREE HORIZONTAL SCROLLING DISHES (OUTSIDE OF THE CARD) */}
       {productsQuery.isLoading ? (
-        <View style={{ height: 230, justifyContent: "center", alignItems: "center" }}>
+        <View style={{ height: 210, justifyContent: "center", alignItems: "center" }}>
           <ActivityIndicator color="#FC8019" />
         </View>
       ) : products.length === 0 ? (
         <Pressable
           onPress={() => router.push(`/seller/${seller.id}`)}
           style={{
-            marginHorizontal: spacing.lg,
+            marginHorizontal: spacing.md,
             marginTop: spacing.md,
-            height: 120,
+            height: 90,
             borderRadius: radius.md,
             backgroundColor: colors.surfaceSecondary,
             alignItems: "center",
@@ -166,7 +225,7 @@ function ShopWithItemsCard({
             gap: 4,
           }}
         >
-          <Ionicons name="restaurant-outline" size={28} color={colors.muted} />
+          <Ionicons name="restaurant-outline" size={24} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: font.sm, fontWeight: "600" }}>
             Tap to explore full shop menu
           </Text>
@@ -176,8 +235,9 @@ function ShopWithItemsCard({
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
-            paddingHorizontal: spacing.lg,
+            paddingHorizontal: spacing.md,
             paddingTop: spacing.md,
+            paddingBottom: spacing.xs,
             gap: spacing.md,
           }}
         >
@@ -187,93 +247,55 @@ function ShopWithItemsCard({
               <View
                 key={p.id}
                 style={{
-                  width: 170,
-                  backgroundColor: colors.surface,
+                  width: 144,
+                  backgroundColor: "transparent",
                 }}
               >
+                {/* Clean image thumbnail with floating ADD button */}
                 <View
                   style={{
-                    width: 170,
-                    height: 140,
-                    borderRadius: radius.lg,
+                    width: 144,
+                    height: 130,
+                    borderRadius: 18,
                     overflow: "hidden",
                     backgroundColor: colors.surfaceTertiary,
+                    position: "relative",
                   }}
                 >
-                  <Image
+                  <AppImage
                     source={{ uri: mediaUri(p.image || seller.image) }}
+                    fallbackType={seller.category === "grocery" ? "groceries" : "food"}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
                     transition={200}
                   />
-                </View>
 
-                <View style={{ marginTop: spacing.sm }}>
-                  <VegMark veg={p.veg} />
-                </View>
-
-                <Text
-                  numberOfLines={2}
-                  style={{
-                    fontSize: font.base,
-                    fontWeight: "700",
-                    color: colors.onSurface,
-                    marginTop: 4,
-                    minHeight: 38,
-                    lineHeight: 19,
-                  }}
-                >
-                  {p.name}
-                </Text>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginTop: spacing.xs,
-                  }}
-                >
-                  <View>
-                    <Text
-                      style={{
-                        fontSize: font.sm,
-                        color: colors.muted,
-                        textDecorationLine: "line-through",
-                      }}
-                    >
-                      {rupee(Math.round(p.price * 1.25))}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: font.base,
-                        fontWeight: "800",
-                        color: colors.onSurface,
-                      }}
-                    >
-                      {rupee(p.price)}
-                    </Text>
-                  </View>
-
+                  {/* Floating ADD button placed over bottom of image like Swiggy/Zomato */}
                   <Pressable
                     disabled={isAdding}
                     onPress={() => onAddToCart(p)}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.borderStrong,
-                      backgroundColor: colors.surface,
-                      borderRadius: radius.sm,
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: 5,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: 64,
-                      shadowColor: "#000",
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.08,
-                      shadowRadius: 2,
-                      elevation: 1,
-                    }}
+                    style={({ pressed }) => [
+                      {
+                        position: "absolute",
+                        bottom: 6,
+                        alignSelf: "center",
+                        backgroundColor: "#FFFFFF",
+                        borderWidth: 1,
+                        borderColor: "rgba(252, 128, 25, 0.4)",
+                        borderRadius: radius.pill,
+                        paddingHorizontal: 16,
+                        paddingVertical: 4,
+                        minWidth: 68,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      },
+                      pressed && { transform: [{ scale: 0.94 }] },
+                    ]}
                   >
                     {isAdding ? (
                       <ActivityIndicator size="small" color="#FC8019" />
@@ -281,8 +303,9 @@ function ShopWithItemsCard({
                       <Text
                         style={{
                           color: "#FC8019",
-                          fontWeight: "800",
-                          fontSize: font.sm + 1,
+                          fontWeight: "900",
+                          fontSize: 12,
+                          letterSpacing: 0.4,
                         }}
                       >
                         ADD
@@ -290,6 +313,45 @@ function ShopWithItemsCard({
                     )}
                   </Pressable>
                 </View>
+
+                {/* Price & Veg mark */}
+                <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <VegMark veg={p.veg} />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "800",
+                      color: colors.onSurface,
+                    }}
+                  >
+                    {rupee(p.price)}
+                  </Text>
+                  {p.price ? (
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: colors.muted,
+                        textDecorationLine: "line-through",
+                      }}
+                    >
+                      {rupee(Math.round(p.price * 1.25))}
+                    </Text>
+                  ) : null}
+                </View>
+
+                {/* Dish name */}
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: colors.onSurface,
+                    marginTop: 2,
+                    lineHeight: 17,
+                  }}
+                >
+                  {p.name}
+                </Text>
               </View>
             );
           })}
@@ -298,7 +360,6 @@ function ShopWithItemsCard({
     </View>
   );
 }
-
 /** Filter chips matching reference design */
 const CATEGORIES: { key: string; label: string; icon: IconName }[] = [
   { key: "all", label: "All", icon: "sparkles" },
@@ -330,10 +391,18 @@ function ExactDiscoverShopCard({
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
-  const [bannerWidth, setBannerWidth] = useState(0);
+  const [bannerWidth, setBannerWidth] = useState(Dimensions.get("window").width - 32);
   const [userInteracting, setUserInteracting] = useState(false);
-  const bannerScrollRef = useRef<FlatList<any>>(null);
+  const bannerScrollRef = useRef<any>(null);
   const progressAnim = useRef(new RNAnimated.Value(0)).current;
+
+  const activeBannerIdxRef = useRef(0);
+  const bannerWidthRef = useRef(bannerWidth);
+  const userInteractingRef = useRef(false);
+
+  activeBannerIdxRef.current = activeBannerIdx;
+  bannerWidthRef.current = bannerWidth;
+  userInteractingRef.current = userInteracting;
 
   // Banner image carousel items
   const bannerImages = useMemo(() => {
@@ -351,7 +420,14 @@ function ExactDiscoverShopCard({
   const hasMultiple = bannerImages.length > 1;
   const CAROUSEL_DURATION = 3500;
 
-  // Automatic carousel sliding animation with duration progress bar on active dot
+  // Keep banner scroll aligned when width changes
+  useEffect(() => {
+    if (bannerWidth > 0 && activeBannerIdxRef.current > 0) {
+      bannerScrollRef.current?.scrollTo({ x: activeBannerIdxRef.current * bannerWidth, animated: false });
+    }
+  }, [bannerWidth]);
+
+  // Automatic carousel sliding animation with duration progress bar on active dot ONLY when isActive
   useEffect(() => {
     if (!hasMultiple) return;
 
@@ -369,21 +445,20 @@ function ExactDiscoverShopCard({
     });
 
     anim.start(({ finished }) => {
-      if (finished && isActive && !userInteracting) {
-        setActiveBannerIdx((prev) => {
-          const next = (prev + 1) % bannerImages.length;
-          if (bannerWidth > 0) {
-            bannerScrollRef.current?.scrollToOffset({ offset: next * bannerWidth, animated: true });
-          }
-          return next;
-        });
+      if (finished && isActive && !userInteractingRef.current) {
+        const next = (activeBannerIdxRef.current + 1) % bannerImages.length;
+        setActiveBannerIdx(next);
+        const w = bannerWidthRef.current;
+        if (w > 0) {
+          bannerScrollRef.current?.scrollTo({ x: next * w, animated: true });
+        }
       }
     });
 
     return () => {
       anim.stop();
     };
-  }, [hasMultiple, isActive, userInteracting, activeBannerIdx, bannerImages.length, bannerWidth, progressAnim]);
+  }, [hasMultiple, isActive, userInteracting, activeBannerIdx, bannerImages.length, progressAnim]);
 
   const fullDescription =
     description ||
@@ -480,22 +555,22 @@ function ExactDiscoverShopCard({
           }
         }}
       >
-        <FlatList
+        <ScrollView
           ref={bannerScrollRef}
-          data={bannerImages}
-          keyExtractor={(_, i) => `hero-${i}`}
           horizontal
           pagingEnabled
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
           onScrollBeginDrag={() => setUserInteracting(true)}
           onMomentumScrollEnd={onMomentumScrollEnd}
-          renderItem={({ item: imgUri }) => (
-            <View style={{ width: bannerWidth > 0 ? bannerWidth : 360, height: dynamicBannerHeight }}>
+        >
+          {bannerImages.map((imgUri, i) => (
+            <View key={`hero-${i}`} style={{ width: bannerWidth > 0 ? bannerWidth : 360, height: dynamicBannerHeight, overflow: "hidden" }}>
               <Image source={{ uri: mediaUri(imgUri) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
             </View>
-          )}
-        />
+          ))}
+        </ScrollView>
 
         {/* Top Badges Row */}
         <View style={s.heroTopBadges} pointerEvents="none">
@@ -856,8 +931,56 @@ export default function DiscoverScreen() {
 
   const isScheduleMode = !!params.schedule;
   const isFoodMode = params.type === "food";
-  const isListViewMode = isScheduleMode || isFoodMode;
+  const isGroceryMode = params.type === "grocery";
+  const isListViewMode = isScheduleMode || isFoodMode || isGroceryMode;
   const isDiscoverMode = !params.schedule && (!params.type || params.type === "new");
+
+  const [vegOnly, setVegOnly] = useState(false);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+
+  const collapseProgress = useSharedValue(0);
+  const [titleRowHeight, setTitleRowHeight] = useState(56);
+  const lastScrollY = useRef(0);
+  const isHiddenRef = useRef(false);
+
+  const TIMING_CONFIG = {
+    duration: 260,
+    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+  };
+
+  const handleListingScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const currentY = e.nativeEvent.contentOffset.y;
+    const diff = currentY - lastScrollY.current;
+
+    if (currentY <= 10) {
+      if (isHiddenRef.current) {
+        isHiddenRef.current = false;
+        collapseProgress.value = withTiming(0, TIMING_CONFIG);
+      }
+    } else if (diff > 12 && currentY > 40) {
+      // User is scrolling content UP (finger moving up) -> hide top title row
+      if (!isHiddenRef.current) {
+        isHiddenRef.current = true;
+        collapseProgress.value = withTiming(1, TIMING_CONFIG);
+      }
+    } else if (diff < -12) {
+      // User is scrolling content DOWN (finger moving down) -> reveal top title row immediately!
+      if (isHiddenRef.current) {
+        isHiddenRef.current = false;
+        collapseProgress.value = withTiming(0, TIMING_CONFIG);
+      }
+    }
+
+    lastScrollY.current = currentY;
+  };
+
+  const titleRowAnimStyle = useAnimatedStyle(() => {
+    const totalShift = titleRowHeight + spacing.xs;
+    return {
+      marginTop: -collapseProgress.value * totalShift,
+      opacity: 1 - collapseProgress.value,
+    };
+  });
 
   const listCategory = params.type || "food";
   const categoryQuery = useQuery({
@@ -948,7 +1071,150 @@ export default function DiscoverScreen() {
   if (isListViewMode) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface }}>
-        <Header title={listTitle} subtitle={listSub} />
+        {/* Sticky Top Header */}
+        <View
+          style={{
+            position: "relative",
+            zIndex: 10,
+            overflow: "hidden",
+            borderBottomWidth: 1,
+            borderBottomColor: colors.divider,
+            backgroundColor: colors.surface,
+          }}
+        >
+          {/* Collapsible Section ABOVE search: Back button, Title & Subtitle */}
+          <Animated.View
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0 && Math.abs(h - titleRowHeight) > 2) {
+                setTitleRowHeight(h);
+              }
+            }}
+            style={[
+              {
+                paddingTop: insets.top + spacing.xs,
+                paddingHorizontal: spacing.lg,
+                paddingBottom: spacing.xs,
+                flexDirection: "row",
+                alignItems: "center",
+              },
+              titleRowAnimStyle,
+            ]}
+          >
+            <Pressable
+              testID="listing-back-button"
+              onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+              style={({ pressed }) => [
+                {
+                  width: 36,
+                  height: 36,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: spacing.xs,
+                  marginLeft: -4,
+                },
+                pressed && { opacity: 0.6 },
+              ]}
+              hitSlop={8}
+            >
+              <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: font.xl, fontWeight: "900", color: colors.onSurface, letterSpacing: -0.3 }} numberOfLines={1}>
+                {listTitle}
+              </Text>
+              {listSub ? (
+                <Text style={{ fontSize: font.sm, color: colors.muted, fontWeight: "500", marginTop: 1 }} numberOfLines={1}>
+                  {listSub}
+                </Text>
+              ) : null}
+            </View>
+          </Animated.View>
+
+          {/* Sticky Search bar & Veg/Non-Veg filter row (always visible!) */}
+          <View
+            style={{
+              paddingHorizontal: spacing.lg,
+              paddingTop: spacing.md,
+              paddingBottom: spacing.lg,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+            }}
+          >
+            <Pressable
+              testID="listing-search-bar"
+              onPress={() => router.push(`/search?${vegOnly ? "veg=1" : ""}`)}
+              style={{
+                flex: 1,
+                height: 50,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.9)",
+                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
+                paddingHorizontal: spacing.lg,
+                shadowColor: colors.onSurface,
+                shadowOpacity: 0.08,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 3,
+              }}
+            >
+              <Ionicons name="search" size={18} color={colors.brandPrimary} />
+              <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
+                <AnimatedPlaceholder
+                  placeholders={[
+                    "Search in " + listTitle + "...",
+                    "Try 'Biryani'",
+                    "Try 'Pizza'",
+                    "Try 'Dosa'",
+                    "Try 'Noodles'",
+                    "Try 'Burger'",
+                    "Try 'Sweets'",
+                  ]}
+                />
+              </View>
+
+              {/* Vertical divider */}
+              <View style={{ width: 1, height: 20, backgroundColor: "rgba(255, 128, 25, 0.15)" }} />
+
+              {/* Voice mic option */}
+              <Pressable
+                testID="listing-voice-mic-button"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setVoiceModalVisible(true);
+                }}
+                style={({ pressed }) => [
+                  { padding: 4, alignItems: "center", justifyContent: "center" },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Ionicons name="mic" size={20} color={colors.brandPrimary} />
+              </Pressable>
+            </Pressable>
+
+            {/* Veg Toggle Filter */}
+            <VegToggle
+              value={vegOnly}
+              onToggle={(val) => setVegOnly(val)}
+              testID="listing-veg-toggle"
+            />
+          </View>
+        </View>
+
+        {/* Voice Search Modal */}
+        <VoiceSearchModal
+          visible={voiceModalVisible}
+          onClose={() => setVoiceModalVisible(false)}
+          onTranscript={(spoken) => {
+            router.push(`/search?q=${encodeURIComponent(spoken)}${vegOnly ? "&veg=1" : ""}`);
+          }}
+        />
+
         {isScheduleMode ? (
           <View
             testID="listing-schedule-banner"
@@ -986,19 +1252,41 @@ export default function DiscoverScreen() {
             onRetry={() => categoryQuery.refetch()}
           />
         ) : (
-          <FlatList
+          <Animated.FlatList
             testID={`listing-${listCategory}`}
             data={categoryQuery.data}
             keyExtractor={(s) => s.id}
+            onScroll={handleListingScroll}
+            scrollEventThrottle={16}
             contentContainerStyle={{
-              paddingVertical: spacing.sm,
+              paddingVertical: spacing.md,
               paddingBottom: insets.bottom + spacing.xl,
             }}
+            ItemSeparatorComponent={() => (
+              <View
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginVertical: spacing.xl,
+                }}
+              >
+                <View
+                  style={{
+                    width: "82%",
+                    height: 1,
+                    backgroundColor: colors.border,
+                    opacity: 0.45,
+                    borderRadius: 1,
+                  }}
+                />
+              </View>
+            )}
             renderItem={({ item }) => (
               <ShopWithItemsCard
                 seller={item}
                 onAddToCart={(p) => addToCart(p, item)}
                 addingPid={addingPid}
+                vegOnly={vegOnly}
               />
             )}
             ListEmptyComponent={
@@ -1018,10 +1306,15 @@ export default function DiscoverScreen() {
     <View style={s.root}>
       {/* 1. TOP HEADER & SEARCH & CATEGORY CHIPS */}
       <View style={[s.headerContainer, { paddingTop: insets.top + spacing.xs }]}>
-        {/* Title row with circular back button */}
+        {/* Title row with back button without background */}
         <View style={s.headerTopRow}>
-          <Pressable onPress={() => router.back()} style={s.circularBackBtn} testID="discover-back-btn">
-            <Ionicons name="arrow-back" size={20} color="#1A1A1A" />
+          <Pressable
+            onPress={() => router.back()}
+            style={s.circularBackBtn}
+            testID="discover-back-btn"
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={24} color="#1A1A1A" />
           </Pressable>
           <View style={s.headerTitleCol}>
             <Text style={s.pageTitle}>Discover</Text>
@@ -1175,22 +1468,22 @@ const useStyles = makeStyles(() => ({
   headerContainer: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   circularBackBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#F2F4F5",
+    width: 36,
+    height: 36,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
+    marginLeft: -4,
   },
   headerTitleCol: {
     marginLeft: 12,
@@ -1211,13 +1504,20 @@ const useStyles = makeStyles(() => ({
   pillSearchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderRadius: radius.lg,
     paddingHorizontal: 14,
-    height: 42,
+    height: 50,
+    marginTop: 4,
+    marginBottom: 4,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#E2E5E8",
+    borderColor: "rgba(0, 0, 0, 0.08)",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   pillSearchInput: {
     flex: 1,

@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated as RNAnimated,
   Dimensions,
-  FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,7 +17,7 @@ import { router } from "expo-router";
 import { mediaUri } from "@/src/format";
 import { Seller } from "@/src/types";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
-import { Ionicons } from "@/src/ui";
+import { AppImage, Ionicons } from "@/src/ui";
 import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
 export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
@@ -26,7 +26,7 @@ export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
   return (
     <Pressable testID={testID} onPress={() => router.push(`/seller/${s.id}`)} style={({ pressed }) => [st.row, pressed && { opacity: 0.85 }]}>
       <View>
-        <Image source={{ uri: mediaUri(s.image) }} style={st.rowImg} contentFit="cover" transition={200} />
+        <AppImage source={{ uri: mediaUri(s.image) }} fallbackType={s.category === "grocery" ? "groceries" : "shop"} style={st.rowImg} contentFit="cover" transition={200} />
         {s.offer ? (
           <View style={st.offerBand}><Text style={st.offerText} numberOfLines={1}>{s.offer}</Text></View>
         ) : null}
@@ -52,7 +52,7 @@ export function SellerTile({ s, testID, rank }: { s: Seller; testID: string; ran
   const st = useStyles();
   return (
     <Pressable testID={testID} onPress={() => router.push(`/seller/${s.id}`)} style={({ pressed }) => [st.tile, pressed && { transform: [{ scale: 0.98 }] }]}>
-      <Image source={{ uri: mediaUri(s.image) }} style={st.tileImg} contentFit="cover" transition={200} />
+      <AppImage source={{ uri: mediaUri(s.image) }} fallbackType={s.category === "grocery" ? "groceries" : "shop"} style={st.tileImg} contentFit="cover" transition={200} />
       {rank ? <View style={st.rank}><Text style={st.rankText}>#{rank}</Text></View> : null}
       <Text style={st.tileName} numberOfLines={1}>{s.name}</Text>
       <Text style={st.tileMeta} numberOfLines={1}>★ {s.rating} · {s.eta_min} mins</Text>
@@ -65,21 +65,37 @@ export function SellerFullCard({
   s,
   testID,
   isActive = true,
+  isRailOpen = false,
 }: {
   s: Seller;
   testID: string;
   isActive?: boolean;
+  isRailOpen?: boolean;
 }) {
   const st = useStyles();
   const { colors } = useTheme();
   const { setPagerScrollEnabled } = useTabBarVisibility();
-  const [cardWidth, setCardWidth] = useState<number>(Dimensions.get("window").width - spacing.lg * 2);
+
+  // Helper to slice text with ellipsis based on whether the rail is open
+  const truncate = (text: string | undefined | null, fullLen: number, railLen: number) => {
+    if (!text) return "";
+    const limit = isRailOpen ? railLen : fullLen;
+    return text.length > limit ? `${text.slice(0, limit).trimEnd()}...` : text;
+  };
+  const [cardWidth, setCardWidth] = useState<number>(Dimensions.get("window").width - spacing.md * 2);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
   const [userInteracting, setUserInteracting] = useState(false);
 
-  const listRef = useRef<FlatList<string>>(null);
+  const scrollRef = useRef<any>(null);
+  const activeIndexRef = useRef(0);
+  const cardWidthRef = useRef(cardWidth);
+  const userInteractingRef = useRef(false);
   const progressAnim = useRef(new RNAnimated.Value(0)).current;
+
+  activeIndexRef.current = activeIndex;
+  cardWidthRef.current = cardWidth;
+  userInteractingRef.current = userInteracting;
 
   // Collect images: gallery or fallback to s.image
   const images = useMemo(() => {
@@ -101,6 +117,13 @@ export function SellerFullCard({
   const hasMultiple = images.length > 1;
   const CAROUSEL_DURATION = 3500;
 
+  // Keep carousel aligned if cardWidth changes
+  useEffect(() => {
+    if (cardWidth > 0 && activeIndexRef.current > 0) {
+      scrollRef.current?.scrollTo({ x: activeIndexRef.current * cardWidth, animated: true });
+    }
+  }, [cardWidth]);
+
   // Animate active dot progress and handle carousel advance only when isActive and not user-interacting
   useEffect(() => {
     if (!hasMultiple) return;
@@ -119,26 +142,26 @@ export function SellerFullCard({
     });
 
     anim.start(({ finished }) => {
-      if (finished && isActive && !userInteracting) {
-        setActiveIndex((prev) => {
-          const next = (prev + 1) % images.length;
-          if (cardWidth > 0) {
-            listRef.current?.scrollToOffset({ offset: next * cardWidth, animated: true });
-          }
-          return next;
-        });
+      if (finished && isActive && !userInteractingRef.current) {
+        const next = (activeIndexRef.current + 1) % images.length;
+        setActiveIndex(next);
+        const w = cardWidthRef.current;
+        if (w > 0) {
+          scrollRef.current?.scrollTo({ x: next * w, animated: true });
+        }
       }
     });
 
     return () => {
       anim.stop();
     };
-  }, [hasMultiple, isActive, userInteracting, activeIndex, images.length, cardWidth, progressAnim]);
+  }, [hasMultiple, isActive, userInteracting, activeIndex, images.length, progressAnim]);
 
-  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (cardWidth <= 0) return;
+  const handleMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const w = cardWidthRef.current;
+    if (w <= 0) return;
     const offset = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(offset / cardWidth);
+    const idx = Math.min(Math.max(0, Math.round(offset / w)), images.length - 1);
     setActiveIndex(idx);
     setUserInteracting(false);
   };
@@ -152,18 +175,19 @@ export function SellerFullCard({
       <View
         style={st.imageContainer}
         onLayout={(e) => {
-          const w = e.nativeEvent.layout.width;
-          if (w > 0) setCardWidth(w);
+          const w = Math.round(e.nativeEvent.layout.width);
+          if (w > 0 && Math.abs(w - cardWidth) > 1) {
+            setCardWidth(w);
+          }
         }}
       >
-        <FlatList
-          ref={listRef}
-          data={images}
+        <ScrollView
+          ref={scrollRef}
           horizontal
           pagingEnabled
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, i) => `${s.id}-img-${i}`}
+          scrollEventThrottle={16}
           onTouchStart={() => setPagerScrollEnabled(false)}
           onTouchEnd={() => setPagerScrollEnabled(true)}
           onScrollBeginDrag={() => {
@@ -174,20 +198,22 @@ export function SellerFullCard({
             setPagerScrollEnabled(true);
           }}
           onMomentumScrollEnd={(e) => {
-            onMomentumScrollEnd(e);
+            handleMomentumScrollEnd(e);
             setPagerScrollEnabled(true);
           }}
-          renderItem={({ item }) => (
-            <View style={{ width: cardWidth, height: 190 }}>
-              <Image
-                source={{ uri: mediaUri(item) }}
-                style={StyleSheet.absoluteFill}
+        >
+          {images.map((imgUri, i) => (
+            <View key={`${s.id}-img-${i}`} style={{ width: cardWidth, height: 190, overflow: "hidden" }}>
+              <AppImage
+                source={{ uri: mediaUri(imgUri) }}
+                fallbackType={s.category === "grocery" ? "groceries" : "shop"}
+                style={{ width: cardWidth, height: 190 }}
                 contentFit="cover"
-                transition={200}
+                transition={0}
               />
             </View>
-          )}
-        />
+          ))}
+        </ScrollView>
 
         {/* Gradient shadow overlay for text and badges */}
         <LinearGradient
@@ -284,7 +310,7 @@ export function SellerFullCard({
       <View style={st.fullCardBody}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
           <Text style={st.fullCardName} numberOfLines={1}>
-            {s.name}
+            {truncate(s.name, 30, 20)}
           </Text>
           {s.is_new ? (
             <View style={st.newTag}>
@@ -302,20 +328,19 @@ export function SellerFullCard({
           <Text style={st.metaDot}>•</Text>
           <Text style={st.metaText}>{s.distance_km} km</Text>
           <Text style={st.metaDot}>•</Text>
-          <Text style={st.metaText} numberOfLines={1}>{s.address || "Nearby"}</Text>
+          <Text style={st.metaText} numberOfLines={1}>{truncate(s.address || "Nearby", 28, 16)}</Text>
         </View>
 
         {/* Cuisine & Business / FSSAI type */}
         <Text style={st.fullCardCuisine} numberOfLines={1}>
-          {s.cuisine || s.category}
+          {truncate(s.cuisine || s.category, 42, 26)}
         </Text>
-        <Text style={st.fullCardType}>
-          {s.business_type === "cloud_kitchen"
-            ? "Cloud kitchen"
-            : s.category === "grocery"
-            ? "Grocery store"
-            : "Restaurant"}
-          {s.fssai_status === "verified" ? "  ·  FSSAI verified" : ""}
+        <Text style={st.fullCardType} numberOfLines={1}>
+          {truncate(
+            `${s.business_type === "cloud_kitchen" ? "Cloud kitchen" : s.category === "grocery" ? "Grocery store" : "Restaurant"}${s.fssai_status === "verified" ? "  ·  FSSAI verified" : ""}`,
+            48,
+            30
+          )}
         </Text>
       </View>
     </Pressable>
@@ -324,7 +349,7 @@ export function SellerFullCard({
 
 const useStyles = makeStyles((c) => ({
   row: { flexDirection: "row", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: "center" },
-  rowImg: { width: 108, height: 116, borderRadius: radius.md, backgroundColor: c.surfaceTertiary },
+  rowImg: { width: 108, height: 116, borderRadius: radius.lg, backgroundColor: c.surfaceTertiary },
   offerBand: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: c.scrim, borderBottomLeftRadius: radius.md,
     borderBottomRightRadius: radius.md, paddingHorizontal: 6, paddingVertical: 4 },
   offerText: { color: c.onSurfaceInverse, fontSize: 10, fontWeight: "800" },
@@ -335,7 +360,7 @@ const useStyles = makeStyles((c) => ({
   newTag: { backgroundColor: c.pastelMint, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
   newText: { color: c.onPastelMint, fontSize: 10, fontWeight: "900" },
   tile: { width: 150 },
-  tileImg: { width: 150, height: 150, borderRadius: radius.md, backgroundColor: c.surfaceTertiary },
+  tileImg: { width: 150, height: 150, borderRadius: radius.lg, backgroundColor: c.surfaceTertiary },
   rank: { position: "absolute", top: spacing.sm, left: spacing.sm, backgroundColor: c.brandPrimary, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
   rankText: { color: c.onBrandPrimary, fontWeight: "900", fontSize: font.sm },
   tileName: { marginTop: spacing.sm, fontSize: font.base + 1, fontWeight: "800", color: c.onSurface },
@@ -346,7 +371,7 @@ const useStyles = makeStyles((c) => ({
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     backgroundColor: c.surface,
-    borderRadius: radius.md + 2,
+    borderRadius: radius.lg,
     overflow: "hidden",
     shadowColor: c.onSurface,
     shadowOffset: { width: 0, height: 2 },

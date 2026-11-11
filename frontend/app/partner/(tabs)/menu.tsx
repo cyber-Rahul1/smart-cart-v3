@@ -10,7 +10,7 @@ import { rupee, mediaUri } from "@/src/format";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Product } from "@/src/types";
-import { EmptyState, ErrorState, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
+import { AppImage, EmptyState, ErrorState, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
 
 type P = Product & { weight_kg: number };
 
@@ -53,7 +53,7 @@ export default function PartnerMenu() {
           renderItem={({ item: p }) => (
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
               <Pressable testID={`partner-product-${p.id}`} onPress={() => router.push(`/partner/product?id=${p.id}`)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-                <Image source={{ uri: mediaUri(p.image) }} style={{ width: 56, height: 56, borderRadius: radius.md, opacity: p.available ? 1 : 0.4 }} />
+                <AppImage source={{ uri: mediaUri(p.image) }} fallbackType="food" style={{ width: 56, height: 56, borderRadius: radius.md, opacity: p.available ? 1 : 0.4 }} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}><VegMark veg={p.veg} /><Text style={{ fontWeight: "700", color: colors.onSurface, flexShrink: 1 }} numberOfLines={1}>{p.name}</Text></View>
                   <Text style={{ color: colors.muted, fontSize: font.sm }}>{rupee(p.price)} · Stock {p.stock}{p.stock < 10 ? " · Low" : ""}</Text>

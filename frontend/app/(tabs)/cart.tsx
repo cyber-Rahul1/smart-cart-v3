@@ -11,7 +11,7 @@ import { rupee } from "@/src/format";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Address, Bill, Line, Seller } from "@/src/types";
-import { BillRow, Button, Chip, ChipRow, EmptyState, EndOfListIndicator, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
+import { BillRow, Button, Chip, ChipRow, EmptyState, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
 
 type CartView = { seller: Seller | null; items: Line[]; unavailable: Line[]; bill: Bill | null };
 const SCHEDULES = [
@@ -165,7 +165,6 @@ export default function CartScreen() {
                 )}
               </View>
             ) : null}
-            <EndOfListIndicator message="You've reached the end of your cart" />
           </ScrollView>
 
           <View style={[s.footer, { paddingBottom: bottomChrome + spacing.md }]}>

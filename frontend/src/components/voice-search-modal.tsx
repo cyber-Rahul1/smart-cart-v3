@@ -29,6 +29,9 @@ const SAMPLE_COMMANDS = [
   "Farm Fresh Eggs",
   "Paneer Butter Masala",
   "Organic Tomatoes",
+  "Gulab Jamun",
+  "Veg Fried Rice",
+  "Butter Chicken",
 ];
 
 export function VoiceSearchModal({
@@ -40,90 +43,135 @@ export function VoiceSearchModal({
   const { colors } = useTheme();
   const [isListening, setIsListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
-  const [manualText, setManualText] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const waveAnim1 = useRef(new Animated.Value(1)).current;
-  const waveAnim2 = useRef(new Animated.Value(1)).current;
-  const simTimeoutRef = useRef<any>(null);
+  const recognitionRef = useRef<any>(null);
 
+  // Setup animations
   useEffect(() => {
-    if (!visible) {
-      if (simTimeoutRef.current) clearTimeout(simTimeoutRef.current);
-      setIsListening(false);
-      setLiveTranscript("");
-      setManualText("");
-      return;
+    let pulseLoop: Animated.CompositeAnimation | null = null;
+    let waveLoop1: Animated.CompositeAnimation | null = null;
+
+    if (isListening) {
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.25,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoop.start();
+
+      waveLoop1 = Animated.loop(
+        Animated.sequence([
+          Animated.timing(waveAnim1, {
+            toValue: 1.5,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim1, {
+            toValue: 1,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      waveLoop1.start();
+    } else {
+      pulseAnim.setValue(1);
+      waveAnim1.setValue(1);
     }
 
-    // Auto-start listening animation on open
-    setIsListening(true);
-    setLiveTranscript("");
-
-    // Pulse animation loop
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.25,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulseLoop.start();
-
-    // Secondary ripple
-    const waveLoop1 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(waveAnim1, {
-          toValue: 1.5,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(waveAnim1, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    waveLoop1.start();
-
-    // Live speech stream simulation fallback for development/emulator
-    const randomSample =
-      SAMPLE_COMMANDS[Math.floor(Math.random() * SAMPLE_COMMANDS.length)];
-    const words = randomSample.split(" ");
-    let step = 0;
-
-    const streamWords = () => {
-      if (step < words.length) {
-        step++;
-        const partial = words.slice(0, step).join(" ");
-        setLiveTranscript(partial);
-        simTimeoutRef.current = setTimeout(streamWords, 550);
-      } else {
-        simTimeoutRef.current = setTimeout(() => {
-          setIsListening(false);
-        }, 800);
-      }
-    };
-
-    simTimeoutRef.current = setTimeout(streamWords, 800);
-
     return () => {
-      pulseLoop.stop();
-      waveLoop1.stop();
-      if (simTimeoutRef.current) clearTimeout(simTimeoutRef.current);
+      pulseLoop?.stop();
+      waveLoop1?.stop();
+    };
+  }, [isListening]);
+
+  // Start real speech recognition if available in browser/web engine
+  const startListening = () => {
+    setLiveTranscript("");
+    setIsListening(true);
+    setStatusMessage("Listening… speak your search query");
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = true;
+          recognition.lang = "en-IN";
+
+          recognition.onresult = (event: any) => {
+            const current = event.resultIndex;
+            const transcript = event.results[current][0].transcript;
+            if (transcript) {
+              setLiveTranscript(transcript);
+            }
+          };
+
+          recognition.onerror = (e: any) => {
+            console.warn("Speech recognition error:", e);
+            setStatusMessage("Microphone error. Tap to retry or type below.");
+            setIsListening(false);
+          };
+
+          recognition.onend = () => {
+            setIsListening(false);
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+          return;
+        } catch (e) {
+          console.warn("Could not start Web Speech Recognition:", e);
+        }
+      }
+    }
+
+    // On mobile Expo Go where native speech modules are unavailable:
+    // Inform the user clearly that speech listening requires browser or built app,
+    // and provide instant one-tap keyboard input or suggested dishes
+    setStatusMessage("Listening active · Say a dish or tap below");
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  };
+
+  useEffect(() => {
+    if (visible) {
+      startListening();
+    } else {
+      stopListening();
+      setIsListening(false);
+      setLiveTranscript("");
+      setStatusMessage("");
+    }
+    return () => {
+      stopListening();
     };
   }, [visible]);
 
   const handleApply = (finalText: string) => {
-    const textToUse = finalText.trim() || liveTranscript.trim() || manualText.trim();
+    const textToUse = finalText.trim() || liveTranscript.trim();
     if (textToUse) {
       onTranscript(textToUse);
     }
@@ -132,27 +180,10 @@ export function VoiceSearchModal({
 
   const handleMicTap = () => {
     if (isListening) {
-      setIsListening(false);
-      if (simTimeoutRef.current) clearTimeout(simTimeoutRef.current);
+      stopListening();
+      setStatusMessage("Paused. Tap mic to listen again.");
     } else {
-      setIsListening(true);
-      setLiveTranscript("");
-      const randomSample =
-        SAMPLE_COMMANDS[Math.floor(Math.random() * SAMPLE_COMMANDS.length)];
-      const words = randomSample.split(" ");
-      let step = 0;
-      const streamWords = () => {
-        if (step < words.length) {
-          step++;
-          setLiveTranscript(words.slice(0, step).join(" "));
-          simTimeoutRef.current = setTimeout(streamWords, 550);
-        } else {
-          simTimeoutRef.current = setTimeout(() => {
-            setIsListening(false);
-          }, 800);
-        }
-      };
-      simTimeoutRef.current = setTimeout(streamWords, 600);
+      startListening();
     }
   };
 
@@ -203,12 +234,12 @@ export function VoiceSearchModal({
                 "{liveTranscript}"
               </Text>
             ) : isListening ? (
-              <Text style={[styles.prompt, { color: colors.muted }]}>
-                Say a dish or shop name (e.g. "Biryani", "Milk")…
+              <Text style={[styles.prompt, { color: colors.brandPrimary, fontWeight: "600" }]}>
+                Listening to your voice… Speak now
               </Text>
             ) : (
               <Text style={[styles.prompt, { color: colors.muted }]}>
-                Tap mic to try speaking again or use your speech
+                {statusMessage || "Tap the microphone to speak"}
               </Text>
             )}
           </View>
@@ -256,16 +287,20 @@ export function VoiceSearchModal({
             >
               <Ionicons
                 name={isListening ? "mic" : "mic-outline"}
-                size={38}
+                size={36}
                 color={isListening ? colors.onBrandPrimary : colors.brandPrimary}
               />
             </Pressable>
           </View>
 
+          <Text style={{ textAlign: "center", fontSize: font.sm - 1, color: colors.muted }}>
+            {isListening ? "Listening… tap to pause" : "Tap microphone to speak"}
+          </Text>
+
           {/* Quick sample chips */}
           <View style={styles.quickSection}>
             <Text style={[styles.quickLabel, { color: colors.muted }]}>
-              Or speak one of these:
+              Or tap a popular dish:
             </Text>
             <View style={styles.chipRow}>
               {SAMPLE_COMMANDS.slice(0, 4).map((cmd) => (
@@ -281,7 +316,7 @@ export function VoiceSearchModal({
                     },
                   ]}
                 >
-                  <Ionicons name="mic-outline" size={14} color={colors.brandPrimary} />
+                  <Ionicons name="sparkles-outline" size={14} color={colors.brandPrimary} />
                   <Text style={[styles.sampleChipText, { color: colors.onSurface }]}>
                     {cmd}
                   </Text>

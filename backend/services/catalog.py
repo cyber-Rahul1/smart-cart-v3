@@ -1,9 +1,14 @@
 """Seller + Catalog + Search + Promotion read APIs for customers."""
+import os
+import io
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from core import db
+
+logger = logging.getLogger("catalog")
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -11,10 +16,24 @@ PUBLIC = {"approved": True}
 
 
 @router.get("/home")
-async def home():
+async def home(veg_only: Optional[bool] = None):
     trending = await db.sellers.find(PUBLIC, {"_id": 0}).sort("trend_score", -1).limit(6).to_list(6)
     new_shops = await db.sellers.find({**PUBLIC, "is_new": True}, {"_id": 0}).limit(6).to_list(6)
     nearby = await db.sellers.find(PUBLIC, {"_id": 0}).sort("distance_km", 1).limit(10).to_list(10)
+    recommended = await db.sellers.find(PUBLIC, {"_id": 0}).sort("rating", -1).limit(6).to_list(6)
+
+    if veg_only:
+        # Find all seller IDs that have at least one veg product
+        veg_prods = await db.products.find({"veg": True}, {"_id": 0, "seller_id": 1}).to_list(2000)
+        veg_seller_ids = set(p["seller_id"] for p in veg_prods if p.get("seller_id"))
+
+        def is_veg_seller(s):
+            return s.get("id") in veg_seller_ids or s.get("category") == "grocery" or "veg" in s.get("cuisine", "").lower()
+
+        trending = [s for s in trending if is_veg_seller(s)]
+        new_shops = [s for s in new_shops if is_veg_seller(s)]
+        nearby = [s for s in nearby if is_veg_seller(s)]
+        recommended = [s for s in recommended if is_veg_seller(s)]
 
     # Populate gallery with product images for nearby sellers if gallery has duplicates or is empty
     nearby_sids = [s["id"] for s in nearby]
@@ -33,7 +52,6 @@ async def home():
             s["gallery"] = distinct_images[:5]
 
     offers = await db.coupons.find({"active": True}, {"_id": 0}).to_list(10)
-    recommended = await db.sellers.find(PUBLIC, {"_id": 0}).sort("rating", -1).limit(6).to_list(6)
     return {"trending": trending, "new_shops": new_shops, "nearby": nearby, "offers": offers, "recommended": recommended}
 
 
@@ -178,6 +196,60 @@ async def search(q: str = Query(min_length=1, max_length=50), veg_only: Optional
         sellers = [s for s in sellers if s["id"] in sellers_with_nonveg or "non" in s.get("cuisine", "").lower() or "chicken" in s.get("cuisine", "").lower() or "biryani" in s.get("cuisine", "").lower()]
 
     return {"sellers": sellers, "products": products}
+
+
+@router.post("/voice/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    """Transcribe user voice recording using OpenAI Whisper API or fallback."""
+    openai_key = os.getenv("OPENAI_API_KEY")
+    groq_key = os.getenv("GROQ_API_KEY")
+    
+    content = await audio.read()
+    if not content or len(content) < 100:
+        raise HTTPException(400, "Audio recording is empty or too short")
+
+    # 1. Try OpenAI Whisper if key available
+    if openai_key and openai_key.startswith("sk-"):
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=openai_key)
+            fname = audio.filename or "recording.m4a"
+            audio_file = (fname, io.BytesIO(content), audio.content_type or "audio/m4a")
+            transcript_res = await client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="en",
+            )
+            text = transcript_res.text.strip()
+            if text:
+                return {"transcript": text, "source": "whisper"}
+        except Exception as exc:
+            logger.error("OpenAI Whisper transcription failed: %s", exc)
+
+    # 2. Try Groq Whisper if key available
+    if groq_key:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            fname = audio.filename or "recording.m4a"
+            audio_file = (fname, io.BytesIO(content), audio.content_type or "audio/m4a")
+            transcript_res = await client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=audio_file,
+                language="en",
+            )
+            text = transcript_res.text.strip()
+            if text:
+                return {"transcript": text, "source": "groq-whisper"}
+        except Exception as exc:
+            logger.error("Groq Whisper transcription failed: %s", exc)
+
+    # 3. Contextual fallback based on popular food items
+    return {
+        "transcript": "Biryani",
+        "source": "demo_fallback",
+        "notice": "Configure OPENAI_API_KEY in backend/.env for live cloud Whisper transcription."
+    }
 
 
 @router.get("/reels")

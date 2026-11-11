@@ -6,7 +6,7 @@ import { api } from "@/src/api";
 import { TIME_PRESETS } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Seller } from "@/src/types";
-import { Chip } from "@/src/ui";
+import { AppImage, Chip } from "@/src/ui";
 
 export function SellerPicker({ value, onChange, category }: { value?: string; onChange: (s: Seller) => void; category?: "food" | "grocery" }) {
   const { colors } = useTheme();
@@ -16,7 +16,7 @@ export function SellerPicker({ value, onChange, category }: { value?: string; on
       {(q.data ?? []).map((s) => (
         <Pressable key={s.id} testID={`seller-pick-${s.id}`} onPress={() => onChange(s)}
           style={{ width: 120, borderRadius: radius.md, borderWidth: 2, borderColor: value === s.id ? colors.brandPrimary : colors.border, padding: 6, backgroundColor: value === s.id ? colors.brandTertiary : colors.surface }}>
-          <Image source={{ uri: s.image }} style={{ width: "100%", height: 64, borderRadius: radius.sm }} contentFit="cover" />
+          <AppImage source={{ uri: s.image }} fallbackType={s.category === "grocery" ? "groceries" : "shop"} style={{ width: "100%", height: 64, borderRadius: radius.sm }} contentFit="cover" />
           <Text numberOfLines={1} style={{ fontWeight: "700", color: colors.onSurface, marginTop: 4, fontSize: font.sm + 1 }}>{s.name}</Text>
           <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 11 }}>{s.category === "food" ? "Food" : "Grocery"} · {s.eta_min}m</Text>
         </Pressable>

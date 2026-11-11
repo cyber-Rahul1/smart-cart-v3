@@ -55,7 +55,7 @@ const light = {
 export type ThemeColors = typeof light;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 };
-export const radius = { sm: 6, md: 12, lg: 20, pill: 999 };
+export const radius = { sm: 8, md: 16, lg: 24, pill: 999 };
 export const font = { sm: 12, base: 14, lg: 16, xl: 20, xxl: 24 };
 
 export const defaultScheme = "light" satisfies ColorScheme;
@@ -81,5 +81,27 @@ export function makeStyles<T extends NamedStyles<T> | NamedStyles<any>>(
   return function useStyles(): T {
     const { colors } = useTheme();
     return useMemo(() => StyleSheet.create(factory(colors)), [colors]);
+  };
+}
+
+
+export function softShadow(c: ThemeColors, intensity = 1) {
+  return {
+    shadowColor: c.onSurface,
+    shadowOffset: { width: 0, height: 4 * intensity },
+    shadowOpacity: 0.08 * intensity,
+    shadowRadius: 10 * intensity,
+    elevation: Math.round(3 * intensity),
+  };
+}
+
+export function tileGradient(c: ThemeColors): Record<string, [string, string]> {
+  return {
+    brandTertiary: ["#FFFBF7", "#FFF3EB"],
+    pastelMint: ["#F6FCF9", "#EBF7F1"],
+    pastelLemon: ["#FFFDF5", "#FFF9E6"],
+    pastelLilac: ["#FAF8FE", "#F3EEFD"],
+    pastelSky: ["#F5F9FD", "#EAF3FB"],
+    pastelRose: ["#FEF8F9", "#FDEEF1"],
   };
 }

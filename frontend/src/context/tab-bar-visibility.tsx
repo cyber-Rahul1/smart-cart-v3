@@ -11,6 +11,8 @@ interface TabBarVisibilityContextType {
   setPagerScrollEnabled: (enabled: boolean) => void;
   enablePagerScroll: () => void;
   disablePagerScroll: () => void;
+  isBottomNavHidden: boolean;
+  setIsBottomNavHidden: (hidden: boolean) => void;
 }
 
 const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null>(null);
@@ -19,6 +21,7 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
   const tabBarTranslateY = useSharedValue(0);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [isPagerScrollEnabled, setPagerScrollEnabledState] = useState(true);
+  const [isBottomNavHidden, setIsBottomNavHidden] = useState(false);
   const [scrollPageToFn, setScrollPageToFn] = useState<((idx: number) => void) | null>(null);
 
   const setPagerScrollEnabled = React.useCallback((enabled: boolean) => {
@@ -55,6 +58,8 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
         setPagerScrollEnabled,
         enablePagerScroll,
         disablePagerScroll,
+        isBottomNavHidden,
+        setIsBottomNavHidden,
       }}
     >
       {children}

@@ -9,7 +9,7 @@ import { PartnerHeader } from "@/src/components/partner-header";
 import { mediaUri } from "@/src/format";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, radius, spacing, useTheme } from "@/src/theme";
-import { Button, Chip, ChipRow, EmptyState, Input, Loader, Sheet, useToast } from "@/src/ui";
+import { AppImage, Button, Chip, ChipRow, EmptyState, Input, Loader, Sheet, useToast } from "@/src/ui";
 
 const TABS = [{ k: "pending_review", l: "Pending" }, { k: "approved", l: "Approved" }, { k: "rejected", l: "Rejected" }] as const;
 
@@ -56,7 +56,7 @@ export function ReviewList<T extends { id: string; image?: string }>({ kind, tit
           renderItem={({ item }) => (
             <Pressable testID={`admin-${kind}-item-${item.id}`} onPress={() => setSel(item)}
               style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, flexDirection: "row", gap: spacing.md }}>
-              {item.image ? <Image source={{ uri: mediaUri(item.image) }} style={{ width: 56, height: 56, borderRadius: radius.md }} /> : null}
+              {item.image ? <AppImage source={{ uri: mediaUri(item.image) }} fallbackType="shop" style={{ width: 56, height: 56, borderRadius: radius.md }} /> : null}
               <View style={{ flex: 1, gap: 2 }}>{render(item)}</View>
             </Pressable>
           )}
