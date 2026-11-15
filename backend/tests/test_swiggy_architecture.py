@@ -199,17 +199,21 @@ def test_multi_store_checkout_splitting():
     }
 
     async def _run():
+        cache_manager.delete(f"idem:checkout:{user['id']}:{body.idempotency_key}")
+        cache_manager.delete(f"lock:checkout:{user['id']}:{body.idempotency_key}")
         with patch("services.orders.cart_view", new_callable=AsyncMock, return_value=mock_view), \
-             patch("services.orders.db") as mock_db:
+             patch("services.orders.db") as mock_db, \
+             patch("core.db") as mock_core_db:
             mock_db.addresses.find_one = AsyncMock(return_value={"id": "addr_1", "user_id": user["id"], "line": "Flat 101"})
-            mock_db.orders.insert_one = AsyncMock()
+            mock_core_db.orders.insert_one = AsyncMock()
+            mock_db.orders.insert_one = mock_core_db.orders.insert_one
             mock_db.carts.delete_one = AsyncMock()
 
             res = await checkout(body, user=user)
             assert res["total_orders_placed"] == 2
             assert len(res["all_orders"]) == 2
             # 2 distinct order inserts
-            assert mock_db.orders.insert_one.call_count == 2
+            assert mock_core_db.orders.insert_one.call_count == 2
     asyncio.run(_run())
 
 
