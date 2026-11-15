@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import FULFILLABLE, db, iso, new_id, notify, now, require
+from services.async_event_service import cache_manager, sqs_service
 from services.delivery import capacity, item_count, order_points, package_weight, plan_runs
 from services.payments import collect_cod
 
@@ -100,8 +101,20 @@ async def current_load(r: dict) -> dict:
 
 @router.put("/location")
 async def location(body: LocationIn, user=Depends(rider_only)):
-    """Foreground GPS ping from the rider app; customers with an assigned order see it on their live map."""
+    """
+    Foreground GPS ping from the rider app.
+    Stores the fix, indexes in Redis Geospatial, and checks ping frequency to throttle stale/duplicate pings.
+    """
     r = await me_rider(user)
+    # Throttle: ensure min 2 seconds between updates per rider
+    last_ping_key = f"rider:ping:{r['id']}"
+    if cache_manager.get(last_ping_key):
+        return {"ok": True, "throttled": True}
+    cache_manager.set(last_ping_key, "1", ex=2)
+
+    # Redis Geospatial Indexing
+    cache_manager.geoadd("riders:geo", body.lng, body.lat, r["id"])
+
     await db.riders.update_one({"id": r["id"]}, {"$set": {"location": {"lat": body.lat, "lng": body.lng, "heading": body.heading, "at": iso(now())}}})
     return {"ok": True}
 

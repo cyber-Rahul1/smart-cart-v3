@@ -101,6 +101,35 @@ async def review_rider(rid: str, body: ReviewIn, user=Depends(admin_only)):
     return await db.riders.find_one({"id": rid}, {"_id": 0})
 
 
+class HomeBannerIn(BaseModel):
+    image_url: str = Field(..., max_length=500)
+    title: Optional[str] = Field("Hi {name}", max_length=100)
+    subtitle: Optional[str] = Field("What are we ordering today?", max_length=200)
+
+
+@router.get("/home-banner")
+async def get_home_banner(user=Depends(admin_only)):
+    banner = await db.platform_config.find_one({"id": "home_banner"}, {"_id": 0})
+    if not banner:
+        return {
+            "id": "home_banner",
+            "image_url": "/assets/images/home_greeting_banner.jpg",
+            "title": "Hi {name}",
+            "subtitle": "What are we ordering today?"
+        }
+    return banner
+
+
+@router.put("/home-banner")
+async def set_home_banner(body: HomeBannerIn, user=Depends(admin_only)):
+    data = body.model_dump()
+    data["id"] = "home_banner"
+    data["updated_at"] = iso(now())
+    await db.platform_config.update_one({"id": "home_banner"}, {"$set": data}, upsert=True)
+    await audit(user["id"], "home_banner.update", "home_banner", str(data))
+    return await db.platform_config.find_one({"id": "home_banner"}, {"_id": 0})
+
+
 @router.get("/config")
 async def config(user=Depends(admin_only)):
     return await get_config()

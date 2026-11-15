@@ -67,6 +67,14 @@ def clean(doc):
     return doc
 
 
+def decode_token(token: str) -> dict:
+    """Decodes and validates a JWT access token string."""
+    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    if payload.get("typ") != "access":
+        raise ValueError("Invalid token type")
+    return payload
+
+
 async def current_user(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Bearer token required")

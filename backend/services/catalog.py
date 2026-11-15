@@ -52,7 +52,21 @@ async def home(veg_only: Optional[bool] = None):
             s["gallery"] = distinct_images[:5]
 
     offers = await db.coupons.find({"active": True}, {"_id": 0}).to_list(10)
-    return {"trending": trending, "new_shops": new_shops, "nearby": nearby, "offers": offers, "recommended": recommended}
+    banner_cfg = await db.platform_config.find_one({"id": "home_banner"}, {"_id": 0})
+    if not banner_cfg:
+        banner_cfg = {
+            "image_url": "/assets/images/home_greeting_banner.jpg",
+            "title": "Hi {name}",
+            "subtitle": "What are we ordering today?"
+        }
+    return {
+        "trending": trending,
+        "new_shops": new_shops,
+        "nearby": nearby,
+        "offers": offers,
+        "recommended": recommended,
+        "home_banner": banner_cfg,
+    }
 
 
 @router.get("/sellers")

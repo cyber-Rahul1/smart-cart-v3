@@ -233,10 +233,54 @@ async def add_product(body: ProductIn, user=Depends(seller_only)):
 @router.put("/products/{pid}")
 async def edit_product(pid: str, body: ProductIn, user=Depends(seller_only)):
     s = await my_shop(user)
-    res = await db.products.update_one({"id": pid, "seller_id": s["id"]}, {"$set": await product_doc(body, user)})
+    doc_data = await product_doc(body, user)
+    res = await db.products.update_one({"id": pid, "seller_id": s["id"]}, {"$set": doc_data})
     if not res.matched_count:
         raise HTTPException(404, "Item not found")
+    
+    # Swiggy-style Real-time Cache & Inventory Event Emission
+    try:
+        from services.async_event_service import RedisCacheManager, SQSQueueService
+        redis_cache = RedisCacheManager()
+        redis_cache.delete(f"seller_menu:{s['id']}")
+        redis_cache.delete(f"product:{pid}")
+        # Emit stock/availability event
+        sqs = SQSQueueService()
+        sqs.send_event("product.updated", {"seller_id": s["id"], "product_id": pid, "available": doc_data["available"], "stock": doc_data["stock"]})
+    except Exception:
+        pass
+
     return await db.products.find_one({"id": pid}, {"_id": 0})
+
+
+class StockToggleIn(BaseModel):
+    available: bool
+
+
+@router.patch("/products/{pid}/availability")
+async def toggle_product_availability(pid: str, body: StockToggleIn, user=Depends(seller_only)):
+    """Swiggy Partner App instant Out-Of-Stock (OOS) toggle.
+    Allows kitchen staff to instantly disable/enable an item during peak hours with sub-second cache eviction.
+    """
+    s = await my_shop(user)
+    res = await db.products.update_one(
+        {"id": pid, "seller_id": s["id"]},
+        {"$set": {"available": body.available, "updated_at": iso(now())}}
+    )
+    if not res.matched_count:
+        raise HTTPException(404, "Item not found")
+
+    try:
+        from services.async_event_service import RedisCacheManager, SQSQueueService
+        redis_cache = RedisCacheManager()
+        redis_cache.delete(f"seller_menu:{s['id']}")
+        redis_cache.delete(f"product:{pid}")
+        sqs = SQSQueueService()
+        sqs.send_event("product.availability_toggled", {"seller_id": s["id"], "product_id": pid, "available": body.available})
+    except Exception:
+        pass
+
+    return {"id": pid, "available": body.available, "ok": True}
 
 
 @router.delete("/products/{pid}")
