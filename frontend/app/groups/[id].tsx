@@ -10,6 +10,7 @@ import { DELIVERY_AFTER, PERM_LABELS, SellerPicker, TimePicker } from "@/src/com
 import { timeLeft } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Button, ErrorState, Header, Input, Ionicons, Loader, Sheet, useToast } from "@/src/ui";
+import { ShareCodeModal } from "@/src/components/share-code-modal";
 
 type GroupD = { id: string; name: string; invite_code: string; owner_id: string; members: { user_id: string; name: string; phone: string }[];
   carts: { id: string; name: string; seller_name: string; status: string; closes_at: string; item_count: number }[] };
@@ -32,6 +33,7 @@ export default function GroupDetail() {
   const [deliverAfter, setDeliverAfter] = useState<number | null>(null);
   const [perms, setPerms] = useState(DEFAULT_PERMS);
   const [busy, setBusy] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   if (q.isLoading) return <Loader />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />;
@@ -57,12 +59,15 @@ export default function GroupDetail() {
     <View style={s.root}>
       <Header title={g.name} subtitle={`${g.members.length} members`} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: insets.bottom + 100 }}>
-        <Pressable testID="group-share-code" onPress={() => Share.share({ message: `Join my GathrCart group "${g.name}" with code ${g.invite_code}` })} style={s.code}>
+        <Pressable testID="group-share-code" onPress={() => setShareModalVisible(true)} style={s.code}>
           <View style={{ flex: 1 }}>
-            <Text style={s.codeLabel}>Invite roommates with code</Text>
+            <Text style={s.codeLabel}>Invite roommates with QR / link / code</Text>
             <Text testID="group-invite-code" style={s.codeVal}>{g.invite_code}</Text>
           </View>
-          <Ionicons name="share-social" size={22} color={colors.onPastelLilac} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Ionicons name="qr-code-outline" size={24} color={colors.onPastelLilac} />
+            <Ionicons name="share-social" size={22} color={colors.onPastelLilac} />
+          </View>
         </Pressable>
 
         <View>
@@ -116,6 +121,14 @@ export default function GroupDetail() {
         ))}
         <Button testID="group-cart-create-submit" title="Open shared cart" loading={busy} onPress={create} />
       </Sheet>
+
+      <ShareCodeModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        type="group"
+        title={g.name}
+        code={g.invite_code}
+      />
     </View>
   );
 }

@@ -85,7 +85,14 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
     throw new ApiError(0, "You're offline. Check your connection and retry.");
   }
   const text = await r.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { detail: text.length > 200 ? `Server returned status ${r.status}` : text };
+    }
+  }
   if (!r.ok) throw new ApiError(r.status, errMessage(data, r.status));
   return data as T;
 }

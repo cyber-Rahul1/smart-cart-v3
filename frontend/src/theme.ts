@@ -15,14 +15,14 @@ const light = {
   onSurfaceInverse: "#FFFFFF",
   muted: "#7A7A7A",
 
-  brand: "#FC8019",
+  brand: "#F43F5E",
   onBrand: "#FFFFFF",
-  brandPrimary: "#FC8019",
+  brandPrimary: "#F43F5E",
   onBrandPrimary: "#FFFFFF",
-  brandSecondary: "#FFA85C",
+  brandSecondary: "#FB7185",
   onBrandSecondary: "#1A1A1A",
-  brandTertiary: "#FFF0E5",
-  onBrandTertiary: "#FC8019",
+  brandTertiary: "#FFF1F2",
+  onBrandTertiary: "#F43F5E",
 
   // Pastel accents for category tiles / promo cards
   pastelMint: "#E6F6EE",
@@ -55,7 +55,7 @@ const light = {
 export type ThemeColors = typeof light;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 };
-export const radius = { sm: 8, md: 16, lg: 24, pill: 999 };
+export const radius = { sm: 6, md: 12, lg: 16, pill: 999 };
 export const font = { sm: 12, base: 14, lg: 16, xl: 20, xxl: 24 };
 
 export const defaultScheme = "light" satisfies ColorScheme;
@@ -87,17 +87,17 @@ export function makeStyles<T extends NamedStyles<T> | NamedStyles<any>>(
 
 export function softShadow(c: ThemeColors, intensity = 1) {
   return {
-    shadowColor: c.onSurface,
-    shadowOffset: { width: 0, height: 4 * intensity },
-    shadowOpacity: 0.08 * intensity,
-    shadowRadius: 10 * intensity,
-    elevation: Math.round(3 * intensity),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: Math.max(1, Math.round(1.5 * intensity)) },
+    shadowOpacity: 0.02 * intensity,
+    shadowRadius: 3 * intensity,
+    elevation: Math.max(0.5, Math.round(1 * intensity)),
   };
 }
 
 export function tileGradient(c: ThemeColors): Record<string, [string, string]> {
   return {
-    brandTertiary: ["#FFFBF7", "#FFF3EB"],
+    brandTertiary: ["#FFF5F6", "#FFE4E6"],
     pastelMint: ["#F6FCF9", "#EBF7F1"],
     pastelLemon: ["#FFFDF5", "#FFF9E6"],
     pastelLilac: ["#FAF8FE", "#F3EEFD"],

@@ -1,12 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -24,12 +25,13 @@ import { useAuth } from "@/src/auth";
 import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
-import { AppImage, Button, ErrorState, Ionicons, Loader, Sheet, Stepper, useToast, VegMark } from "@/src/ui";
+import { AppImage, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
+import { navigateToTab } from "@/src/context/tab-bar-visibility";
 
 type ModeItem = { id: string; product_id: string; qty: number; user_id: string; flat?: string };
 
-const HERO_HEIGHT = 240;
-const ESTIMATED_CARD_HEIGHT = 175;
+const HERO_HEIGHT = 260;
+const ESTIMATED_CARD_HEIGHT = 200;
 
 export default function SellerScreen() {
   const { id, gc, bk } = useLocalSearchParams<{ id: string; gc?: string; bk?: string }>();
@@ -41,6 +43,11 @@ export default function SellerScreen() {
   const [conflict, setConflict] = useState<{ product_id: string; qty: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [activeBannerIdx, setActiveBannerIdx] = useState(0);
+  const [measuredCardHeight, setMeasuredCardHeight] = useState(ESTIMATED_CARD_HEIGHT);
+  const sectionListRef = useRef<any>(null);
+  const bannerScrollRef = useRef<any>(null);
   const { user } = useAuth();
 
   const toggleSection = (title: string) => {
@@ -58,11 +65,24 @@ export default function SellerScreen() {
   const myItems: ModeItem[] = useMemo(() => {
     if (mode === "group") return (group.data?.items ?? []).filter((i: ModeItem) => i.user_id === user?.id);
     if (mode === "basket") return basket.data?.my_items ?? [];
-    return cart.data?.seller?.id === id ? cart.data.items : [];
+    return (cart.data?.items ?? []).filter((i: any) => i.seller_id === id || (!i.seller_id && cart.data?.seller?.id === id));
   }, [mode, group.data, basket.data, cart.data, id, user?.id]);
 
   const qtyOf = (pid: string) => myItems.filter((i) => i.product_id === pid).reduce((a, i) => a + i.qty, 0);
   const totalQty = myItems.reduce((a, i) => a + i.qty, 0);
+
+  // Cart total price for floating pill
+  const cartTotalAmount = useMemo(() => {
+    if (mode === "cart") {
+      const serverTotal = cart.data?.bill?.total ?? cart.data?.total_price;
+      if (typeof serverTotal === "number" && serverTotal > 0) return serverTotal;
+    }
+    if (!q.data?.products) return 0;
+    return myItems.reduce((sum, item) => {
+      const prod = q.data!.products.find((p) => p.id === item.product_id);
+      return sum + (prod ? prod.price * item.qty : 0);
+    }, 0);
+  }, [mode, cart.data, myItems, q.data?.products]);
 
   const change = async (p: Product, next: number, replace = false) => {
     setBusy(p.id);
@@ -85,30 +105,32 @@ export default function SellerScreen() {
     }
   };
 
-  // The bottom edge of the hero image is at HERO_HEIGHT (240).
-  // The card is centered vertically on that bottom edge:
-  const halfCard = ESTIMATED_CARD_HEIGHT / 2;
-  const initialCardTop = HERO_HEIGHT - halfCard;
-  const dockTargetTop = insets.top;
+  // The bottom edge of the hero image is at HERO_HEIGHT (260).
+  const cardHeight = Math.max(160, measuredCardHeight);
+  const initialCardTop = HERO_HEIGHT - 65; // Overlaps bottom of hero by 65px
+  // The below section begins under the vertical center point of the title card
+  const belowSectionStartTop = initialCardTop + cardHeight / 2;
+  const paddingForCoveredHalfCard = cardHeight / 2 + 10;
+  const dockTargetTop = 0; // Dock flush to the very top edge of the screen
   const maxScroll = Math.max(1, initialCardTop - dockTargetTop);
 
-  // Smooth, jitter-free animation driven directly on the UI thread via transform translateY
+  // Smooth docking animation driven directly on the UI thread via transform translateY
   const cardAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
 
-    // translateY moves the card up with scroll until it docks cleanly at insets.top
     const translateY = -Math.min(y, maxScroll);
-
-    // Smooth horizontal expansion from spacing.lg (16) to 0 (full screen width)
     const left = interpolate(progress, [0, 1], [spacing.lg, 0]);
     const right = interpolate(progress, [0, 1], [spacing.lg, 0]);
 
-    // Border radius smoothly flattens top corners upon docking
-    const borderTopLeftRadius = interpolate(progress, [0, 1], [radius.lg, 0]);
-    const borderTopRightRadius = interpolate(progress, [0, 1], [radius.lg, 0]);
-    const borderBottomLeftRadius = interpolate(progress, [0, 1], [radius.lg, radius.md]);
-    const borderBottomRightRadius = interpolate(progress, [0, 1], [radius.lg, radius.md]);
+    // Border radius transitions to 0 on top when docked flush to top screen edge
+    const borderTopLeftRadius = interpolate(progress, [0, 1], [24, 0]);
+    const borderTopRightRadius = interpolate(progress, [0, 1], [24, 0]);
+    const borderBottomLeftRadius = interpolate(progress, [0, 1], [24, 16]);
+    const borderBottomRightRadius = interpolate(progress, [0, 1], [24, 16]);
+
+    // Animate top padding to respect status bar insets as it docks to screen edge
+    const paddingTop = interpolate(progress, [0, 1], [14, insets.top + 10]);
 
     return {
       transform: [{ translateY }],
@@ -118,11 +140,10 @@ export default function SellerScreen() {
       borderTopRightRadius,
       borderBottomLeftRadius,
       borderBottomRightRadius,
+      paddingTop,
     };
   });
 
-  // Animated styles for back buttons crossfade & slide transition
-  // Floating round button fades out as card docks (progress 0.6 -> 0.95)
   const floatingBackBtnAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
@@ -134,7 +155,6 @@ export default function SellerScreen() {
     };
   });
 
-  // Title row inline back button on the card slides in from left & fades in as card docks (progress 0.75 -> 1)
   const cardBackBtnAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
@@ -146,7 +166,6 @@ export default function SellerScreen() {
     };
   });
 
-  // Animated title style: shifts right by 32dp when docked so the inline back button sits comfortably beside it
   const cardTitleAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
@@ -156,7 +175,6 @@ export default function SellerScreen() {
     };
   });
 
-  // Animated style for fixed background image: stays fixed, subtle zoom on over-pull
   const bgImageAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const scale = y < 0 ? 1 + Math.abs(y) / HERO_HEIGHT : 1;
@@ -172,66 +190,200 @@ export default function SellerScreen() {
   if (q.isLoading) return <Loader />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   const { seller, products } = q.data!;
-  const rawSections = Object.entries(products.reduce<Record<string, Product[]>>((acc, p) => ((acc[p.category] ??= []).push(p), acc), {}))
-    .map(([title, data]) => ({ title, data }));
-  const sections = rawSections.map((s) => ({
-    ...s,
-    data: collapsedSections[s.title] ? [] : s.data,
-    totalCount: s.data.length,
+
+  // Collect hero carousel images
+  const bannerImages = [
+    seller.image,
+    ...(seller.gallery && seller.gallery.length > 0 ? seller.gallery : []),
+    seller.banner_url,
+  ].filter(Boolean) as string[];
+  const heroList = Array.from(new Set(bannerImages)).slice(0, 5);
+
+  // Group products into 3-column rows
+  const rawCategories = Array.from(new Set(products.map((p) => p.category)));
+  const categoryList = ["all", ...rawCategories];
+
+  // Helper to chunk products into rows of 3 items
+  const chunkRows = (arr: Product[]) => {
+    const rows: Product[][] = [];
+    for (let i = 0; i < arr.length; i += 3) {
+      rows.push(arr.slice(i, i + 3));
+    }
+    return rows;
+  };
+
+  // Grouped sections for SectionList
+  const filteredProducts = selectedCategory === "all"
+    ? products
+    : products.filter((p) => p.category === selectedCategory);
+
+  const rawSections = Object.entries(
+    filteredProducts.reduce<Record<string, Product[]>>((acc, p) => {
+      (acc[p.category] ??= []).push(p);
+      return acc;
+    }, {})
+  ).map(([title, data]) => ({
+    title,
+    data: collapsedSections[title] ? [] : chunkRows(data),
+    totalCount: data.length,
   }));
+
   const modeLabel = mode === "group" ? `Adding to shared cart: ${group.data?.name ?? ""}` : mode === "basket" ? `Adding to Flat ${basket.data?.my_flat ?? ""} · ${basket.data?.title ?? ""}` : null;
+  const discountRemaining = Math.max(0, 299 - cartTotalAmount);
 
   return (
     <View style={s.root}>
-      {/* 1. FIXED BACKGROUND HERO IMAGE */}
-      <View style={s.fixedHeroContainer} pointerEvents="none">
+      {/* 1. FIXED BACKGROUND HERO CAROUSEL */}
+      <View style={s.fixedHeroContainer}>
         <Animated.View style={[StyleSheet.absoluteFill, bgImageAnimStyle]}>
-          <AppImage
-            source={{ uri: mediaUri(seller.image) }}
-            fallbackType={seller.category === "grocery" ? "groceries" : "shop"}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={200}
-          />
+          <ScrollView
+            ref={bannerScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              const w = Dimensions.get("window").width;
+              if (w > 0) setActiveBannerIdx(Math.round(x / w));
+            }}
+          >
+            {heroList.map((imgUri, idx) => (
+              <View key={idx} style={{ width: Dimensions.get("window").width, height: HERO_HEIGHT }}>
+                <AppImage
+                  source={{ uri: mediaUri(imgUri) }}
+                  fallbackType={seller.category === "grocery" ? "groceries" : "shop"}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  transition={200}
+                />
+              </View>
+            ))}
+          </ScrollView>
         </Animated.View>
         <View style={s.heroDarkGradient} />
+
+        {/* Carousel Page indicator (e.g., 1/5 ••••) on bottom right */}
+        {heroList.length > 1 && (
+          <View style={s.heroDotsBadge} pointerEvents="none">
+            <Text style={s.heroDotsText}>{activeBannerIdx + 1}/{heroList.length}</Text>
+            <View style={s.heroDotsList}>
+              {heroList.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    s.heroDot,
+                    i === activeBannerIdx ? s.heroDotActive : s.heroDotInactive,
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* 2. FLOATING FIXED BACK BUTTON (Visible over hero, fades out when card docks at the top) */}
-      <Animated.View style={[s.fixedBackButtonWrapper, { top: insets.top + spacing.sm }, floatingBackBtnAnimStyle]}>
+      {/* 2. FLOATING FIXED TOP CONTROLS: Back button on left, Share button on right (No heart icon) */}
+      <Animated.View style={[s.fixedBackButtonWrapper, { top: insets.top + spacing.xs }, floatingBackBtnAnimStyle]}>
         <Pressable
           testID="seller-back-button"
           onPress={() => router.back()}
-          style={s.roundBackBtn}
+          style={s.topCircleBtn}
           hitSlop={8}
         >
-          <Ionicons name="chevron-back" size={18} color={colors.onSurface} />
+          <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
         </Pressable>
       </Animated.View>
 
-      {/* 3. SCROLLABLE MENU & SECTIONS:
-             Covers the full screen with zIndex: 10 (above the fixed background hero image at zIndex: 0).
-             Sections and items scroll smoothly ON TOP of the background image,
-             but UNDER the floating card (which has zIndex: 30).
-             ListHeaderComponent has:
-               - Transparent spacer of height HERO_HEIGHT (hero is visible behind at initial view)
-               - White spacer of height halfCard (so content starts cleanly below the centered card) */}
+      <Animated.View style={[s.fixedShareButtonWrapper, { top: insets.top + spacing.xs }, floatingBackBtnAnimStyle]}>
+        <Pressable
+          testID="seller-share-button"
+          onPress={() => toast("Shop link copied")}
+          style={s.topCircleBtn}
+          hitSlop={8}
+        >
+          <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+        </Pressable>
+      </Animated.View>
+
+      {/* 3. SCROLLABLE MENU & SECTIONS */}
       <SectionList
+        ref={sectionListRef}
         testID="seller-menu-list"
         style={s.sectionList}
-        sections={sections}
-        keyExtractor={(p) => p.id}
+        sections={rawSections}
+        keyExtractor={(_, index) => `row-${index}`}
         stickySectionHeadersEnabled={false}
         scrollEventThrottle={16}
         onScroll={onScroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
         ListHeaderComponent={
-          <View pointerEvents="none">
-            {/* Transparent region allowing the hero background image to show through */}
-            <View style={{ height: HERO_HEIGHT }} />
-            {/* White spacer behind bottom half of card, so first section starts right below the card */}
-            <View style={{ height: halfCard + spacing.sm, backgroundColor: colors.surface }} />
+          <View>
+            {/* Transparent spacer so the below section begins at the vertical center of the card */}
+            <View style={{ height: belowSectionStartTop }} />
+
+            {/* Solid background container for entire menu section below the title card */}
+            <View style={[s.menuContentContainer, { paddingTop: paddingForCoveredHalfCard }]}>
+              {/* Flat Promo Offer Banner Pill */}
+              <View style={{ paddingHorizontal: 16 }}>
+                <Pressable
+                  testID="seller-offer-banner"
+                  onPress={() => toast(seller.offer || "Flat ₹30 OFF applied on checkout")}
+                  style={s.promoOfferBanner}
+                >
+                  <View style={s.promoOfferLeft}>
+                    <View style={s.promoIconBox}>
+                      <Ionicons name="pricetag" size={15} color="#EA580C" />
+                    </View>
+                    <Text style={s.promoOfferText}>
+                      {seller.offer || "Flat ₹30 OFF on orders above ₹299"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#EA580C" />
+                </Pressable>
+              </View>
+
+              {/* Category Filter Chips Horizontal Row */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.categoryChipsScroll}
+                style={{ marginTop: 12, marginBottom: 4 }}
+              >
+                {categoryList.map((catKey) => {
+                  const isActive = selectedCategory === catKey;
+                  const label = catKey === "all" ? "All Items" : catKey;
+                  const iconName = catKey === "all"
+                    ? "list-outline"
+                    : catKey.toLowerCase().includes("bake")
+                    ? "nutrition-outline"
+                    : catKey.toLowerCase().includes("dairy")
+                    ? "water-outline"
+                    : catKey.toLowerCase().includes("egg")
+                    ? "egg-outline"
+                    : "cafe-outline";
+
+                  return (
+                    <Pressable
+                      key={catKey}
+                      onPress={() => setSelectedCategory(catKey)}
+                      style={[
+                        s.categoryChip,
+                        isActive && s.categoryChipActive,
+                      ]}
+                    >
+                      <Ionicons
+                        name={iconName as any}
+                        size={15}
+                        color={isActive ? "#FFFFFF" : "#374151"}
+                      />
+                      <Text style={[s.categoryChipText, isActive && s.categoryChipTextActive]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
           </View>
         }
         renderSectionHeader={({ section }) => {
@@ -239,86 +391,188 @@ export default function SellerScreen() {
           return (
             <Pressable
               testID={`section-toggle-${section.title}`}
-              style={s.sectionHeaderBox}
+              style={s.sectionHeaderRow}
               onPress={() => toggleSection(section.title)}
             >
-              <Text style={s.sectionTitle}>
+              <Text style={s.sectionTitleText}>
                 {section.title} ({section.totalCount})
               </Text>
-              <View style={s.collapseIconBox}>
+              {/* Dropdown arrow icon instead of View All */}
+              <View style={s.dropdownArrowBox}>
                 <Ionicons
                   name={isCollapsed ? "chevron-down" : "chevron-up"}
-                  size={20}
-                  color={colors.onSurface}
+                  size={18}
+                  color={colors.brandPrimary}
                 />
               </View>
             </Pressable>
           );
         }}
-        renderItem={({ item: p }) => (
-          <View style={s.item} testID={`product-${p.id}`}>
-            <View style={{ flex: 1, gap: 6, paddingRight: spacing.sm }}>
-              <VegMark veg={p.veg} />
-              <Text style={s.pname}>{p.name}</Text>
-              <Text style={s.pprice}>{rupee(p.price)}</Text>
-              <Text style={s.pdesc} numberOfLines={2}>
-                {p.available ? (p.stock < 10 ? `Only ${p.stock} left` : p.description) : "Currently unavailable"}
-              </Text>
-            </View>
-            <View style={{ alignItems: "center" }}>
-              <AppImage
-                source={{ uri: mediaUri(p.image) }}
-                fallbackType={seller.category === "grocery" ? "groceries" : "food"}
-                style={s.pimg}
-                contentFit="cover"
-                transition={150}
-              />
-              <View style={{ marginTop: -20 }}>
-                <Stepper testID={`product-stepper-${p.id}`} qty={qtyOf(p.id)} disabled={!p.available || busy === p.id} onChange={(n) => change(p, n)} />
-              </View>
+        renderItem={({ item: rowProducts }) => (
+          <View style={{ backgroundColor: "#FDFBF9" }}>
+            <View style={s.gridRow}>
+              {rowProducts.map((p) => {
+                const qty = qtyOf(p.id);
+                const isBusy = busy === p.id;
+                return (
+                  <View key={p.id} style={s.gridCard} testID={`product-${p.id}`}>
+                    {/* Product Image Box */}
+                    <View style={s.gridCardImageBox}>
+                      <AppImage
+                        source={{ uri: mediaUri(p.image) }}
+                        fallbackType={seller.category === "grocery" ? "groceries" : "food"}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                        transition={150}
+                      />
+
+                      {/* Square Veg Mark indicator at bottom-left of image */}
+                      <View style={s.gridCardVegBox}>
+                        <VegMark veg={p.veg} />
+                      </View>
+                    </View>
+
+                    {/* Title & Price & Add/Stepper */}
+                    <View style={s.gridCardContent}>
+                      <Text style={s.gridCardTitle} numberOfLines={2}>
+                        {p.name}
+                      </Text>
+                      <Text style={s.gridCardPrice}>{rupee(p.price)}</Text>
+
+                      {/* Action button: '+ Add' pill or Stepper */}
+                      <View style={s.gridCardActionRow}>
+                        {qty === 0 ? (
+                          <Pressable
+                            testID={`product-add-${p.id}`}
+                            disabled={!p.available || isBusy}
+                            onPress={() => change(p, 1)}
+                            style={({ pressed }) => [
+                              s.gridAddBtn,
+                              pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+                              (!p.available || isBusy) && { opacity: 0.4 },
+                            ]}
+                          >
+                            <Ionicons name="add" size={14} color={colors.brandPrimary} />
+                            <Text style={s.gridAddBtnText}>Add</Text>
+                          </Pressable>
+                        ) : (
+                          <View style={s.stepperWrapper}>
+                            <Stepper
+                              testID={`product-stepper-${p.id}`}
+                              qty={qty}
+                              disabled={!p.available || isBusy}
+                              onChange={(n) => change(p, n)}
+                            />
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+              {/* Fillers for incomplete 3-column rows */}
+              {rowProducts.length === 1 && (
+                <>
+                  <View style={[s.gridCard, { opacity: 0 }]} />
+                  <View style={[s.gridCard, { opacity: 0 }]} />
+                </>
+              )}
+              {rowProducts.length === 2 && (
+                <View style={[s.gridCard, { opacity: 0 }]} />
+              )}
             </View>
           </View>
         )}
       />
 
-      {/* 4. DOCKED / FLOATING CARD (Vertically centered on the bottom edge of hero image; translates & docks smoothly without wiggling) */}
-      <Animated.View style={[s.floatingCard, { top: initialCardTop }, cardAnimStyle]} pointerEvents="box-none">
-        <View style={s.cardTitleRow}>
-          {/* Animated back button positioned absolutely; slides & fades in beside title once docked */}
-          <Animated.View style={[s.cardBackBtnWrapper, cardBackBtnAnimStyle]}>
-            <Pressable
-              testID="seller-docked-back-button"
-              onPress={() => router.back()}
-              style={s.cardBackBtn}
-              hitSlop={8}
-            >
-              <Ionicons name="chevron-back" size={24} color={colors.onSurface} />
-            </Pressable>
-          </Animated.View>
-          <Animated.Text testID="seller-name" style={[s.name, cardTitleAnimStyle]} numberOfLines={1}>{seller.name}</Animated.Text>
-        </View>
-        <Text style={s.cuisine}>{seller.cuisine} · {seller.address}</Text>
-
-        <View style={s.metaRow}>
-          <View style={s.rating}>
-            <Ionicons name="star" size={12} color={colors.onSuccess} />
-            <Text style={s.ratingText}>{seller.rating}</Text>
+      {/* 4. DOCKED / FLOATING CARD MATCHING FIRST IMAGE */}
+      <Animated.View
+        style={[s.floatingCard, { top: initialCardTop }, cardAnimStyle]}
+        pointerEvents="box-none"
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 50 && Math.abs(h - measuredCardHeight) > 2) {
+            setMeasuredCardHeight(h);
+          }
+        }}
+      >
+        <View style={s.cardBodyRow}>
+          {/* Shop Logo Avatar Box */}
+          <View style={s.shopLogoBox}>
+            {seller.image ? (
+              <AppImage
+                source={{ uri: mediaUri(seller.image) }}
+                fallbackType={seller.category === "grocery" ? "groceries" : "shop"}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+              />
+            ) : (
+              <Ionicons
+                name={seller.category === "grocery" ? "basket" : "restaurant"}
+                size={26}
+                color="#FFFFFF"
+              />
+            )}
           </View>
-          <Text style={s.meta}>{seller.eta_min} mins · {seller.distance_km} km · Prep {seller.prep_time_min} min</Text>
-        </View>
 
-        {seller.offer ? (
-          <View style={s.offer}>
-            <Ionicons name="pricetag" size={14} color={colors.brandPrimary} />
-            <Text style={s.offerText}>{seller.offer}</Text>
+          {/* Center Shop Details */}
+          <View style={s.shopInfoCol}>
+            <View style={s.cardTitleRow}>
+              {/* Back button when docked */}
+              <Animated.View style={[s.cardBackBtnWrapper, cardBackBtnAnimStyle]}>
+                <Pressable
+                  testID="seller-docked-back-button"
+                  onPress={() => router.back()}
+                  style={s.cardBackBtn}
+                  hitSlop={8}
+                >
+                  <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
+                </Pressable>
+              </Animated.View>
+              <Animated.Text testID="seller-name" style={[s.shopNameTitle, cardTitleAnimStyle]} numberOfLines={1}>
+                {seller.name}
+              </Animated.Text>
+              <Ionicons name="checkmark-circle" size={17} color="#22C55E" style={{ marginLeft: 4 }} />
+            </View>
+
+            {/* Subtitle: Cuisine / Category & Area */}
+            <Text style={s.shopSubtitleText} numberOfLines={1}>
+              {seller.cuisine ? seller.cuisine.replace(/,/g, ", ") : (seller.category === "grocery" ? "Grocery, Staples" : "South Indian, Meals")} • {seller.address || "Koramangala, Bengaluru"}
+            </Text>
+
+            {/* Rating Pill & Reviews */}
+            <View style={s.shopRatingRow}>
+              <View style={s.ratingBadgeGreen}>
+                <Ionicons name="star" size={11} color="#FFFFFF" />
+                <Text style={s.ratingBadgeText}>{seller.rating ? seller.rating.toFixed(1) : "4.4"}</Text>
+              </View>
+              <Text style={s.reviewsCountText}>
+                ({seller.reviews_count ? `${(seller.reviews_count / 1000).toFixed(1)}k` : "2.8k"} reviews)
+              </Text>
+            </View>
+
+            {/* Metrics: ETA | Distance | Prep time */}
+            <View style={s.shopMetricsRow}>
+              <View style={s.metricItem}>
+                <Ionicons name="time-outline" size={14} color="#64748B" />
+                <Text style={s.metricItemText}>{seller.eta_min || 17} mins</Text>
+              </View>
+              <View style={s.metricItemDivider} />
+              <View style={s.metricItem}>
+                <Ionicons name="location-outline" size={14} color="#64748B" />
+                <Text style={s.metricItemText}>{seller.distance_km || 0.7} km</Text>
+              </View>
+              <View style={s.metricItemDivider} />
+              <View style={s.metricItem}>
+                <Ionicons name="restaurant-outline" size={14} color="#64748B" />
+                <Text style={s.metricItemText}>Prep {seller.prep_time_min || 15} mins</Text>
+              </View>
+            </View>
+
+            {/* Min order */}
+            <Text style={s.minOrderText}>Min order: {rupee(seller.min_order || 49)}</Text>
           </View>
-        ) : null}
-
-        {seller.fssai_status === "verified" ? (
-          <Text style={s.fssai}>FSSAI verified · Min order {rupee(seller.min_order)}</Text>
-        ) : (
-          <Text style={s.fssai}>Min order {rupee(seller.min_order)}</Text>
-        )}
+        </View>
 
         {modeLabel ? (
           <View testID="seller-mode-banner" style={s.mode}>
@@ -328,27 +582,58 @@ export default function SellerScreen() {
         ) : null}
       </Animated.View>
 
+      {/* 5. FLOATING BOTTOM CART BAR MATCHING THIRD IMAGE (USING APP'S THEME) */}
       {totalQty > 0 ? (
-        <View style={[s.bar, { bottom: insets.bottom + spacing.lg }]}>
-          <Pressable testID="seller-view-cart-bar" style={s.barInner}
-            onPress={() => (mode === "cart" ? router.push("/(tabs)/cart") : mode === "group" ? router.back() : router.back())}>
-            <Text style={s.barText}>{totalQty} item{totalQty > 1 ? "s" : ""} added</Text>
-            <Text style={s.barText}>{mode === "cart" ? "View cart" : mode === "group" ? "Back to shared cart" : "Back to basket"}  ›</Text>
+        <View style={[s.cartBarContainer, { bottom: insets.bottom + 12 }]}>
+          <Pressable
+            testID="seller-view-cart-bar"
+            style={s.cartBarInner}
+            onPress={() => {
+              if (mode === "cart") {
+                navigateToTab(2);
+                router.back();
+              } else {
+                router.back();
+              }
+            }}
+          >
+            {/* Left: Cart Icon with Badge */}
+            <View style={s.cartIconWithBadge}>
+              <Ionicons name="cart" size={24} color="#FFFFFF" />
+              <View style={s.cartCountBadge}>
+                <Text style={s.cartCountBadgeText}>{totalQty}</Text>
+              </View>
+            </View>
+
+            {/* Vertical Divider */}
+            <View style={s.cartBarDivider} />
+
+            {/* Middle: Items & Total Price & Discount Prompt */}
+            <View style={s.cartBarMiddle}>
+              <Text style={s.cartBarMainText}>
+                {totalQty} item{totalQty > 1 ? "s" : ""} • {rupee(cartTotalAmount)}
+              </Text>
+              <Text style={s.cartBarSubText}>
+                {discountRemaining > 0
+                  ? `Add ${rupee(discountRemaining)} more for ₹30 OFF`
+                  : "₹30 OFF unlocked on your bill!"}
+              </Text>
+            </View>
+
+            {/* Right: View Cart Button Pill */}
+            <View style={s.viewCartPill}>
+              <Text style={s.viewCartPillText}>View Cart</Text>
+              <Ionicons name="arrow-forward" size={14} color="#16A34A" />
+            </View>
           </Pressable>
         </View>
       ) : null}
-
-      <Sheet visible={!!conflict} onClose={() => setConflict(null)} title="Replace cart items?" testID="replace-cart-sheet">
-        <Text style={{ color: colors.onSurfaceSecondary, lineHeight: 20 }}>Your cart has items from another shop. Start a fresh cart with {seller.name}?</Text>
-        <Button testID="replace-cart-confirm" title="Yes, start fresh" onPress={() => { const c = conflict!; setConflict(null); change(products.find((x) => x.id === c.product_id)!, c.qty, true); }} />
-        <Button testID="replace-cart-cancel" variant="ghost" title="Keep existing cart" onPress={() => setConflict(null)} />
-      </Sheet>
     </View>
   );
 }
 
 const useStyles = makeStyles((c) => ({
-  root: { flex: 1, backgroundColor: c.surface },
+  root: { flex: 1, backgroundColor: "#FDFBF9" },
 
   /* Fixed Hero Background */
   fixedHeroContainer: {
@@ -362,49 +647,117 @@ const useStyles = makeStyles((c) => ({
     zIndex: 0,
   },
   heroDarkGradient: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.18)",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.22)",
+  },
+  heroDotsBadge: {
+    position: "absolute",
+    bottom: 24,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+  },
+  heroDotsText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  heroDotsList: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  heroDot: {
+    width: 4.5,
+    height: 4.5,
+    borderRadius: 2.5,
+  },
+  heroDotActive: {
+    backgroundColor: "#FFFFFF",
+  },
+  heroDotInactive: {
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
-  /* Fixed Back Button */
+  /* Fixed Top Buttons */
   fixedBackButtonWrapper: {
     position: "absolute",
-    left: spacing.lg,
+    left: 16,
     zIndex: 50,
-    elevation: 10,
   },
-  roundBackBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: c.surface,
+  fixedShareButtonWrapper: {
+    position: "absolute",
+    right: 16,
+    zIndex: 50,
+  },
+  topCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000000",
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.2)",
   },
 
-  /* Floating Card docked/scaled */
+  /* SectionList */
+  sectionList: {
+    flex: 1,
+    zIndex: 10,
+    backgroundColor: "transparent",
+  },
+  menuContentContainer: {
+    backgroundColor: "#FDFBF9",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    marginTop: -8,
+  },
+
+  /* Floating Docked Card */
   floatingCard: {
     position: "absolute",
     left: spacing.lg,
     right: spacing.lg,
-    backgroundColor: c.surface,
-    padding: spacing.lg,
-    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
     shadowColor: "#000000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
     zIndex: 30,
     elevation: 6,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
   },
-  sectionList: {
+  cardBodyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  shopLogoBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 12,
+    backgroundColor: "#166534",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  shopInfoCol: {
     flex: 1,
-    zIndex: 10,
+    marginLeft: 12,
   },
   cardTitleRow: {
     flexDirection: "row",
@@ -425,57 +778,340 @@ const useStyles = makeStyles((c) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  name: { fontSize: font.xxl, fontWeight: "800", color: c.onSurface, letterSpacing: -0.3, flexShrink: 1 },
-  cuisine: { color: c.muted },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  rating: { flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: c.success, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
-  ratingText: { color: c.onSuccess, fontWeight: "800", fontSize: font.sm },
-  meta: { color: c.onSurfaceSecondary, fontWeight: "600", fontSize: font.sm + 1 },
-  offer: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: c.brandTertiary, alignSelf: "flex-start", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm },
-  offerText: { color: c.brandPrimary, fontWeight: "800", fontSize: font.sm },
-  fssai: { color: c.muted, fontSize: font.sm },
-  mode: { flexDirection: "row", gap: spacing.sm, alignItems: "center", backgroundColor: c.pastelLilac, padding: spacing.sm, borderRadius: radius.sm, marginTop: 4 },
-  modeText: { color: c.onPastelLilac, fontWeight: "700", flex: 1, fontSize: font.sm + 1 },
+  shopNameTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.3,
+    flexShrink: 1,
+  },
+  shopSubtitleText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#64748B",
+    marginTop: 2,
+  },
+  shopRatingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 5,
+  },
+  ratingBadgeGreen: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#16A34A",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  ratingBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  reviewsCountText: {
+    fontSize: 11.5,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  shopMetricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 7,
+  },
+  metricItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  metricItemText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  metricItemDivider: {
+    width: 1,
+    height: 10,
+    backgroundColor: "#CBD5E1",
+    marginHorizontal: 1,
+  },
+  minOrderText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#64748B",
+    marginTop: 5,
+  },
+  mode: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    alignItems: "center",
+    backgroundColor: c.pastelLilac,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: 8,
+  },
+  modeText: {
+    color: c.onPastelLilac,
+    fontWeight: "700",
+    flex: 1,
+    fontSize: font.sm + 1,
+  },
 
-  sectionHeaderBox: {
-    backgroundColor: c.surface,
-    zIndex: 5,
+  /* Promo Offer Banner */
+  promoOfferBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  sectionTitle: {
-    fontSize: font.lg,
-    fontWeight: "800",
-    color: c.onSurface,
+  promoOfferLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     flex: 1,
   },
-  collapseIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.pill,
-    backgroundColor: c.surfaceTertiary,
+  promoIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFEDD5",
     alignItems: "center",
     justifyContent: "center",
   },
-  item: {
+  promoOfferText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#C2410C",
+    flex: 1,
+  },
+
+  /* Category Filter Chips */
+  categoryChipsScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: "center",
+  },
+  categoryChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: c.divider,
-    backgroundColor: c.surface,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  pname: { fontSize: font.xl, fontWeight: "800", color: c.onSurface, letterSpacing: -0.2 },
-  pprice: { fontSize: font.lg, fontWeight: "700", color: c.onSurface },
-  pdesc: { color: c.muted, fontSize: font.base, lineHeight: 20 },
-  pimg: { width: 136, height: 122, borderRadius: radius.lg, backgroundColor: c.surfaceTertiary },
-  bar: { position: "absolute", left: spacing.lg, right: spacing.lg },
-  barInner: { height: 56, borderRadius: radius.md, backgroundColor: c.success, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg },
-  barText: { color: c.onSuccess, fontWeight: "800", fontSize: font.base + 1 },
+  categoryChipActive: {
+    backgroundColor: c.brandPrimary,
+    borderColor: c.brandPrimary,
+  },
+  categoryChipText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  categoryChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+
+  /* Section Header */
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: "#FDFBF9",
+  },
+  sectionTitleText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  dropdownArrowBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: c.brandTertiary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* 3-Column Grid Cards */
+  gridRow: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    gap: 8,
+    marginTop: 0,
+    marginBottom: 12,
+  },
+  gridCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1.5,
+  },
+  gridCardImageBox: {
+    width: "100%",
+    height: 105,
+    backgroundColor: c.surfaceTertiary,
+    position: "relative",
+  },
+  gridCardVegBox: {
+    position: "absolute",
+    bottom: 6,
+    left: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 4,
+    padding: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  gridCardContent: {
+    padding: 8,
+    justifyContent: "space-between",
+    minHeight: 88,
+  },
+  gridCardTitle: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#1E293B",
+    lineHeight: 15,
+  },
+  gridCardPrice: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 4,
+  },
+  gridCardActionRow: {
+    marginTop: 6,
+    alignItems: "flex-end",
+  },
+  gridAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: c.brandTertiary,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4.5,
+  },
+  gridAddBtnText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: c.brandPrimary,
+  },
+  stepperWrapper: {
+    transform: [{ scale: 0.85 }],
+    marginRight: -6,
+  },
+
+  /* Floating Bottom Cart Bar (Image 3 layout in our Theme) */
+  cartBarContainer: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    elevation: 20,
+  },
+  cartBarInner: {
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: "#16A34A",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    shadowColor: "#16A34A",
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  cartIconWithBadge: {
+    position: "relative",
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cartCountBadge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  cartCountBadgeText: {
+    color: "#16A34A",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  cartBarDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    marginHorizontal: 12,
+  },
+  cartBarMiddle: {
+    flex: 1,
+  },
+  cartBarMainText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 14,
+    letterSpacing: -0.2,
+  },
+  cartBarSubText: {
+    color: "rgba(255, 255, 255, 0.85)",
+    fontSize: 10.5,
+    fontWeight: "600",
+    marginTop: 1,
+  },
+  viewCartPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  viewCartPillText: {
+    color: "#16A34A",
+    fontWeight: "800",
+    fontSize: 12,
+  },
 }));

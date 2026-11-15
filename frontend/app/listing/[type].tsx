@@ -1,9 +1,5 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
-import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated as RNAnimated,
   Dimensions,
   FlatList,
@@ -19,30 +15,33 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
+import { router, useLocalSearchParams } from "expo-router";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { api, ApiError } from "@/src/api";
-import { rupee, mediaUri } from "@/src/format";
-import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
-import { DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
-import { AppImage, EmptyState, ErrorState, Header, IconName, Ionicons, Loader, useToast, VegMark } from "@/src/ui";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   Easing,
 } from "react-native-reanimated";
+
+import { api, ApiError } from "@/src/api";
+import { rupee, mediaUri } from "@/src/format";
+import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
+import { Address, DiscoverResponse, Product, Seller, ShowcaseItem } from "@/src/types";
+import { AppImage, EmptyState, ErrorState, Header, IconName, Ionicons, Loader, SkeletonBlock, useToast, VegMark } from "@/src/ui";
 import { AnimatedPlaceholder } from "@/src/components/animated-placeholder";
 import { VegToggle } from "@/src/components/veg-toggle";
 import { VoiceSearchModal } from "@/src/components/voice-search-modal";
+import { DiscoverSkeleton } from "@/src/components/discover-skeleton";
+import { LinearGradient } from "expo-linear-gradient";
 
 const TITLES: Record<string, [string, string]> = {
   food: ["Food", "Restaurants & cloud kitchens near you"],
   grocery: ["Groceries", "Kirana, fresh produce & dairy"],
   new: ["Discover", "Explore newly opened shops near you"],
 };
-
-import { LinearGradient } from "expo-linear-gradient";
 
 /** Shop card with preview items for generic food/grocery listing */
 function ShopWithItemsCard({
@@ -95,7 +94,7 @@ function ShopWithItemsCard({
               style={{
                 width: 44,
                 height: 44,
-                borderRadius: 22,
+                borderRadius: 14,
                 overflow: "hidden",
                 borderWidth: 1.5,
                 borderColor: colors.border,
@@ -118,98 +117,128 @@ function ShopWithItemsCard({
                     fontWeight: "900",
                     color: colors.onSurface,
                     letterSpacing: -0.2,
-                    flexShrink: 1,
                   }}
                   numberOfLines={1}
                 >
                   {seller.name}
                 </Text>
+                {seller.is_new && (
+                  <View
+                    style={{
+                      backgroundColor: "#FFF8E1",
+                      borderWidth: 1,
+                      borderColor: "#FFE082",
+                      paddingHorizontal: 6,
+                      paddingVertical: 1,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 9, fontWeight: "800", color: "#FF8F00", letterSpacing: 0.3 }}>
+                      NEW
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              {/* Rating + Time row */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 2,
-                    backgroundColor: "#16A34A",
-                    borderRadius: 5,
-                    paddingHorizontal: 5,
-                    paddingVertical: 1.5,
-                  }}
-                >
-                  <Ionicons name="star" size={10} color="#FFFFFF" />
-                  <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>
-                    {seller.rating ? seller.rating.toFixed(1) : "4.2"}
-                  </Text>
-                </View>
-                <Text style={{ fontSize: font.sm, color: colors.muted, fontWeight: "600" }}>
-                  {seller.eta_min ? `${seller.eta_min - 5 > 0 ? seller.eta_min - 5 : 10}-${seller.eta_min} mins` : "15-20 mins"}
-                </Text>
-              </View>
+              <Text
+                style={{
+                  fontSize: font.sm,
+                  color: colors.muted,
+                  marginTop: 1,
+                  fontWeight: "500",
+                }}
+                numberOfLines={1}
+              >
+                {seller.cuisine || (seller.category === "grocery" ? "Kirana & Essentials" : "Fast Food & Meals")}
+              </Text>
             </View>
           </View>
 
-          {/* View All Button Pill */}
-          <Pressable
-            hitSlop={8}
-            onPress={() => router.push(`/seller/${seller.id}`)}
-            style={({ pressed }) => [
-              {
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                backgroundColor: colors.surface,
-                paddingVertical: 5,
-                paddingHorizontal: 12,
-                borderRadius: radius.pill,
-                borderWidth: 1,
-                borderColor: "rgba(252, 128, 25, 0.25)",
-              },
-              pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            <Text style={{ color: "#FC8019", fontWeight: "800", fontSize: font.sm + 0.5 }}>
-              View All
-            </Text>
-            <Ionicons name="arrow-forward" size={13} color="#FC8019" />
-          </Pressable>
-        </View>
-
-        {/* Promo offer strip */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            paddingTop: 3,
-            paddingBottom: 2,
-          }}
-        >
+          {/* Rating badge */}
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 4,
-              backgroundColor: "rgba(252, 128, 25, 0.1)",
+              backgroundColor: "#2E7D32",
               paddingHorizontal: 8,
-              paddingVertical: 2.5,
-              borderRadius: radius.pill,
+              paddingVertical: 3,
+              borderRadius: 6,
+              gap: 3,
             }}
           >
-            <Ionicons name="pricetag" size={12} color="#FC8019" />
-            <Text style={{ fontSize: 11, color: "#FC8019", fontWeight: "800" }}>
-              {seller.offer || "50% off upto ₹100"}
+            <Ionicons name="star" size={11} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontWeight: "900", fontSize: 11 }}>
+              {seller.rating ? seller.rating.toFixed(1) : "4.2"}
             </Text>
           </View>
+        </View>
+
+        {/* Delivery / Distance info snippet */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingVertical: 4,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+            <Ionicons name="time-outline" size={12} color={colors.muted} />
+            <Text style={{ fontSize: font.sm - 1, color: colors.muted, fontWeight: "600" }}>
+              {seller.eta_min || 25} mins
+            </Text>
+          </View>
+          <Text style={{ color: colors.border, fontSize: font.sm - 2 }}>•</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+            <Ionicons name="location-outline" size={12} color={colors.muted} />
+            <Text style={{ fontSize: font.sm - 1, color: colors.muted, fontWeight: "600" }}>
+              {seller.distance_km || 1.8} km
+            </Text>
+          </View>
+          {seller.offer && (
+            <>
+              <Text style={{ color: colors.border, fontSize: font.sm - 2 }}>•</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Ionicons name="pricetag" size={11} color="#E65100" />
+                <Text style={{ fontSize: font.sm - 1, color: "#E65100", fontWeight: "800" }}>
+                  {seller.offer}
+                </Text>
+              </View>
+            </>
+          )}
+
+          {/* View Menu / Store link */}
+          <Pressable
+            onPress={() => router.push(`/seller/${seller.id}`)}
+            style={{
+              marginLeft: "auto",
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 2,
+              paddingHorizontal: 4,
+            }}
+            hitSlop={8}
+          >
+            <Text
+              style={{
+                fontSize: font.sm,
+                fontWeight: "800",
+                color: "#EA580C",
+              }}
+            >
+              View store
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color="#EA580C" />
+          </Pressable>
         </View>
       </View>
 
       {/* 2. FREE HORIZONTAL SCROLLING DISHES (OUTSIDE OF THE CARD) */}
       {productsQuery.isLoading ? (
-        <View style={{ height: 210, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#FC8019" />
+        <View style={{ height: 210, flexDirection: "row", paddingHorizontal: spacing.md, gap: spacing.md, alignItems: "center" }}>
+          <SkeletonBlock width={140} height={180} borderRadius={16} />
+          <SkeletonBlock width={140} height={180} borderRadius={16} />
+          <SkeletonBlock width={140} height={180} borderRadius={16} />
         </View>
       ) : products.length === 0 ? (
         <Pressable
@@ -227,17 +256,18 @@ function ShopWithItemsCard({
         >
           <Ionicons name="restaurant-outline" size={24} color={colors.muted} />
           <Text style={{ color: colors.muted, fontSize: font.sm, fontWeight: "600" }}>
-            Tap to explore full shop menu
+            Tap to view available items from this shop
           </Text>
         </Pressable>
       ) : (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
           contentContainerStyle={{
             paddingHorizontal: spacing.md,
-            paddingTop: spacing.md,
-            paddingBottom: spacing.xs,
+            paddingTop: spacing.xs,
+            paddingBottom: spacing.sm,
             gap: spacing.md,
           }}
         >
@@ -256,7 +286,7 @@ function ShopWithItemsCard({
                   style={{
                     width: 144,
                     height: 130,
-                    borderRadius: 18,
+                    borderRadius: 12,
                     overflow: "hidden",
                     backgroundColor: colors.surfaceTertiary,
                     position: "relative",
@@ -270,7 +300,7 @@ function ShopWithItemsCard({
                     transition={200}
                   />
 
-                  {/* Floating ADD button placed over bottom of image like Swiggy/Zomato */}
+                  {/* Floating ADD button placed over bottom of image */}
                   <Pressable
                     disabled={isAdding}
                     onPress={() => onAddToCart(p)}
@@ -298,11 +328,11 @@ function ShopWithItemsCard({
                     ]}
                   >
                     {isAdding ? (
-                      <ActivityIndicator size="small" color="#FC8019" />
+                      <SkeletonBlock width={32} height={14} borderRadius={7} />
                     ) : (
                       <Text
                         style={{
-                          color: "#FC8019",
+                          color: "#EA580C",
                           fontWeight: "900",
                           fontSize: 12,
                           letterSpacing: 0.4,
@@ -314,44 +344,34 @@ function ShopWithItemsCard({
                   </Pressable>
                 </View>
 
-                {/* Price & Veg mark */}
-                <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 5 }}>
-                  <VegMark veg={p.veg} />
+                {/* Dish name & details */}
+                <View style={{ paddingTop: 6, paddingHorizontal: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <VegMark veg={p.veg} />
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: font.sm,
+                        fontWeight: "700",
+                        color: colors.onSurface,
+                        flex: 1,
+                      }}
+                    >
+                      {p.name}
+                    </Text>
+                  </View>
+
                   <Text
                     style={{
-                      fontSize: 14,
+                      fontSize: font.sm,
                       fontWeight: "800",
                       color: colors.onSurface,
+                      marginTop: 2,
                     }}
                   >
                     {rupee(p.price)}
                   </Text>
-                  {p.price ? (
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: colors.muted,
-                        textDecorationLine: "line-through",
-                      }}
-                    >
-                      {rupee(Math.round(p.price * 1.25))}
-                    </Text>
-                  ) : null}
                 </View>
-
-                {/* Dish name */}
-                <Text
-                  numberOfLines={2}
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: colors.onSurface,
-                    marginTop: 2,
-                    lineHeight: 17,
-                  }}
-                >
-                  {p.name}
-                </Text>
               </View>
             );
           })}
@@ -360,37 +380,33 @@ function ShopWithItemsCard({
     </View>
   );
 }
+
 /** Filter chips matching reference design */
 const CATEGORIES: { key: string; label: string; icon: IconName }[] = [
-  { key: "all", label: "All", icon: "sparkles" },
-  { key: "new", label: "Newly Opened", icon: "time-outline" },
+  { key: "new", label: "Newly Opened", icon: "sparkles" },
   { key: "recently_registered", label: "Recently Registered", icon: "business-outline" },
-  { key: "food", label: "Food", icon: "fast-food-outline" },
+  { key: "food", label: "Food", icon: "restaurant-outline" },
   { key: "grocery", label: "Groceries", icon: "basket-outline" },
 ];
 
-/** Full Exact Discover Shop Card component */
+/** Full Discover Shop Card matching the screenshot design */
 function ExactDiscoverShopCard({
   item,
-  cardHeight,
-  isActive = true,
+  isActive = false,
   onAddToCart,
   addingPid,
   onPreviewImage,
 }: {
   item: ShowcaseItem;
-  cardHeight: number;
   isActive?: boolean;
   onAddToCart: (p: Product, s: Seller) => void;
   addingPid: string | null;
   onPreviewImage: (uri: string) => void;
 }) {
   const { seller, banner_url, gallery, description, products } = item;
-  const s = useStyles();
   const toast = useToast();
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
-  const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [bannerWidth, setBannerWidth] = useState(Dimensions.get("window").width - 32);
   const [userInteracting, setUserInteracting] = useState(false);
   const bannerScrollRef = useRef<any>(null);
@@ -399,10 +415,12 @@ function ExactDiscoverShopCard({
   const activeBannerIdxRef = useRef(0);
   const bannerWidthRef = useRef(bannerWidth);
   const userInteractingRef = useRef(false);
+  const isActiveRef = useRef(isActive);
 
   activeBannerIdxRef.current = activeBannerIdx;
   bannerWidthRef.current = bannerWidth;
   userInteractingRef.current = userInteracting;
+  isActiveRef.current = isActive;
 
   // Banner image carousel items
   const bannerImages = useMemo(() => {
@@ -427,7 +445,7 @@ function ExactDiscoverShopCard({
     }
   }, [bannerWidth]);
 
-  // Automatic carousel sliding animation with duration progress bar on active dot ONLY when isActive
+  // Automatic carousel sliding animation - only runs when card is active / visible on screen
   useEffect(() => {
     if (!hasMultiple) return;
 
@@ -445,7 +463,7 @@ function ExactDiscoverShopCard({
     });
 
     anim.start(({ finished }) => {
-      if (finished && isActive && !userInteractingRef.current) {
+      if (finished && isActiveRef.current && !userInteractingRef.current) {
         const next = (activeBannerIdxRef.current + 1) % bannerImages.length;
         setActiveBannerIdx(next);
         const w = bannerWidthRef.current;
@@ -463,63 +481,42 @@ function ExactDiscoverShopCard({
   const fullDescription =
     description ||
     seller.description ||
-    "Authentic, restaurant-style Biryani and Indian meals crafted with premium spices and fresh ingredients.";
+    "Authentic Biryani, meals and homely Indian dishes made with fresh & quality ingredients.";
 
-  // Words array
-  const words = useMemo(() => {
-    return fullDescription.trim().split(/\s+/).filter(Boolean);
-  }, [fullDescription]);
-
-  const WORD_LIMIT = 20;
-  const canExpand = words.length > WORD_LIMIT;
-
-  // When collapsed and expandable, slice to the word limit with an ellipsis
-  const displayedDescription = useMemo(() => {
-    if (!canExpand || isDescExpanded) {
-      return fullDescription;
-    }
-    return words.slice(0, WORD_LIMIT).join(" ") + "...";
-  }, [fullDescription, words, canExpand, isDescExpanded]);
-
-  // Ambience gallery items (with video timestamp mock on item 2 like screenshot)
+  // Ambience gallery items (4 items: 3 thumbnails + 1 "+5 More" overlay card)
   const ambienceImages = useMemo(() => {
-    if (gallery && gallery.length >= 4) return gallery.slice(0, 4);
-    const fallbacks = [
-      banner_url || seller.image,
-      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=70",
+    const fallbackList = [
       "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=70",
+      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=70",
       "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=800&q=70",
+      "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=70",
     ];
-    return fallbacks;
-  }, [gallery, banner_url, seller.image]);
+    const list: string[] = [];
+    if (gallery && gallery.length > 0) {
+      gallery.forEach((g) => {
+        if (!list.includes(g)) list.push(g);
+      });
+    }
+    fallbackList.forEach((fb) => {
+      if (list.length < 4 && !list.includes(fb)) list.push(fb);
+    });
+    return list.slice(0, 4);
+  }, [gallery]);
 
   // Format reviews count
   const reviewCountDisplay = seller.reviews_count
     ? `${(seller.reviews_count / 1000).toFixed(1)}k`
     : "1.2k";
 
-  // Formatted address line
-  const displayAddress =
-    seller.address && seller.address.includes("MVP Colony")
-      ? seller.address
-      : `${seller.address || "D.No. 12-5-34, MVP Colony"}, Visakhapatnam, Andhra Pradesh - 530017`;
+  // Formatted address lines matching screenshot:
+  // line 1: "Koramangala 5th block,"
+  // line 2: "Visakhapatnam, Andhra Pradesh - 530017"
+  const addressLine1 = (seller.address || "Koramangala 5th block").split(",")[0].trim() + ",";
+  const addressLine2 = "Visakhapatnam, Andhra Pradesh - 530017";
 
   const handleCall = () => {
     const phone = seller.phone || "+919876543210";
     Linking.openURL(`tel:${phone}`).catch(() => toast("Unable to open dialer", "err"));
-  };
-
-  const handleChat = () => {
-    toast(`Opening chat with ${seller.name}`);
-  };
-
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        title: seller.name,
-        message: `Check out ${seller.name} on GathrCart! Discover authentic dishes and group orders.`,
-      });
-    } catch {}
   };
 
   const handleDirections = () => {
@@ -537,17 +534,11 @@ function ExactDiscoverShopCard({
     setUserInteracting(false);
   };
 
-  // Dynamic banner height proportionally balanced with full screen height
-  const dynamicBannerHeight = cardHeight > 0 ? Math.max(220, Math.min(270, Math.round(cardHeight * 0.32))) : 240;
-
   return (
-    <View
-      style={[s.shopCardContainer, cardHeight > 0 && { height: cardHeight }]}
-      testID={`discover-shop-${seller.id}`}
-    >
-      {/* 1. HERO BANNER WITH AUTOMATIC CAROUSEL, BADGES & DURATION PROGRESS */}
+    <View style={discoverCardStyles.cardContainer} testID={`discover-shop-${seller.id}`}>
+      {/* 1. HERO BANNER WITH ROUNDED CORNERS, TOP BADGES, HEART & CAROUSEL */}
       <View
-        style={[s.heroBannerWrapper, { height: dynamicBannerHeight }]}
+        style={discoverCardStyles.heroBannerWrapper}
         onLayout={(e) => {
           const w = e.nativeEvent.layout.width;
           if (w > 0 && Math.abs(w - bannerWidth) > 1) {
@@ -566,50 +557,69 @@ function ExactDiscoverShopCard({
           onMomentumScrollEnd={onMomentumScrollEnd}
         >
           {bannerImages.map((imgUri, i) => (
-            <View key={`hero-${i}`} style={{ width: bannerWidth > 0 ? bannerWidth : 360, height: dynamicBannerHeight, overflow: "hidden" }}>
+            <View key={`hero-${i}`} style={{ width: bannerWidth > 0 ? bannerWidth : 360, height: 210, overflow: "hidden" }}>
               <Image source={{ uri: mediaUri(imgUri) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
             </View>
           ))}
         </ScrollView>
 
-        {/* Top Badges Row */}
-        <View style={s.heroTopBadges} pointerEvents="none">
-          <View style={s.heroTopLeftBadges}>
+        {/* Top Badges Row: New pill, Cloud Kitchen pill, Heart Outline */}
+        <View style={discoverCardStyles.heroTopBadges}>
+          <View style={discoverCardStyles.heroTopLeftBadges}>
             {/* New Badge */}
-            <View style={s.badgeNew}>
+            <View style={discoverCardStyles.badgeNew}>
               <Ionicons name="sparkles" size={11} color="#FFFFFF" />
-              <Text style={s.badgeNewText}>New</Text>
+              <Text style={discoverCardStyles.badgeNewText}>New</Text>
             </View>
 
-            {/* Recently Opened */}
-            <View style={s.badgeDark}>
-              <Text style={s.badgeDarkText}>Recently Opened</Text>
-            </View>
-
-            {/* Cloud Kitchen */}
-            <View style={s.badgeLightPill}>
-              <Ionicons name="restaurant" size={12} color="#1A1A1A" />
-              <Text style={s.badgeLightPillText}>Cloud Kitchen</Text>
+            {/* Cloud Kitchen Badge */}
+            <View style={discoverCardStyles.badgeCloudKitchen}>
+              <Ionicons name="restaurant-outline" size={13} color="#6D28D9" />
+              <Text style={discoverCardStyles.badgeCloudKitchenText}>Cloud Kitchen</Text>
             </View>
           </View>
 
-          {/* Top Right: Video duration badge */}
-          <View style={s.badgeVideo}>
-            <Ionicons name="play" size={11} color="#FFFFFF" />
-            <Text style={s.badgeVideoText}>0:20</Text>
-          </View>
+          {/* Top Right: Save icon without background (matching home page full-width cards) */}
+          <Pressable
+            hitSlop={10}
+            onPress={() => {
+              setIsSaved(!isSaved);
+              toast(isSaved ? "Removed from saved" : "Saved to your list");
+            }}
+            style={discoverCardStyles.saveBtn}
+          >
+            {!isSaved ? (
+              <View style={{ width: 22, height: 22, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons
+                  name="bookmark"
+                  size={20}
+                  color="rgba(0, 0, 0, 0.18)"
+                  style={StyleSheet.absoluteFill}
+                />
+                <Ionicons name="bookmark-outline" size={22} color="#FFFFFF" />
+              </View>
+            ) : (
+              <Ionicons name="bookmark" size={22} color="#EA580C" />
+            )}
+          </Pressable>
         </View>
 
-        {/* Bottom Right Carousel Pagination with Duration Animation */}
+        {/* Bottom Left Video Badge (0:20) */}
+        <View style={discoverCardStyles.badgeVideoBottomLeft}>
+          <Ionicons name="play" size={10} color="#FFFFFF" />
+          <Text style={discoverCardStyles.badgeVideoText}>0:20</Text>
+        </View>
+
+        {/* Bottom Right Carousel Pagination Dots */}
         {hasMultiple ? (
-          <View style={s.heroDotsContainer} pointerEvents="none">
+          <View style={discoverCardStyles.heroDotsContainer} pointerEvents="none">
             {bannerImages.map((_, i) => {
               const isCurrent = i === activeBannerIdx;
               return isCurrent ? (
-                <View key={`dot-${i}`} style={s.activeDotTrack}>
+                <View key={`dot-${i}`} style={discoverCardStyles.activeDotTrack}>
                   <RNAnimated.View
                     style={[
-                      s.activeDotFill,
+                      discoverCardStyles.activeDotFill,
                       {
                         width: progressAnim.interpolate({
                           inputRange: [0, 1],
@@ -620,308 +630,157 @@ function ExactDiscoverShopCard({
                   />
                 </View>
               ) : (
-                <View key={`dot-${i}`} style={s.inactiveRoundDot} />
+                <View key={`dot-${i}`} style={discoverCardStyles.inactiveRoundDot} />
               );
             })}
           </View>
         ) : null}
       </View>
 
-      {/* Internal scrollable content so full details remain completely accessible inside the snapped card */}
-      <ScrollView
-        style={s.cardBodyScroll}
-        contentContainerStyle={s.cardBodyScrollContent}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-      >
-        {/* 2. SHOP IDENTITY HEADER (Icon, Title, Heart, Tags, Rating, ETA, Distance, FSSAI) */}
-        <View style={s.shopHeaderRow}>
-          {/* Black Square Logo */}
-          <View style={s.shopLogoBox}>
-            <Ionicons name="restaurant-outline" size={26} color="#FFFFFF" />
-            <Text style={s.shopLogoText}>Test{"\n"}Kitchen</Text>
-          </View>
-
-          {/* Info Column */}
-          <View style={s.shopHeaderInfo}>
-            <View style={s.shopTitleRow}>
-              <Text style={s.shopNameTitle} numberOfLines={1}>
-                {seller.name}
-              </Text>
-              <Pressable
-                hitSlop={8}
-                onPress={() => {
-                  setIsSaved(!isSaved);
-                  toast(isSaved ? "Removed from saved" : "Saved to your list");
-                }}
-                style={s.saveIconBtn}
-              >
-                <Ionicons
-                  name={isSaved ? "bookmark" : "bookmark-outline"}
-                  size={22}
-                  color={isSaved ? "#FC8019" : "#1A1A1A"}
-                />
-              </Pressable>
-            </View>
-
-            {/* Subtitle / Cuisines */}
-            <Text style={s.shopCuisinesText} numberOfLines={1}>
-              {seller.cuisine || "Biryani • North Indian • Indian"}
-            </Text>
-
-            {/* Metrics Row: Rating, Reviews, Time, Distance, FSSAI */}
-            <View style={s.shopMetricsRow}>
-              {/* Green Rating Pill */}
-              <View style={s.ratingBadgeGreen}>
-                <Ionicons name="star" size={11} color="#FFFFFF" />
-                <Text style={s.ratingBadgeText}>{seller.rating ? seller.rating.toFixed(1) : "4.0"}</Text>
-              </View>
-
-              {/* Review count in parentheses */}
-              <Text style={s.reviewsCountText}>({reviewCountDisplay} reviews)</Text>
-
-              {/* Time ETA */}
-              <View style={s.metricItemWithIcon}>
-                <Ionicons name="time-outline" size={13} color="#666666" />
-                <Text style={s.metricText}>{seller.eta_min || 26} mins</Text>
-              </View>
-
-              {/* Distance */}
-              <View style={s.metricItemWithIcon}>
-                <Ionicons name="location-outline" size={13} color="#666666" />
-                <Text style={s.metricText}>{seller.distance_km || 1.5} km</Text>
-              </View>
-
-              {/* FSSAI Verified Pill with Green Check */}
-              <View style={s.fssaiBadge}>
-                <Ionicons name="checkmark-circle" size={13} color="#2E7D32" />
-                <Text style={s.fssaiBadgeText}>FSSAI Verified</Text>
-              </View>
-            </View>
-          </View>
+      {/* 2. IDENTITY HEADER ROW: Logo, Name, FSSAI Verified, Cuisines, Rating, View Menu Button */}
+      <View style={discoverCardStyles.identityRow}>
+        {/* Black Square Logo */}
+        <View style={discoverCardStyles.shopLogoBox}>
+          <Ionicons name="restaurant-outline" size={24} color="#FFFFFF" />
+          <Text style={discoverCardStyles.shopLogoText}>Test{"\n"}Kitchen</Text>
         </View>
 
-        {/* 3. DESCRIPTION WITH CONDITIONAL "Read more" TOGGLE */}
-        <View style={s.descriptionBlock}>
-          <Text style={s.shopDescText}>
-            {displayedDescription}
+        {/* Shop Name, Verified badge & Cuisines */}
+        <View style={discoverCardStyles.identityInfoCol}>
+          <View style={discoverCardStyles.nameVerifiedRow}>
+            <Text style={discoverCardStyles.shopNameTitle} numberOfLines={1}>
+              {seller.name}
+            </Text>
+            <View style={discoverCardStyles.fssaiVerifiedBadge}>
+              <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+              <Text style={discoverCardStyles.fssaiVerifiedText}>FSSAI Verified</Text>
+            </View>
+          </View>
+
+          {/* Cuisines */}
+          <Text style={discoverCardStyles.cuisinesText} numberOfLines={1}>
+            {seller.cuisine || "Biryani  •  Indian  •  Meals"}
           </Text>
-          {canExpand && (
-            <Pressable
-              hitSlop={6}
-              onPress={() => setIsDescExpanded(!isDescExpanded)}
-              style={s.readMoreBtn}
-            >
-              <Text style={s.readMoreText}>{isDescExpanded ? "Show less" : "Read more"}</Text>
-              <Ionicons
-                name={isDescExpanded ? "chevron-up" : "chevron-down"}
-                size={14}
-                color="#FC8019"
-              />
-            </Pressable>
-          )}
-        </View>
 
-        {/* 4. ACTION BUTTONS: Call, Chat, Share, Directions (Brand filled pill) */}
-        <View style={s.actionButtonsRow}>
-          <Pressable style={s.actionOutlineBtn} onPress={handleCall}>
-            <Ionicons name="call-outline" size={16} color="#1A1A1A" />
-            <Text style={s.actionOutlineBtnText}>Call</Text>
-          </Pressable>
-
-          <Pressable style={s.actionOutlineBtn} onPress={handleChat}>
-            <Ionicons name="chatbubble-outline" size={16} color="#1A1A1A" />
-            <Text style={s.actionOutlineBtnText}>Chat</Text>
-          </Pressable>
-
-          <Pressable style={s.actionOutlineBtn} onPress={handleShare}>
-            <Ionicons name="share-social-outline" size={16} color="#1A1A1A" />
-            <Text style={s.actionOutlineBtnText}>Share</Text>
-          </Pressable>
-
-          <Pressable style={s.directionsPillBtn} onPress={handleDirections}>
-            <Ionicons name="navigate" size={15} color="#FC8019" />
-            <Text style={s.directionsPillBtnText}>Directions</Text>
-          </Pressable>
-        </View>
-
-        {/* 5. ADDRESS CARD WITH MINI MAP PREVIEW */}
-        <Pressable style={s.addressCardBox} onPress={handleDirections}>
-          <View style={s.addressPinCircle}>
-            <Ionicons name="location-sharp" size={16} color="#FC8019" />
+          {/* Rating Pill + Review Count */}
+          <View style={discoverCardStyles.ratingRow}>
+            <View style={discoverCardStyles.ratingBadgeGreen}>
+              <Ionicons name="star" size={10} color="#FFFFFF" />
+              <Text style={discoverCardStyles.ratingBadgeText}>{seller.rating ? seller.rating.toFixed(1) : "4.0"}</Text>
+            </View>
+            <Text style={discoverCardStyles.reviewsCountText}>({reviewCountDisplay} reviews)</Text>
           </View>
+        </View>
 
-          <View style={s.addressInfoCol}>
-            <Text style={s.addressTitleLabel}>Address</Text>
-            <Text style={s.addressFullText} numberOfLines={2}>
-              {displayAddress}
+        {/* View Menu > Pill Button on Right */}
+        <Pressable
+          style={discoverCardStyles.viewMenuBtn}
+          onPress={() => router.push(`/seller/${seller.id}`)}
+          testID={`discover-view-menu-${seller.id}`}
+        >
+          <Text style={discoverCardStyles.viewMenuBtnText}>View Menu</Text>
+          <Ionicons name="chevron-forward" size={13} color="#EA580C" />
+        </Pressable>
+      </View>
+
+      {/* 3. DESCRIPTION TEXT */}
+      <View style={discoverCardStyles.descriptionBox}>
+        <Text style={discoverCardStyles.descText} numberOfLines={2}>
+          {fullDescription}
+        </Text>
+      </View>
+
+      {/* 4. METRICS ROW: Time | Distance | Delivery Fee + Info Icon */}
+      <View style={discoverCardStyles.metricsRow}>
+        <View style={discoverCardStyles.metricItem}>
+          <Ionicons name="time-outline" size={14} color="#6B7280" />
+          <Text style={discoverCardStyles.metricText}>{seller.eta_min || 36} mins</Text>
+        </View>
+        <View style={discoverCardStyles.metricDivider} />
+        <View style={discoverCardStyles.metricItem}>
+          <Ionicons name="location-outline" size={14} color="#6B7280" />
+          <Text style={discoverCardStyles.metricText}>{seller.distance_km || 1.5} km</Text>
+        </View>
+        <View style={discoverCardStyles.metricDivider} />
+        <View style={discoverCardStyles.metricItem}>
+          <Ionicons name="bicycle-outline" size={15} color="#6B7280" />
+          <Text style={discoverCardStyles.metricText}>₹30 delivery</Text>
+          <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
+        </View>
+      </View>
+
+      {/* 5. ADDRESS & CALL / DIRECTIONS SECTION (Split box layout) */}
+      <View style={discoverCardStyles.addressSectionRow}>
+        {/* Left: Address with Orange Location Pin */}
+        <View style={discoverCardStyles.addressCol}>
+          <View style={discoverCardStyles.addressPinWrap}>
+            <Ionicons name="location-sharp" size={15} color="#EA580C" />
+          </View>
+          <View style={discoverCardStyles.addressTextCol}>
+            <Text style={discoverCardStyles.addressHeading}>Address</Text>
+            <Text style={discoverCardStyles.addressLineText} numberOfLines={1}>
+              {addressLine1}
+            </Text>
+            <Text style={discoverCardStyles.addressLineText} numberOfLines={1}>
+              {addressLine2}
             </Text>
           </View>
+        </View>
 
-          {/* Stylized Mini Map Card */}
-          <View style={s.miniMapWrapper}>
-            <View style={s.miniMapRoadH} />
-            <View style={s.miniMapRoadV} />
-            <View style={s.miniMapPinDot}>
-              <Ionicons name="location-sharp" size={14} color="#FC8019" />
+        {/* Vertical divider */}
+        <View style={discoverCardStyles.addressVerticalDivider} />
+
+        {/* Right: Call & Directions Pill */}
+        <View style={discoverCardStyles.contactCol}>
+          <Pressable style={discoverCardStyles.callRow} onPress={handleCall}>
+            <Ionicons name="call-outline" size={14} color="#4B5563" />
+            <View>
+              <Text style={discoverCardStyles.callLabel}>Call</Text>
+              <Text style={discoverCardStyles.callNumber}>+91 98765 43210</Text>
             </View>
-            <Ionicons name="chevron-forward" size={14} color="#666666" style={s.mapChevron} />
-          </View>
-        </Pressable>
+          </Pressable>
 
-        {/* 6. SHOP AMBIENCE & HIGHLIGHTS (Horizontal Photos - View All removed per request) */}
-        <View style={s.sectionBlock}>
-          <View style={s.sectionHeaderRow}>
-            <Text style={s.sectionTitleText}>Shop Ambience & Highlights</Text>
-          </View>
+          <Pressable style={discoverCardStyles.directionsBtn} onPress={handleDirections}>
+            <Ionicons name="navigate" size={12} color="#EA580C" />
+            <Text style={discoverCardStyles.directionsBtnText}>Directions</Text>
+          </Pressable>
+        </View>
+      </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={s.ambienceScrollContainer}
-          >
-            {ambienceImages.map((uri, idx) => (
+      {/* 6. AMBIENCE 4-IMAGE ROW (3 Photos + 1 "+5 More" Dark Overlay) */}
+      <View style={discoverCardStyles.ambienceImagesRow}>
+        {ambienceImages.map((uri, idx) => {
+          if (idx === 3) {
+            return (
               <Pressable
                 key={`amb-${seller.id}-${idx}`}
                 onPress={() => onPreviewImage(uri)}
-                style={s.ambienceThumbCard}
+                style={discoverCardStyles.ambienceThumb}
               >
-                <Image source={{ uri: mediaUri(uri) }} style={s.ambienceThumbImg} contentFit="cover" transition={200} />
-                {/* If second item, show video pill 0:18 as in screenshot */}
-                {idx === 1 && (
-                  <View style={s.ambienceVideoPill}>
-                    <Ionicons name="play" size={10} color="#FFFFFF" />
-                    <Text style={s.ambienceVideoText}>0:18</Text>
-                  </View>
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* 7. POPULAR DISHES (Horizontal Dish Cards with Image, Name, Price, +ADD) */}
-        <View style={s.sectionBlock}>
-          <View style={s.sectionHeaderRow}>
-            <Text style={s.sectionTitleText}>Popular Dishes</Text>
-            <Pressable
-              hitSlop={6}
-              onPress={() => router.push(`/seller/${seller.id}`)}
-              style={s.viewAllRow}
-            >
-              <Text style={s.viewAllOrangeText}>View all ({item.total_products || 12})</Text>
-              <Ionicons name="chevron-forward" size={14} color="#FC8019" />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={s.dishesScrollContainer}
-          >
-            {(products && products.length > 0
-              ? products.slice(0, 6)
-              : [
-                  {
-                    id: "sample-1",
-                    seller_id: seller.id,
-                    name: "Test Biryani",
-                    price: 250,
-                    category: "Biryani",
-                    veg: false,
-                    image:
-                      banner_url ||
-                      "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=70",
-                    available: true,
-                    stock: 50,
-                    description: "",
-                  },
-                  {
-                    id: "sample-2",
-                    seller_id: seller.id,
-                    name: "Biryani Speciality",
-                    price: 320,
-                    category: "Biryani",
-                    veg: false,
-                    image:
-                      gallery?.[1] ||
-                      "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=70",
-                    available: true,
-                    stock: 50,
-                    description: "",
-                  },
-                  {
-                    id: "sample-3",
-                    seller_id: seller.id,
-                    name: "Chicken Biryani",
-                    price: 280,
-                    category: "Biryani",
-                    veg: false,
-                    image:
-                      gallery?.[2] ||
-                      "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=70",
-                    available: true,
-                    stock: 50,
-                    description: "",
-                  },
-                ]
-            ).map((prod) => {
-              const isAdding = addingPid === prod.id;
-              return (
-                <View key={prod.id} style={s.popularDishCard}>
-                  <Image
-                    source={{ uri: mediaUri(prod.image || seller.image) }}
-                    style={s.popularDishImg}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                  <View style={s.popularDishContent}>
-                    <Text style={s.popularDishName} numberOfLines={1}>
-                      {prod.name}
-                    </Text>
-                    <Text style={s.popularDishPrice}>{rupee(prod.price)}</Text>
-                    <Pressable
-                      disabled={isAdding}
-                      onPress={() => onAddToCart(prod as Product, seller)}
-                      style={s.popularDishAddBtn}
-                    >
-                      {isAdding ? (
-                        <ActivityIndicator size="small" color="#FC8019" />
-                      ) : (
-                        <>
-                          <Ionicons name="add" size={13} color="#FC8019" />
-                          <Text style={s.popularDishAddText}>ADD</Text>
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
+                <Image source={{ uri: mediaUri(uri) }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                <View style={discoverCardStyles.morePhotosOverlay}>
+                  <Text style={discoverCardStyles.morePhotosCount}>+5</Text>
+                  <Text style={discoverCardStyles.morePhotosLabel}>More</Text>
                 </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Bottom space so content doesn't get obscured by fixed button */}
-        <View style={{ height: 60 }} />
-      </ScrollView>
-
-      {/* 8. BOTTOM ANCHORED CTA: Explore Shop & Full Menu -> */}
-      <View style={s.shopCtaWrapper}>
-        <Pressable
-          style={s.exploreShopBtn}
-          onPress={() => router.push(`/seller/${seller.id}`)}
-          testID={`discover-explore-${seller.id}`}
-        >
-          <Text style={s.exploreShopBtnText}>Explore Shop & Full Menu</Text>
-          <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-        </Pressable>
+              </Pressable>
+            );
+          }
+          return (
+            <Pressable
+              key={`amb-${seller.id}-${idx}`}
+              onPress={() => onPreviewImage(uri)}
+              style={discoverCardStyles.ambienceThumb}
+            >
+              <Image source={{ uri: mediaUri(uri) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
 }
 
-export default function DiscoverScreen() {
+export default function DiscoverScreen({ forcedType }: { forcedType?: string } = {}) {
   const params = useLocalSearchParams<{ type?: string; schedule?: string }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -929,11 +788,12 @@ export default function DiscoverScreen() {
   const qc = useQueryClient();
   const toast = useToast();
 
+  const activeType = forcedType || params.type;
   const isScheduleMode = !!params.schedule;
-  const isFoodMode = params.type === "food";
-  const isGroceryMode = params.type === "grocery";
+  const isFoodMode = activeType === "food";
+  const isGroceryMode = activeType === "grocery";
   const isListViewMode = isScheduleMode || isFoodMode || isGroceryMode;
-  const isDiscoverMode = !params.schedule && (!params.type || params.type === "new");
+  const isDiscoverMode = !params.schedule && (!activeType || activeType === "new");
 
   const [vegOnly, setVegOnly] = useState(false);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
@@ -958,13 +818,11 @@ export default function DiscoverScreen() {
         collapseProgress.value = withTiming(0, TIMING_CONFIG);
       }
     } else if (diff > 12 && currentY > 40) {
-      // User is scrolling content UP (finger moving up) -> hide top title row
       if (!isHiddenRef.current) {
         isHiddenRef.current = true;
         collapseProgress.value = withTiming(1, TIMING_CONFIG);
       }
     } else if (diff < -12) {
-      // User is scrolling content DOWN (finger moving down) -> reveal top title row immediately!
       if (isHiddenRef.current) {
         isHiddenRef.current = false;
         collapseProgress.value = withTiming(0, TIMING_CONFIG);
@@ -982,7 +840,7 @@ export default function DiscoverScreen() {
     };
   });
 
-  const listCategory = params.type || "food";
+  const listCategory = activeType || "food";
   const categoryQuery = useQuery({
     queryKey: ["sellers", listCategory],
     queryFn: () => api<Seller[]>(`/sellers?category=${listCategory}`),
@@ -990,27 +848,37 @@ export default function DiscoverScreen() {
   });
   const [listTitle, listSub] = TITLES[listCategory] ?? ["Shops", ""];
 
-  const [selectedCat, setSelectedCat] = useState<string>("all");
+  // Default filter matches the screenshot: "Newly Opened"
+  const [selectedCat, setSelectedCat] = useState<string>("new");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [addingPid, setAddingPid] = useState<string | null>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(0);
   const [visibleShopId, setVisibleShopId] = useState<string | null>(null);
 
-  // Track the most visible card in the feed
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item: any; isViewable: boolean }> }) => {
-    if (viewableItems && viewableItems.length > 0) {
-      const topVisible = viewableItems.find((v) => v.isViewable) || viewableItems[0];
-      if (topVisible?.item?.seller?.id) {
-        setVisibleShopId(topVisible.item.seller.id);
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ item: any; isViewable: boolean }> }) => {
+      if (viewableItems && viewableItems.length > 0) {
+        // Pick the top visible item with an id
+        const top = viewableItems.find((v) => v.isViewable && v.item?.seller?.id) || viewableItems[0];
+        if (top?.item?.seller?.id) {
+          setVisibleShopId(top.item.seller.id);
+        }
       }
     }
-  }).current;
+  ).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
+    itemVisiblePercentThreshold: 45,
   }).current;
+
+  // User addresses for the location pill in the top header
+  const addrQuery = useQuery({
+    queryKey: ["addresses"],
+    queryFn: () => api<Address[]>("/addresses"),
+    enabled: isDiscoverMode,
+  });
+  const defaultAddress = addrQuery.data?.find((a) => a.is_default);
 
   // Infinite query for discover showcase feed
   const {
@@ -1041,6 +909,8 @@ export default function DiscoverScreen() {
   const showcaseItems = useMemo(() => {
     return (data?.pages.flatMap((page) => page.items) ?? []) as ShowcaseItem[];
   }, [data]);
+
+  const totalShopsCount = data?.pages?.[0]?.total ?? 32;
 
   const addToCart = async (product: Product, seller: Seller) => {
     setAddingPid(product.id);
@@ -1077,8 +947,7 @@ export default function DiscoverScreen() {
             position: "relative",
             zIndex: 10,
             overflow: "hidden",
-            borderBottomWidth: 1,
-            borderBottomColor: colors.divider,
+            borderBottomWidth: 0,
             backgroundColor: colors.surface,
           }}
         >
@@ -1131,7 +1000,7 @@ export default function DiscoverScreen() {
             </View>
           </Animated.View>
 
-          {/* Sticky Search bar & Veg/Non-Veg filter row (always visible!) */}
+          {/* Sticky Search bar & Veg/Non-Veg filter row */}
           <View
             style={{
               paddingHorizontal: spacing.lg,
@@ -1177,21 +1046,16 @@ export default function DiscoverScreen() {
                   ]}
                 />
               </View>
-
-              {/* Vertical divider */}
-              <View style={{ width: 1, height: 20, backgroundColor: "rgba(255, 128, 25, 0.15)" }} />
-
-              {/* Voice mic option */}
               <Pressable
-                testID="listing-voice-mic-button"
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setVoiceModalVisible(true);
+                onPress={() => setVoiceModalVisible(true)}
+                hitSlop={8}
+                style={{
+                  width: 34,
+                  height: 34,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: radius.pill,
                 }}
-                style={({ pressed }) => [
-                  { padding: 4, alignItems: "center", justifyContent: "center" },
-                  pressed && { opacity: 0.7 },
-                ]}
               >
                 <Ionicons name="mic" size={20} color={colors.brandPrimary} />
               </Pressable>
@@ -1206,44 +1070,28 @@ export default function DiscoverScreen() {
           </View>
         </View>
 
-        {/* Voice Search Modal */}
-        <VoiceSearchModal
-          visible={voiceModalVisible}
-          onClose={() => setVoiceModalVisible(false)}
-          onTranscript={(spoken) => {
-            router.push(`/search?q=${encodeURIComponent(spoken)}${vegOnly ? "&veg=1" : ""}`);
-          }}
-        />
-
-        {isScheduleMode ? (
+        {/* Schedule Delivery Mode Banner */}
+        {isScheduleMode && (
           <View
-            testID="listing-schedule-banner"
             style={{
-              margin: spacing.lg,
-              marginBottom: spacing.xs,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+              marginHorizontal: spacing.lg,
+              marginBottom: spacing.md,
               padding: spacing.md,
               borderRadius: radius.md,
               backgroundColor: colors.pastelLilac,
-              flexDirection: "row",
-              gap: spacing.sm,
-              alignItems: "center",
             }}
           >
             <Ionicons name="time-outline" size={20} color={colors.onPastelLilac} />
-            <Text
-              style={{
-                color: colors.onPastelLilac,
-                flex: 1,
-                fontSize: font.sm + 1,
-                fontWeight: "600",
-                lineHeight: 20,
-              }}
-            >
-              Add items, then choose a delivery slot in your cart.
+            <Text style={{ fontSize: font.sm, fontWeight: "600", color: colors.onPastelLilac, flex: 1 }}>
+              Ordering for future delivery • Select your items and schedule date & time at checkout
             </Text>
           </View>
-        ) : null}
+        )}
 
+        {/* Main Shops Listing */}
         {categoryQuery.isLoading ? (
           <Loader />
         ) : categoryQuery.isError ? (
@@ -1284,16 +1132,18 @@ export default function DiscoverScreen() {
             renderItem={({ item }) => (
               <ShopWithItemsCard
                 seller={item}
-                onAddToCart={(p) => addToCart(p, item)}
-                addingPid={addingPid}
                 vegOnly={vegOnly}
+                onAddToCart={(p) => {
+                  addToCart(p, item);
+                }}
+                addingPid={addingPid}
               />
             )}
             ListEmptyComponent={
               <EmptyState
                 icon="storefront-outline"
-                title="No shops here yet"
-                body="We're onboarding more local businesses in your area."
+                title="No shops nearby"
+                body="We couldn't find any open shops in this category near your location."
               />
             }
           />
@@ -1302,29 +1152,48 @@ export default function DiscoverScreen() {
     );
   }
 
+  /* ---------------- DISCOVER PAGE EXACT REDESIGN ---------------- */
   return (
     <View style={s.root}>
       {/* 1. TOP HEADER & SEARCH & CATEGORY CHIPS */}
       <View style={[s.headerContainer, { paddingTop: insets.top + spacing.xs }]}>
-        {/* Title row with back button without background */}
+        {/* Title row with Back button on top left & Location Selector on top right */}
         <View style={s.headerTopRow}>
+          {/* Back Button */}
           <Pressable
-            onPress={() => router.back()}
-            style={s.circularBackBtn}
-            testID="discover-back-btn"
+            testID="discover-back-button"
+            onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+            style={({ pressed }) => [
+              s.backBtn,
+              pressed && { opacity: 0.6, transform: [{ scale: 0.95 }] },
+            ]}
             hitSlop={8}
           >
-            <Ionicons name="chevron-back" size={24} color="#1A1A1A" />
+            <Ionicons name="arrow-back" size={22} color="#111111" />
           </Pressable>
+
           <View style={s.headerTitleCol}>
             <Text style={s.pageTitle}>Discover</Text>
             <Text style={s.pageSubtitle}>Explore newly opened shops near you</Text>
           </View>
+
+          {/* Location selector pill on top right */}
+          <Pressable
+            testID="discover-location-selector"
+            onPress={() => router.push("/addresses")}
+            style={s.locationPill}
+          >
+            <Ionicons name="location-sharp" size={14} color="#EA580C" />
+            <Text style={s.locationPillText} numberOfLines={1}>
+              {defaultAddress?.label || "Visakhapatnam"}
+            </Text>
+            <Ionicons name="chevron-down" size={13} color="#4B5563" />
+          </Pressable>
         </View>
 
-        {/* Pill Search Input */}
+        {/* Pill Search Bar with Filters Sliders Icon */}
         <View style={s.pillSearchBar}>
-          <Ionicons name="search" size={17} color="#7A7A7A" />
+          <Ionicons name="search" size={18} color="#7A7A7A" />
           <TextInput
             style={s.pillSearchInput}
             placeholder="Search for shops, cuisines, dishes..."
@@ -1339,7 +1208,11 @@ export default function DiscoverScreen() {
             <Pressable onPress={clearSearch} hitSlop={6}>
               <Ionicons name="close-circle" size={18} color="#7A7A7A" />
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={s.searchFilterDivider}>
+              <Ionicons name="options-outline" size={18} color="#4B5563" />
+            </View>
+          )}
         </View>
 
         {/* Category Horizontal Filter Chips */}
@@ -1363,7 +1236,7 @@ export default function DiscoverScreen() {
                 <Ionicons
                   name={cat.icon}
                   size={14}
-                  color={isSelected ? "#FFFFFF" : "#1A1A1A"}
+                  color={isSelected ? "#EA580C" : "#1A1A1A"}
                 />
                 <Text
                   style={[
@@ -1379,71 +1252,111 @@ export default function DiscoverScreen() {
         </ScrollView>
       </View>
 
-      {/* 2. SNAP-FITTING CONTINUOUS FEED OF EXACT SHOP CARDS */}
-      <View
-        style={s.feedContainer}
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h > 0 && Math.abs(h - containerHeight) > 2) {
-            setContainerHeight(h);
-          }
-        }}
-      >
-        {isLoading ? (
-          <Loader />
-        ) : isError ? (
-          <ErrorState message={(error as Error)?.message || "Failed to load discovery feed"} onRetry={() => refetch()} />
-        ) : (
-          <FlatList
-            data={showcaseItems}
-            keyExtractor={(item) => item.seller.id}
-            pagingEnabled
-            snapToInterval={containerHeight > 0 ? containerHeight : undefined}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            disableIntervalMomentum={true}
-            showsVerticalScrollIndicator={false}
-            getItemLayout={
-              containerHeight > 0
-                ? (_, i) => ({ length: containerHeight, offset: containerHeight * i, index: i })
-                : undefined
-            }
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
-            refreshing={isRefetching}
-            onRefresh={() => refetch()}
-            onEndReached={() => {
-              if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-            }}
-            onEndReachedThreshold={0.5}
-            renderItem={({ item, index }) => (
-              <ExactDiscoverShopCard
-                item={item}
-                cardHeight={containerHeight}
-                isActive={visibleShopId ? visibleShopId === item.seller.id : index === 0}
-                onAddToCart={addToCart}
-                addingPid={addingPid}
-                onPreviewImage={(uri) => setPreviewImage(uri)}
-              />
-            )}
-            ListFooterComponent={
-              isFetchingNextPage ? (
-                <View style={s.footerLoader}>
-                  <ActivityIndicator size="small" color="#FC8019" />
-                  <Text style={s.footerText}>Loading more businesses...</Text>
+      {/* 2. MAIN SCROLLABLE CONTENT */}
+      {isLoading ? (
+        <DiscoverSkeleton />
+      ) : isError ? (
+        <ErrorState message={(error as Error)?.message || "Failed to load discovery feed"} onRetry={() => refetch()} />
+      ) : (
+        <FlatList
+          data={showcaseItems}
+          keyExtractor={(item) => item.seller.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingBottom: insets.bottom + 32,
+          }}
+          refreshing={isRefetching}
+          onRefresh={() => refetch()}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+          }}
+          onEndReachedThreshold={0.5}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          ListHeaderComponent={
+            <View style={{ paddingHorizontal: 16 }}>
+              {/* Peach Gradient Promo Card */}
+              <View style={s.promoBannerCard}>
+                <LinearGradient
+                  colors={["#FFF4ED", "#FFE5D3", "#FFD7BE"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                {/* Left Promo Text */}
+                <View style={s.promoContentLeft}>
+                  <Text style={s.promoOverline}>EXPLORE</Text>
+                  <Text style={s.promoHeadline}>
+                    Newly Opened{"\n"}
+                    <Text style={{ color: "#EA580C" }}>Shops </Text>
+                    <Text style={{ color: "#EA580C" }}>Near You</Text>
+                  </Text>
+                  <Text style={s.promoSubtext}>
+                    Fresh listings, local favorites & cloud kitchens in your area.
+                  </Text>
+
+                  {/* Carousel pagination indicators */}
+                  <View style={s.promoDotsRow}>
+                    <View style={s.promoDotActive} />
+                    <View style={s.promoDotInactive} />
+                    <View style={s.promoDotInactive} />
+                  </View>
                 </View>
-              ) : undefined
-            }
-            ListEmptyComponent={
-              <EmptyState
-                icon="compass-outline"
-                title="No shops found"
-                body="No recently opened or matching businesses found for this filter. Try another category."
-              />
-            }
-          />
-        )}
-      </View>
+
+                {/* Right Biryani Bowl Image */}
+                <View style={s.promoImageWrap}>
+                  <Image
+                    source={{ uri: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=70" }}
+                    style={s.promoBowlImage}
+                    contentFit="cover"
+                  />
+                </View>
+              </View>
+
+              {/* Newly Added Shops Section Header Row */}
+              <View style={s.sectionHeaderRow}>
+                <Text style={s.sectionHeaderTitle}>Newly Added Shops</Text>
+                <Pressable style={s.viewAllRow} onPress={() => setSelectedCat("all")}>
+                  <Text style={s.viewAllText}>View All ({totalShopsCount})</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#EA580C" />
+                </Pressable>
+              </View>
+            </View>
+          }
+          renderItem={({ item, index }) => {
+            const isCardActive = visibleShopId
+              ? visibleShopId === item.seller.id
+              : index === 0;
+
+            return (
+              <View style={{ paddingHorizontal: 16 }}>
+                <ExactDiscoverShopCard
+                  item={item}
+                  isActive={isCardActive}
+                  onAddToCart={addToCart}
+                  addingPid={addingPid}
+                  onPreviewImage={(uri) => setPreviewImage(uri)}
+                />
+              </View>
+            );
+          }}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={[s.footerLoader, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }]}>
+                <SkeletonBlock width={16} height={16} borderRadius={8} />
+                <Text style={s.footerText}>Loading more businesses...</Text>
+              </View>
+            ) : undefined
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon="compass-outline"
+              title="No shops found"
+              body="No recently opened or matching businesses found for this filter. Try another category."
+            />
+          }
+        />
+      )}
 
       {/* Full-screen Image Preview Modal */}
       <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
@@ -1463,86 +1376,112 @@ export default function DiscoverScreen() {
 const useStyles = makeStyles(() => ({
   root: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FDFBF9",
   },
   headerContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FDFBF9",
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    paddingBottom: 8,
   },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  circularBackBtn: {
+  backBtn: {
     width: 36,
     height: 36,
-    backgroundColor: "transparent",
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 8,
     marginLeft: -4,
   },
   headerTitleCol: {
-    marginLeft: 12,
     flex: 1,
   },
   pageTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: "800",
     color: "#111111",
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   pageSubtitle: {
-    fontSize: 12,
-    color: "#777777",
+    fontSize: 13,
+    color: "#6B7280",
     marginTop: 2,
     fontWeight: "500",
+  },
+  locationPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  locationPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F2937",
+    maxWidth: 110,
   },
   pillSearchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderRadius: radius.lg,
-    paddingHorizontal: 14,
-    height: 50,
-    marginTop: 4,
-    marginBottom: 4,
-    gap: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 48,
+    gap: 10,
     borderWidth: 1,
-    borderColor: "rgba(0, 0, 0, 0.08)",
+    borderColor: "#F0F0F0",
     shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   pillSearchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
     color: "#1A1A1A",
     paddingVertical: 0,
+  },
+  searchFilterDivider: {
+    borderLeftWidth: 1,
+    borderLeftColor: "#E5E7EB",
+    paddingLeft: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
   categoryChipsScroll: {
     flexDirection: "row",
     gap: 8,
-    paddingTop: 12,
-    paddingBottom: 2,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
   categoryChipSelected: {
-    backgroundColor: "#FC8019",
-    borderWidth: 1,
-    borderColor: "#FC8019",
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1.5,
+    borderColor: "#EA580C",
   },
   categoryChipUnselected: {
     backgroundColor: "#FFFFFF",
@@ -1550,512 +1489,105 @@ const useStyles = makeStyles(() => ({
     borderColor: "#E5E7EB",
   },
   categoryChipText: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   categoryChipTextSelected: {
-    color: "#FFFFFF",
+    color: "#EA580C",
     fontWeight: "700",
   },
   categoryChipTextUnselected: {
-    color: "#1F2937",
-    fontWeight: "600",
-  },
-  feedContainer: {
-    flex: 1,
-  },
-  shopCardContainer: {
-    backgroundColor: "#FFFFFF",
-    overflow: "hidden",
-  },
-  cardBodyScroll: {
-    flex: 1,
-  },
-  cardBodyScrollContent: {
-    paddingBottom: 16,
-  },
-
-  /* 1. Hero Banner */
-  heroBannerWrapper: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 20,
-    overflow: "hidden",
-    position: "relative",
-    backgroundColor: "#1A1A1A",
-  },
-  heroTopBadges: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  heroTopLeftBadges: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  badgeNew: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "#EA580C",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeNewText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  badgeDark: {
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeDarkText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  badgeLightPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeLightPillText: {
-    color: "#111111",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  badgeVideo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeVideoText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  heroDotsContainer: {
-    position: "absolute",
-    bottom: 12,
-    right: 14,
-    flexDirection: "row",
-    gap: 5,
-    alignItems: "center",
-  },
-  activeDotTrack: {
-    width: 18,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.4)",
-    overflow: "hidden",
-  },
-  activeDotFill: {
-    height: "100%",
-    backgroundColor: "#FC8019",
-    borderRadius: 3,
-  },
-  inactiveRoundDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.55)",
-  },
-
-  /* 2. Shop Identity Header */
-  shopHeaderRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-  },
-  shopLogoBox: {
-    width: 62,
-    height: 62,
-    borderRadius: 14,
-    backgroundColor: "#111111",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 4,
-  },
-  shopLogoText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "800",
-    textAlign: "center",
-    marginTop: 2,
-    lineHeight: 11,
-  },
-  shopHeaderInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  shopTitleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  shopNameTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111111",
-    flex: 1,
-    letterSpacing: -0.2,
-  },
-  saveIconBtn: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  shopCuisinesText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 3,
-    fontWeight: "500",
-  },
-  shopMetricsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginTop: 7,
-    flexWrap: "wrap",
-  },
-  ratingBadgeGreen: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "#4CAF50",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  ratingBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  reviewsCountText: {
-    fontSize: 11,
-    color: "#4B5563",
-    fontWeight: "500",
-  },
-  metricItemWithIcon: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  metricText: {
-    fontSize: 11,
     color: "#374151",
     fontWeight: "600",
   },
-  fssaiBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "#E8F5E9",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  fssaiBadgeText: {
-    fontSize: 11,
-    color: "#2E7D32",
-    fontWeight: "700",
-  },
-
-  /* 3. Description Block */
-  descriptionBlock: {
-    paddingHorizontal: 16,
-    marginTop: 8,
-  },
-  shopDescText: {
-    fontSize: 13,
-    color: "#4B5563",
-    lineHeight: 18,
-    fontWeight: "400",
-  },
-  readMoreBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    marginTop: 3,
-  },
-  readMoreText: {
-    color: "#FC8019",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  /* 4. Action Buttons */
-  actionButtonsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginTop: 12,
-    gap: 8,
-  },
-  actionOutlineBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    height: 38,
-    borderRadius: 19,
-  },
-  actionOutlineBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1F2937",
-  },
-  directionsPillBtn: {
-    flex: 1.3,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: "#FFF0E5",
-    borderWidth: 1,
-    borderColor: "#FFD8BF",
-    height: 38,
-    borderRadius: 19,
-  },
-  directionsPillBtnText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#FC8019",
-  },
-
-  /* 5. Address Card Box */
-  addressCardBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
+  promoBannerCard: {
+    marginTop: 10,
     borderRadius: 14,
-    padding: 12,
-  },
-  addressPinCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#FFF0E5",
+    overflow: "hidden",
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    padding: 16,
+    minHeight: 140,
+    position: "relative",
+    shadowColor: "#EA580C",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  addressInfoCol: {
-    flex: 1,
-    marginLeft: 10,
-    marginRight: 8,
+  promoContentLeft: {
+    flex: 1.1,
+    paddingRight: 6,
   },
-  addressTitleLabel: {
-    fontSize: 12,
+  promoOverline: {
+    fontSize: 10,
     fontWeight: "800",
-    color: "#111111",
-  },
-  addressFullText: {
-    fontSize: 11,
+    letterSpacing: 1.2,
     color: "#6B7280",
-    marginTop: 2,
+    marginBottom: 4,
+  },
+  promoHeadline: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111111",
+    lineHeight: 22,
+  },
+  promoSubtext: {
+    fontSize: 11,
+    color: "#4B5563",
+    marginTop: 6,
     lineHeight: 15,
   },
-  miniMapWrapper: {
-    width: 90,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: "#FFF3EB",
-    overflow: "hidden",
-    position: "relative",
-    justifyContent: "center",
+  promoDotsRow: {
+    flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#FFE0CC",
+    gap: 4,
+    marginTop: 12,
   },
-  miniMapRoadH: {
-    position: "absolute",
-    height: 8,
-    left: 0,
-    right: 0,
-    top: 18,
-    backgroundColor: "#FFFFFF",
+  promoDotActive: {
+    width: 14,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#EA580C",
   },
-  miniMapRoadV: {
-    position: "absolute",
-    width: 8,
-    top: 0,
-    bottom: 0,
-    left: 40,
-    backgroundColor: "#FFFFFF",
+  promoDotInactive: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
   },
-  miniMapPinDot: {
-    zIndex: 2,
+  promoImageWrap: {
+    flex: 0.9,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  mapChevron: {
-    position: "absolute",
-    right: 4,
-    top: 17,
-  },
-
-  /* 6. Section Block (Ambience & Highlights) */
-  sectionBlock: {
-    marginTop: 14,
+  promoBowlImage: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
   },
   sectionHeaderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 8,
+    justifyContent: "space-between",
+    marginTop: 18,
+    marginBottom: 10,
   },
-  sectionTitleText: {
-    fontSize: 15,
-    fontWeight: "800",
+  sectionHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "900",
     color: "#111111",
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   viewAllRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
   },
-  viewAllOrangeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#FC8019",
-  },
-  ambienceScrollContainer: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  ambienceThumbCard: {
-    width: 105,
-    height: 75,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#E5E7EB",
-    position: "relative",
-  },
-  ambienceThumbImg: {
-    width: "100%",
-    height: "100%",
-  },
-  ambienceVideoPill: {
-    position: "absolute",
-    bottom: 4,
-    right: 4,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  ambienceVideoText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "700",
-  },
-
-  /* 7. Popular Dishes */
-  dishesScrollContainer: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  popularDishCard: {
-    width: 135,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    overflow: "hidden",
-  },
-  popularDishImg: {
-    width: "100%",
-    height: 85,
-    backgroundColor: "#F3F4F6",
-  },
-  popularDishContent: {
-    padding: 8,
-  },
-  popularDishName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111111",
-  },
-  popularDishPrice: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#D97706",
-    marginTop: 3,
-  },
-  popularDishAddBtn: {
-    marginTop: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
-    borderWidth: 1,
-    borderColor: "#FFD8BF",
-    backgroundColor: "#FFF8F2",
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  popularDishAddText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#FC8019",
-  },
-
-  /* 8. Shop CTA */
-  shopCtaWrapper: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    paddingTop: 8,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#F0F0F0",
-  },
-  exploreShopBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#FC8019",
-    height: 44,
-    borderRadius: 10,
-  },
-  exploreShopBtnText: {
+  viewAllText: {
     fontSize: 13,
-    fontWeight: "800",
-    color: "#FFFFFF",
+    fontWeight: "700",
+    color: "#EA580C",
   },
-
   footerLoader: {
     flexDirection: "row",
     alignItems: "center",
@@ -2086,3 +1618,363 @@ const useStyles = makeStyles(() => ({
     height: "80%",
   },
 }));
+
+const discoverCardStyles = StyleSheet.create({
+  cardContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+    marginBottom: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    paddingBottom: 14,
+  },
+  heroBannerWrapper: {
+    height: 210,
+    position: "relative",
+    backgroundColor: "#1A1A1A",
+  },
+  heroTopBadges: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    right: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  heroTopLeftBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  badgeNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EA580C",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  badgeNewText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  badgeCloudKitchen: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F3E8FF",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  badgeCloudKitchenText: {
+    color: "#6D28D9",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  saveBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeVideoBottomLeft: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  badgeVideoText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  heroDotsContainer: {
+    position: "absolute",
+    bottom: 14,
+    right: 14,
+    flexDirection: "row",
+    gap: 4,
+    alignItems: "center",
+  },
+  activeDotTrack: {
+    width: 16,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.4)",
+    overflow: "hidden",
+  },
+  activeDotFill: {
+    height: "100%",
+    backgroundColor: "#EA580C",
+    borderRadius: 3,
+  },
+  inactiveRoundDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#EA580C",
+  },
+  identityRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+  },
+  shopLogoBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "#111111",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 3,
+  },
+  shopLogoText: {
+    color: "#FFFFFF",
+    fontSize: 8,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 1,
+    lineHeight: 9,
+  },
+  identityInfoCol: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 6,
+  },
+  nameVerifiedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  shopNameTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111111",
+    letterSpacing: -0.2,
+  },
+  fssaiVerifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  fssaiVerifiedText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  cuisinesText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 4,
+  },
+  ratingBadgeGreen: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  ratingBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  reviewsCountText: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  viewMenuBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: "center",
+  },
+  viewMenuBtnText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#EA580C",
+  },
+  descriptionBox: {
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+  descText: {
+    fontSize: 12,
+    color: "#4B5563",
+    lineHeight: 17,
+  },
+  metricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    marginTop: 10,
+    gap: 8,
+  },
+  metricItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metricText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  metricDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "#E5E7EB",
+  },
+  addressSectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FAFAFA",
+    marginHorizontal: 14,
+    marginTop: 10,
+    borderRadius: 14,
+    padding: 10,
+    gap: 8,
+  },
+  addressCol: {
+    flex: 1.2,
+    flexDirection: "row",
+    gap: 8,
+  },
+  addressPinWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  addressTextCol: {
+    flex: 1,
+  },
+  addressHeading: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#111111",
+  },
+  addressLineText: {
+    fontSize: 10.5,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  addressVerticalDivider: {
+    width: 1,
+    height: 38,
+    backgroundColor: "#E5E7EB",
+  },
+  contactCol: {
+    flex: 0.9,
+    gap: 6,
+    alignItems: "flex-end",
+  },
+  callRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  callLabel: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#111111",
+  },
+  callNumber: {
+    fontSize: 9.5,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  directionsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFF7ED",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+  },
+  directionsBtnText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#EA580C",
+  },
+  ambienceImagesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    marginTop: 12,
+    gap: 6,
+  },
+  ambienceThumb: {
+    flex: 1,
+    height: 68,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB",
+    position: "relative",
+  },
+  morePhotosOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  morePhotosCount: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  morePhotosLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    marginTop: -2,
+  },
+});

@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Button, EmptyState, ErrorState, Header, Input, Ionicons, Loader, Sheet, useToast } from "@/src/ui";
+import { QrScanModal } from "@/src/components/qr-scan-modal";
 
 type Group = { id: string; name: string; invite_code: string; owner_id: string; members: { user_id: string; name: string }[] };
 const EMPTY_IMG = "https://images.unsplash.com/photo-1547573854-74d2a71d0826?w=800&q=70";
@@ -17,10 +18,19 @@ export default function Groups() {
   const { colors } = useTheme();
   const qc = useQueryClient();
   const toast = useToast();
+  const params = useLocalSearchParams<{ code?: string }>();
   const q = useQuery({ queryKey: ["groups"], queryFn: () => api<Group[]>("/groups") });
   const [sheet, setSheet] = useState<"create" | "join" | null>(null);
+  const [qrScanVisible, setQrScanVisible] = useState(false);
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (params.code) {
+      setVal(params.code.trim().toUpperCase());
+      setSheet("join");
+    }
+  }, [params.code]);
 
   const submit = async () => {
     setBusy(true);
@@ -75,8 +85,28 @@ export default function Groups() {
       <Sheet visible={!!sheet} onClose={() => setSheet(null)} title={sheet === "create" ? "New roommate group" : "Join a group"} testID="group-form-sheet">
         <Input testID="group-form-input" label={sheet === "create" ? "Group name" : "Invite code"} placeholder={sheet === "create" ? "Flat 4B Boys" : "e.g. 3FA9C2"}
           value={val} onChangeText={setVal} autoCapitalize={sheet === "join" ? "characters" : "words"} autoFocus />
+        
+        {sheet === "join" && (
+          <Button
+            variant="ghost"
+            icon="qr-code-outline"
+            title="Scan QR Code"
+            onPress={() => setQrScanVisible(true)}
+          />
+        )}
+
         <Button testID="group-form-submit" title={sheet === "create" ? "Create group" : "Join group"} loading={busy} disabled={val.trim().length < 2} onPress={submit} />
       </Sheet>
+
+      <QrScanModal
+        visible={qrScanVisible}
+        onClose={() => setQrScanVisible(false)}
+        title="Scan roommate invite QR code"
+        onScanCode={(scannedCode) => {
+          setVal(scannedCode);
+          setSheet("join");
+        }}
+      />
     </View>
   );
 }

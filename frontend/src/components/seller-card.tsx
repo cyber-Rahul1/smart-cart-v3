@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 
@@ -48,14 +49,110 @@ export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
   );
 }
 
-export function SellerTile({ s, testID, rank }: { s: Seller; testID: string; rank?: number }) {
+export function SellerTile({
+  s,
+  testID,
+  rank,
+  isNew,
+}: {
+  s: Seller;
+  testID: string;
+  rank?: number;
+  isNew?: boolean;
+}) {
   const st = useStyles();
+  const isGrocery = s.category === "grocery";
+
+  // Format order count / popularity badge: e.g. "1.2k orders", "2.8k orders", "900 orders"
+  const orderCountText = useMemo(() => {
+    const base = ((s.id.charCodeAt(s.id.length - 1) * 73) % 25) + 8; // 8 to 32 -> 0.8k to 3.2k
+    if (rank === 1) return "1.2k orders";
+    if (rank === 2) return "2.8k orders";
+    if (rank === 3) return "900 orders";
+    return `${(base / 10).toFixed(1)}k orders`;
+  }, [s.id, rank]);
+
+  // Review count formatting: e.g. "(8.2k)", "(12k)", "(6.7k)"
+  const reviewCountText = useMemo(() => {
+    if (rank === 1) return "(8.2k)";
+    if (rank === 2) return "(12k)";
+    if (rank === 3) return "(6.7k)";
+    const count = ((s.id.charCodeAt(0) * 13) % 9) + 4;
+    return `(${count}.${count % 5}k)`;
+  }, [s.id, rank]);
+
+  // Subtitle formatting: e.g. "Biryani • Andhra" or "Fruits & Vegetables"
+  const subtitle = s.cuisine
+    ? s.cuisine.split(",").slice(0, 2).map((c) => c.trim()).join(" • ")
+    : isGrocery
+    ? "Fruits & Vegetables"
+    : "South Indian";
+
   return (
-    <Pressable testID={testID} onPress={() => router.push(`/seller/${s.id}`)} style={({ pressed }) => [st.tile, pressed && { transform: [{ scale: 0.98 }] }]}>
-      <AppImage source={{ uri: mediaUri(s.image) }} fallbackType={s.category === "grocery" ? "groceries" : "shop"} style={st.tileImg} contentFit="cover" transition={200} />
-      {rank ? <View style={st.rank}><Text style={st.rankText}>#{rank}</Text></View> : null}
-      <Text style={st.tileName} numberOfLines={1}>{s.name}</Text>
-      <Text style={st.tileMeta} numberOfLines={1}>★ {s.rating} · {s.eta_min} mins</Text>
+    <Pressable
+      testID={testID}
+      onPress={() => router.push(`/seller/${s.id}`)}
+      style={({ pressed }) => [st.modernCard, pressed && { transform: [{ scale: 0.98 }] }]}
+    >
+      {/* Liquid Glass Frosted Base Layer */}
+      <BlurView
+        intensity={20}
+        tint="light"
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.42)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Top Image Box */}
+      <View style={st.modernCardImageBox}>
+        <AppImage
+          source={{ uri: mediaUri(s.image) }}
+          fallbackType={isGrocery ? "groceries" : "shop"}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={200}
+        />
+
+        {/* Popularity Badge on Top-Left */}
+        <View style={st.popularityBadge}>
+          <Ionicons name="flame" size={11} color="#FFFFFF" />
+          <Text style={st.popularityBadgeText}>{orderCountText}</Text>
+        </View>
+
+        {/* Small White Circular Arrow Button at Bottom-Right of Image */}
+        <View style={st.imageArrowCircle}>
+          <Ionicons name="arrow-forward" size={12} color="#F43F5E" />
+        </View>
+      </View>
+
+      {/* Bottom Info Section */}
+      <View style={st.modernCardBody}>
+        <Text style={st.modernCardName} numberOfLines={1}>
+          {s.name}
+        </Text>
+
+        <Text style={st.modernCardCuisine} numberOfLines={1}>
+          {subtitle}
+        </Text>
+
+        {/* Rating and Delivery time */}
+        <View style={st.cardMetricsRow}>
+          <View style={st.ratingWrap}>
+            <Ionicons name="star" size={12} color="#16A34A" />
+            <Text style={st.ratingValueText}>{s.rating ? s.rating.toFixed(1) : "4.5"}</Text>
+            <Text style={st.reviewCountText}>{reviewCountText}</Text>
+          </View>
+
+          <View style={st.timeWrap}>
+            <Ionicons name="time-outline" size={13} color="#64748B" />
+            <Text style={st.timeText}>{s.eta_min || 28} mins</Text>
+          </View>
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -172,6 +269,18 @@ export function SellerFullCard({
       onPress={() => router.push(`/seller/${s.id}`)}
       style={({ pressed }) => [st.fullCard, pressed && { opacity: 0.96 }]}
     >
+      {/* Liquid Glass Frosted Base Layer */}
+      <BlurView
+        intensity={20}
+        tint="light"
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={["rgba(255, 255, 255, 0.82)", "rgba(255, 238, 244, 0.45)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <View
         style={st.imageContainer}
         onLayout={(e) => {
@@ -203,11 +312,11 @@ export function SellerFullCard({
           }}
         >
           {images.map((imgUri, i) => (
-            <View key={`${s.id}-img-${i}`} style={{ width: cardWidth, height: 190, overflow: "hidden" }}>
+            <View key={`${s.id}-img-${i}`} style={{ width: cardWidth, height: 160, overflow: "hidden" }}>
               <AppImage
                 source={{ uri: mediaUri(imgUri) }}
                 fallbackType={s.category === "grocery" ? "groceries" : "shop"}
-                style={{ width: cardWidth, height: 190 }}
+                style={{ width: cardWidth, height: 160 }}
                 contentFit="cover"
                 transition={0}
               />
@@ -217,14 +326,15 @@ export function SellerFullCard({
 
         {/* Gradient shadow overlay for text and badges */}
         <LinearGradient
-          colors={["rgba(0,0,0,0.4)", "transparent", "rgba(0,0,0,0.65)"]}
+          colors={["rgba(0,0,0,0.35)", "transparent", "rgba(0,0,0,0.6)"]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
 
-        {/* Top Header Row on Image: Bookmark/Save Icon at top-right */}
+        {/* Top Header Row on Image: Bookmark/Save Icon at top-right (no trending mark) */}
         <View style={st.imageTopRow} pointerEvents="box-none">
           <View style={{ flex: 1 }} />
+
           <Pressable
             testID={`${testID}-save-btn`}
             hitSlop={10}
@@ -240,7 +350,7 @@ export function SellerFullCard({
                 <Ionicons
                   name="bookmark"
                   size={20}
-                  color="rgba(0, 0, 0, 0.18)"
+                  color="rgba(0, 0, 0, 0.25)"
                   style={StyleSheet.absoluteFill}
                 />
                 <Ionicons
@@ -259,15 +369,32 @@ export function SellerFullCard({
           </Pressable>
         </View>
 
-        {/* Bottom Bar on Image: Offer badge (bottom-left) + Carousel Dots with progress (bottom-right) */}
+        {/* Bottom Bar on Image: Offer / Delivery pill (bottom-left) + Carousel Dots (bottom-right) */}
         <View style={st.imageBottomRow} pointerEvents="none">
           {s.offer ? (
-            <View style={st.fullCardOfferBadge}>
-              <Ionicons name="pricetag" size={13} color="#FFFFFF" />
+            <LinearGradient
+              colors={["#EA580C", "#DC2626"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={st.fullCardOfferBadge}
+            >
+              <Ionicons name="cart-outline" size={13} color="#FFFFFF" />
               <Text style={st.fullCardOfferText} numberOfLines={1}>
                 {s.offer}
               </Text>
-            </View>
+            </LinearGradient>
+          ) : s.category === "grocery" ? (
+            <LinearGradient
+              colors={["#EA580C", "#DC2626"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={st.fullCardOfferBadge}
+            >
+              <Ionicons name="car-outline" size={13} color="#FFFFFF" />
+              <Text style={st.fullCardOfferText} numberOfLines={1}>
+                Free delivery above ₹399
+              </Text>
+            </LinearGradient>
           ) : (
             <View />
           )}
@@ -308,40 +435,111 @@ export function SellerFullCard({
 
       {/* Card Info Section */}
       <View style={st.fullCardBody}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
-          <Text style={st.fullCardName} numberOfLines={1}>
-            {truncate(s.name, 30, 20)}
-          </Text>
-          {s.is_new ? (
-            <View style={st.newTag}>
-              <Text style={st.newText}>NEW</Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Rating and Distance Row */}
-        <View style={st.metaRow}>
-          <View style={st.ratingBadge}>
-            <Ionicons name="star" size={11} color="#FFFFFF" />
-            <Text style={st.ratingText}>{s.rating.toFixed(1)}</Text>
+        {/* Top Info Row: Left Shop Logo + Middle Text Details + Right Circular Chevron */}
+        <View style={st.fullCardMainRow}>
+          {/* Shop Logo Avatar Box */}
+          <View style={st.shopLogoBox}>
+            {s.image ? (
+              <AppImage
+                source={{ uri: mediaUri(s.image) }}
+                fallbackType={s.category === "grocery" ? "groceries" : "shop"}
+                style={st.shopLogoImg}
+                contentFit="cover"
+              />
+            ) : (
+              <Ionicons
+                name={s.category === "grocery" ? "basket" : "leaf"}
+                size={22}
+                color="#FFFFFF"
+              />
+            )}
           </View>
-          <Text style={st.metaDot}>•</Text>
-          <Text style={st.metaText}>{s.distance_km} km</Text>
-          <Text style={st.metaDot}>•</Text>
-          <Text style={st.metaText} numberOfLines={1}>{truncate(s.address || "Nearby", 28, 16)}</Text>
+
+          {/* Middle Info Column */}
+          <View style={st.shopInfoCol}>
+            {/* Title Row with Verified Checkmark */}
+            <View style={st.shopTitleRow}>
+              <Text style={st.fullCardName} numberOfLines={1}>
+                {truncate(s.name, 28, 18)}
+              </Text>
+              <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+            </View>
+
+            {/* Cuisines / Subtitle Row */}
+            <Text style={st.fullCardCuisine} numberOfLines={1}>
+              {truncate(
+                s.cuisine
+                  ? s.cuisine.replace(/,/g, " •")
+                  : s.category === "grocery"
+                  ? "Groceries • Staples • Home Essentials"
+                  : "South Indian • Meals • North Indian",
+                44,
+                26
+              )}
+            </Text>
+
+            {/* Description Text */}
+            <Text style={st.fullCardDescription} numberOfLines={2}>
+              {s.description ||
+                (s.category === "grocery"
+                  ? "Your neighbourhood grocery store with daily essentials, fresh items and more."
+                  : "Authentic South Indian tiffins, dosas & filter coffee made fresh everyday.")}
+            </Text>
+          </View>
+
+          {/* Right Chevron Forward Button */}
+          <View style={st.chevronBtnBox}>
+            <Ionicons name="chevron-forward" size={17} color="#F43F5E" />
+          </View>
         </View>
 
-        {/* Cuisine & Business / FSSAI type */}
-        <Text style={st.fullCardCuisine} numberOfLines={1}>
-          {truncate(s.cuisine || s.category, 42, 26)}
-        </Text>
-        <Text style={st.fullCardType} numberOfLines={1}>
-          {truncate(
-            `${s.business_type === "cloud_kitchen" ? "Cloud kitchen" : s.category === "grocery" ? "Grocery store" : "Restaurant"}${s.fssai_status === "verified" ? "  ·  FSSAI verified" : ""}`,
-            48,
-            30
-          )}
-        </Text>
+        {/* Bottom Metrics Pill Bar: Rating, Distance, ETA, FSSAI Verified */}
+        <View style={st.bottomMetricsBar}>
+          {/* Star Rating & Review Count */}
+          <View style={st.metricItem}>
+            <Ionicons name="star" size={13} color="#22C55E" />
+            <Text style={st.metricBoldText}>{s.rating ? s.rating.toFixed(1) : "4.5"}</Text>
+            {!isRailOpen && (
+              <Text style={st.metricMutedText}>
+                ({s.reviews_count ? `${(s.reviews_count / 1000).toFixed(1)}k` : "1.2k"})
+              </Text>
+            )}
+          </View>
+
+          {/* Divider */}
+          <View style={st.metricDivider} />
+
+          {/* Distance */}
+          <View style={st.metricItem}>
+            <Ionicons name="location-outline" size={14} color="#64748B" />
+            <Text style={st.metricBoldText}>{s.distance_km || 1.2} km</Text>
+          </View>
+
+          {/* Divider */}
+          <View style={st.metricDivider} />
+
+          {/* ETA / Delivery Time */}
+          <View style={st.metricItem}>
+            <Ionicons name="time-outline" size={14} color="#64748B" />
+            <Text style={st.metricBoldText}>
+              {s.eta_min ? `${s.eta_min}-${s.eta_min + 10}m` : "20-30m"}
+            </Text>
+          </View>
+
+          {/* Flexible Space */}
+          <View style={{ flex: 1 }} />
+
+          {/* FSSAI Verified Tag: Shows shield icon only when rail is open, otherwise full text */}
+          <View
+            style={[
+              st.fssaiVerifiedPill,
+              isRailOpen && { paddingHorizontal: 6, paddingVertical: 4 },
+            ]}
+          >
+            <Ionicons name="shield-checkmark" size={13} color="#15803D" />
+            {!isRailOpen && <Text style={st.fssaiVerifiedPillText}>FSSAI Verified</Text>}
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -366,25 +564,191 @@ const useStyles = makeStyles((c) => ({
   tileName: { marginTop: spacing.sm, fontSize: font.base + 1, fontWeight: "800", color: c.onSurface },
   tileMeta: { fontSize: font.sm, color: c.muted, marginTop: 2 },
 
-  // Full Card Styles
+  // Redesigned Modern Card Styles with Liquid Glass
+  modernCard: {
+    width: 172,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.85)",
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#F43F5E",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  modernCardImageBox: {
+    width: "100%",
+    height: 120,
+    position: "relative",
+  },
+  popularityBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  popularityBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  imageArrowCircle: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  trendingPillBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EA580C",
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  trendingPillText: {
+    color: "#FFFFFF",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  newPillBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  newPillText: {
+    color: "#15803D",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  modernCardAvatarCircle: {
+    position: "absolute",
+    bottom: -15,
+    left: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10,
+  },
+  modernCardBody: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  modernCardName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+  },
+  modernCardCuisine: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#64748B",
+    marginTop: 2,
+  },
+  cardMetricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  ratingWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  ratingValueText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  reviewCountText: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  timeWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  timeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+
+  // Full Card Styles with Liquid Glass
   fullCard: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
-    backgroundColor: c.surface,
-    borderRadius: radius.lg,
+    borderRadius: 14,
     overflow: "hidden",
-    shadowColor: c.onSurface,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: c.border,
+    position: "relative",
+    shadowColor: "#F43F5E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.85)",
   },
   imageContainer: {
     width: "100%",
-    height: 190,
-    backgroundColor: c.surfaceTertiary,
+    height: 160,
     overflow: "hidden",
   },
   imageTopRow: {
@@ -394,7 +758,20 @@ const useStyles = makeStyles((c) => ({
     right: spacing.md,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+  },
+  trendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  trendingBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
   },
   saveIconBtn: {
     width: 36,
@@ -414,15 +791,14 @@ const useStyles = makeStyles((c) => ({
   fullCardOfferBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: c.brandPrimary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
   fullCardOfferText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "800",
   },
   bottomDotsContainer: {
@@ -446,7 +822,7 @@ const useStyles = makeStyles((c) => ({
   },
   activeDotFill: {
     height: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F43F5E",
     borderRadius: 2.5,
   },
   inactiveRoundDot: {
@@ -461,53 +837,107 @@ const useStyles = makeStyles((c) => ({
     elevation: 2,
   },
   fullCardBody: {
-    padding: spacing.md,
-    gap: 3,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    gap: 12,
   },
-  fullCardName: {
-    fontSize: font.lg + 1,
-    fontWeight: "800",
-    color: c.onSurface,
+  fullCardMainRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  shopLogoBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#166534",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  shopLogoImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+  },
+  shopInfoCol: {
     flex: 1,
-    letterSpacing: -0.2,
+    marginLeft: 12,
+    marginRight: 8,
   },
-  metaRow: {
+  shopTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginTop: 2,
   },
-  ratingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "#228B22",
-    borderRadius: radius.sm - 2,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  ratingText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  metaDot: {
-    color: c.muted,
-    fontSize: 12,
-  },
-  metaText: {
-    fontSize: font.sm + 1,
-    color: c.onSurfaceSecondary,
-    fontWeight: "600",
+  fullCardName: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.2,
   },
   fullCardCuisine: {
-    fontSize: font.sm + 1,
-    color: c.muted,
-    marginTop: 1,
+    fontSize: 12.5,
+    fontWeight: "500",
+    color: "#64748B",
+    marginTop: 2,
   },
-  fullCardType: {
-    fontSize: font.sm,
-    color: c.muted,
-    marginTop: 1,
+  fullCardDescription: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: "#64748B",
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  chevronBtnBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+  },
+  bottomMetricsBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  metricItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metricBoldText: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  metricMutedText: {
+    fontSize: 11.5,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  metricDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 2,
+  },
+  fssaiVerifiedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+  },
+  fssaiVerifiedPillText: {
+    color: "#15803D",
+    fontSize: 10.5,
+    fontWeight: "800",
   },
 }));

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -10,7 +10,7 @@ import { api } from "@/src/api";
 import { LatLng, OsmMap, OsmMapHandle } from "@/src/components/osm-map";
 import { currentPosition, LocationExplainSheet, useLocationAccess } from "@/src/location";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
-import { Button, Chip, Header, Input, Ionicons, useToast } from "@/src/ui";
+import { Button, Chip, Header, Input, Ionicons, SkeletonBlock, useToast } from "@/src/ui";
 
 const DEFAULT = { lat: 12.9352, lng: 77.6245 }; // Koramangala, Bengaluru
 type Place = { line: string; area: string };
@@ -138,7 +138,7 @@ export default function NewAddress() {
             <Ionicons name="search" size={18} color={colors.muted} />
             <TextInput testID="address-search-input" value={query} onChangeText={setQuery} placeholder="Search area, street or apartment" placeholderTextColor={colors.muted}
               style={s.searchInput} returnKeyType="search" />
-            {searching ? <ActivityIndicator size="small" color={colors.brandPrimary} /> : query ? (
+            {searching ? <SkeletonBlock width={16} height={16} borderRadius={8} /> : query ? (
               <Pressable testID="address-search-clear" hitSlop={10} onPress={() => { setQuery(""); setHits([]); }}><Ionicons name="close-circle" size={18} color={colors.muted} /></Pressable>
             ) : null}
           </View>
@@ -157,7 +157,7 @@ export default function NewAddress() {
           ) : null}
         </View>
         <Pressable testID="address-use-my-location" onPress={useMyLocation} style={s.locBtn}>
-          {locating ? <ActivityIndicator size="small" color={colors.brandPrimary} /> : <Ionicons name="locate" size={18} color={colors.brandPrimary} />}
+          {locating ? <SkeletonBlock width={18} height={18} borderRadius={9} /> : <Ionicons name="locate" size={18} color={colors.brandPrimary} />}
           <Text style={{ color: colors.brandPrimary, fontWeight: "800" }}>Use my location</Text>
         </Pressable>
       </View>

@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Button, EmptyState, ErrorState, Header, Input, Ionicons, Loader, Sheet, useToast } from "@/src/ui";
+import { QrScanModal } from "@/src/components/qr-scan-modal";
 
 type Comm = { id: string; name: string; address: string; invite_code: string; my_flat: string; is_admin: boolean; resident_count: number; flats: string[] };
 const COVER = "https://images.unsplash.com/photo-1515263487990-61b07816b324?w=900&q=70";
@@ -17,11 +18,20 @@ export default function Communities() {
   const { colors } = useTheme();
   const qc = useQueryClient();
   const toast = useToast();
+  const params = useLocalSearchParams<{ code?: string }>();
   const q = useQuery({ queryKey: ["communities"], queryFn: () => api<Comm[]>("/communities") });
   const [sheet, setSheet] = useState<"create" | "join" | null>(null);
+  const [qrScanVisible, setQrScanVisible] = useState(false);
   const [f, setF] = useState({ name: "", address: "", flats: "101, 102, 103, 104, 201, 202, 203, 204", my_flat: "", code: "" });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
+
+  useEffect(() => {
+    if (params.code) {
+      setF((x) => ({ ...x, code: params.code!.trim().toUpperCase() }));
+      setSheet("join");
+    }
+  }, [params.code]);
 
   const submit = async () => {
     setBusy(true);
@@ -80,11 +90,29 @@ export default function Communities() {
             <Input testID="community-flats-input" label="Flat numbers (comma separated)" value={f.flats} onChangeText={set("flats")} multiline />
           </>
         ) : (
-          <Input testID="community-code-input" label="Community code" placeholder="APTXXXXXX" value={f.code} onChangeText={set("code")} autoCapitalize="characters" />
+          <>
+            <Input testID="community-code-input" label="Community code" placeholder="APTXXXXXX" value={f.code} onChangeText={set("code")} autoCapitalize="characters" />
+            <Button
+              variant="ghost"
+              icon="qr-code-outline"
+              title="Scan QR Code"
+              onPress={() => setQrScanVisible(true)}
+            />
+          </>
         )}
         <Input testID="community-myflat-input" label="Your flat" placeholder="101" value={f.my_flat} onChangeText={set("my_flat")} autoCapitalize="characters" />
         <Button testID="community-form-submit" title={sheet === "create" ? "Register community" : "Join community"} loading={busy} onPress={submit} />
       </Sheet>
+
+      <QrScanModal
+        visible={qrScanVisible}
+        onClose={() => setQrScanVisible(false)}
+        title="Scan apartment community QR code"
+        onScanCode={(scannedCode) => {
+          setF((x) => ({ ...x, code: scannedCode }));
+          setSheet("join");
+        }}
+      />
     </View>
   );
 }

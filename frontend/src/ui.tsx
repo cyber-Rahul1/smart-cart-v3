@@ -1,8 +1,9 @@
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { router } from "expo-router";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Modal,
   Pressable,
@@ -48,7 +49,12 @@ export function Button({
         style,
       ]}
     >
-      {loading ? <ActivityIndicator color={fg} /> : (
+      {loading ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <SkeletonBlock width={16} height={16} borderRadius={8} style={{ backgroundColor: fg }} />
+          <SkeletonBlock width={54} height={12} borderRadius={4} style={{ backgroundColor: fg }} />
+        </View>
+      ) : (
         <>
           {icon ? <Ionicons name={icon} size={small ? 16 : 18} color={fg} /> : null}
           <Text style={{ color: fg, fontSize: small ? font.sm : font.lg, fontWeight: "700" }}>{title}</Text>
@@ -133,12 +139,120 @@ export function Header({ title, subtitle, right, back = true }: { title: string;
   );
 }
 
-/* ---------------- States ---------------- */
-export function Loader({ testID = "loading-indicator" }: { testID?: string }) {
+/* ---------------- Shimmering Skeleton Loader ---------------- */
+export function SkeletonBlock({
+  width,
+  height,
+  borderRadius = radius.sm,
+  style,
+}: {
+  width?: number | `${number}%` | "auto";
+  height?: number;
+  borderRadius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
   const { colors } = useTheme();
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmerAnim]);
+
+  const opacity = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.35, 0.85],
+  });
+
   return (
-    <View testID={testID} style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xxl }}>
-      <ActivityIndicator size="large" color={colors.brandPrimary} />
+    <Animated.View
+      style={[
+        {
+          width: width as any,
+          height,
+          borderRadius,
+          backgroundColor: colors.borderStrong || "#E2E5E9",
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+/* ---------------- Modern Shimmering Skeleton Page Loader ---------------- */
+export function Loader({
+  testID = "loading-indicator",
+  type = "default",
+}: {
+  testID?: string;
+  type?: "default" | "list" | "cards";
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      testID={testID}
+      style={{
+        flex: 1,
+        paddingHorizontal: spacing.lg,
+        paddingTop: spacing.xl,
+        gap: spacing.lg,
+        backgroundColor: colors.surface,
+      }}
+    >
+      {/* Top Banner / Hero Skeleton */}
+      <View style={{ gap: spacing.sm }}>
+        <SkeletonBlock height={140} borderRadius={radius.lg} />
+      </View>
+
+      {/* Row of Avatar / Pill Chips Skeleton */}
+      <View style={{ flexDirection: "row", gap: spacing.md, overflow: "hidden" }}>
+        {[1, 2, 3, 4].map((i) => (
+          <View key={i} style={{ alignItems: "center", gap: 6 }}>
+            <SkeletonBlock width={54} height={54} borderRadius={27} />
+            <SkeletonBlock width={48} height={10} borderRadius={4} />
+          </View>
+        ))}
+      </View>
+
+      {/* Repeating List Item Cards */}
+      <View style={{ gap: spacing.md, marginTop: spacing.xs }}>
+        {[1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={{
+              flexDirection: "row",
+              gap: spacing.md,
+              alignItems: "center",
+              padding: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.surfaceSecondary,
+            }}
+          >
+            <SkeletonBlock width={64} height={64} borderRadius={radius.md} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <SkeletonBlock width="75%" height={14} borderRadius={4} />
+              <SkeletonBlock width="45%" height={10} borderRadius={4} />
+              <SkeletonBlock width="30%" height={12} borderRadius={4} />
+            </View>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -164,10 +278,28 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
 /* ---------------- Veg dot ---------------- */
 export function VegMark({ veg }: { veg?: boolean }) {
   const { colors } = useTheme();
-  const c = veg ? colors.success : colors.error;
+  if (veg) {
+    return (
+      <View style={{ width: 14, height: 14, borderWidth: 1.2, borderColor: "#16A34A", borderRadius: 3, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#16A34A" }} />
+      </View>
+    );
+  }
+  // Non-veg mark: brown/red triangle inside border matching Food Delivery standard
   return (
-    <View style={{ width: 14, height: 14, borderWidth: 1.5, borderColor: c, borderRadius: 3, alignItems: "center", justifyContent: "center" }}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c }} />
+    <View style={{ width: 14, height: 14, borderWidth: 1.2, borderColor: "#B91C1C", borderRadius: 3, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}>
+      <View style={{
+        width: 0,
+        height: 0,
+        backgroundColor: "transparent",
+        borderStyle: "solid",
+        borderLeftWidth: 3.5,
+        borderRightWidth: 3.5,
+        borderBottomWidth: 6,
+        borderLeftColor: "transparent",
+        borderRightColor: "transparent",
+        borderBottomColor: "#B91C1C",
+      }} />
     </View>
   );
 }
@@ -332,14 +464,88 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 /* ---------------- Section title ---------------- */
-export function SectionTitle({ title, action, onAction, testID }: { title: string; action?: string; onAction?: () => void; testID?: string }) {
+export function SectionTitle({
+  title,
+  subtitle,
+  icon,
+  iconBg,
+  iconColor,
+  action,
+  onAction,
+  testID,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  iconBg?: string;
+  iconColor?: string;
+  action?: string;
+  onAction?: () => void;
+  testID?: string;
+}) {
   const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.md }}>
-      <Text style={{ flex: 1, fontSize: font.lg + 1, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.2 }}>{title}</Text>
+      {icon ? (
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            backgroundColor: iconBg || "#FCE7F3",
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 10,
+          }}
+        >
+          <Ionicons name={icon as any} size={20} color={iconColor || "#F43F5E"} />
+        </View>
+      ) : null}
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: "900", color: "#0F172A", letterSpacing: -0.3 }}>{title}</Text>
+        {subtitle ? (
+          <Text style={{ fontSize: 12, fontWeight: "500", color: "#64748B", marginTop: 2 }}>{subtitle}</Text>
+        ) : null}
+      </View>
       {action ? (
-        <Pressable testID={testID} onPress={onAction} hitSlop={8}>
-          <Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>{action}</Text>
+        <Pressable
+          testID={testID}
+          onPress={onAction}
+          hitSlop={8}
+          style={({ pressed }) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 20,
+              borderWidth: 1.2,
+              borderColor: "rgba(255, 255, 255, 0.9)",
+              overflow: "hidden",
+              position: "relative",
+              shadowColor: "#F43F5E",
+              shadowOpacity: 0.05,
+              shadowRadius: 5,
+              shadowOffset: { width: 0, height: 1.5 },
+            },
+            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
+          ]}
+        >
+          {/* Frosted Liquid Glass Base for See All */}
+          <BlurView
+            intensity={20}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(255, 255, 255, 0.75)", "rgba(255, 235, 242, 0.35)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={{ color: "#F43F5E", fontWeight: "800", fontSize: 12 }}>{action}</Text>
+          <Ionicons name="arrow-forward" size={13} color="#F43F5E" />
         </Pressable>
       ) : null}
     </View>

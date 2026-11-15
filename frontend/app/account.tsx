@@ -26,7 +26,30 @@ export default function Account() {
 
   return (
     <View style={s.root}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + spacing.lg, paddingBottom: bottomChrome + spacing.xl }}>
+      {/* Top Header Row with Back button and Title */}
+      <View style={{ paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Pressable
+          testID="account-back-button"
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={({ pressed }) => [
+            {
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: colors.surfaceSecondary,
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
+        </Pressable>
+        <Text style={{ fontSize: 20, fontWeight: "900", color: colors.onSurface }}>Account & Profile</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: bottomChrome + spacing.xl }}>
         <View style={s.profile}>
           <View style={s.avatar}><Text style={s.avatarText}>{(user?.name || "G").slice(0, 1).toUpperCase()}</Text></View>
           <View style={{ flex: 1 }}>

@@ -20,6 +20,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/src/auth";
@@ -27,23 +28,25 @@ import { ROLE_HOME, usesNativeTabs } from "@/src/navigation";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Ionicons, IconName } from "@/src/ui";
 import { TabBarVisibilityProvider, useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+import { useCartSummary } from "@/src/cart";
 
 import HomeScreen from "./index";
 import Reels from "./reels";
 import CartScreen from "./cart";
-import Account from "./account";
+import ListingFood from "../listing/[type]";
+import GroceriesScreen from "../groceries";
 
 const TABS: { name: string; title: string; icon: IconName; active: IconName; sf: string }[] = [
-  { name: "index", title: "Home", icon: "home-outline", active: "home", sf: "house.fill" },
-  { name: "reels", title: "Bites", icon: "play-circle-outline", active: "play-circle", sf: "play.rectangle.fill" },
-  { name: "cart", title: "Cart", icon: "bag-handle-outline", active: "bag-handle", sf: "bag.fill" },
-  { name: "account", title: "Account", icon: "person-circle-outline", active: "person-circle", sf: "person.crop.circle.fill" },
+  { name: "index", title: "Home", icon: "home", active: "home", sf: "house.fill" },
+  { name: "food", title: "Food", icon: "restaurant-outline", active: "restaurant", sf: "fork.knife" },
+  { name: "groceries", title: "Groceries", icon: "bag-handle-outline", active: "bag-handle", sf: "bag.fill" },
 ];
 
 function TabsContent() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { totalCount: cartCount } = useCartSummary();
   const {
     tabBarTranslateY,
     activeTabIndex,
@@ -51,6 +54,7 @@ function TabsContent() {
     setScrollPageToHandler,
     isPagerScrollEnabled,
     isBottomNavHidden,
+    setIsBottomNavHidden,
   } = useTabBarVisibility();
 
   const [pageWidth, setPageWidth] = useState(Dimensions.get("window").width);
@@ -78,12 +82,19 @@ function TabsContent() {
     });
   }, [activeTabIndex]);
 
+  // Ensure tab bar is always visible when navigating away from Home (activeTabIndex !== 0)
+  useEffect(() => {
+    if (activeTabIndex !== 0) {
+      tabBarTranslateY.value = withTiming(0, { duration: 200 });
+      setIsBottomNavHidden(false);
+    }
+  }, [activeTabIndex]);
+
   const tabWidth = pageWidth / TABS.length;
 
   const animBubbleStyle = useAnimatedStyle(() => {
-    const bubbleW = 68;
-    const bubbleH = 48;
-    // Calculate centered translateX for current animated bubble position
+    const bubbleW = 56;
+    // Calculate centered translateX for current animated bubble position specifically over the icon
     const translateX = bubblePosition.value * tabWidth + (tabWidth - bubbleW) / 2;
     return {
       transform: [
@@ -128,12 +139,10 @@ function TabsContent() {
     switch (tabName) {
       case "index":
         return <HomeScreen />;
-      case "reels":
-        return <Reels />;
-      case "cart":
-        return <CartScreen />;
-      case "account":
-        return <Account />;
+      case "food":
+        return <ListingFood forcedType="food" />;
+      case "groceries":
+        return <GroceriesScreen />;
       default:
         return null;
     }
@@ -169,7 +178,7 @@ function TabsContent() {
         )}
       />
 
-      {/* Synchronized Custom Bottom Tab Bar */}
+      {/* Synchronized Custom Bottom Tab Bar with High-Opacity Frost Glass */}
       {!isBottomNavHidden && (
         <Animated.View
           style={[
@@ -178,29 +187,48 @@ function TabsContent() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: colors.surface,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
+              borderTopLeftRadius: 36,
+              borderTopRightRadius: 36,
+              overflow: "hidden",
               flexDirection: "row",
               alignItems: "center",
               paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.xs,
-              height: insets.bottom > 0 ? insets.bottom + 52 : 60,
+              height: insets.bottom > 0 ? insets.bottom + 46 : 56,
+              shadowColor: "#F43F5E",
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.08,
+              shadowRadius: 14,
             },
             animTabBarStyle,
           ]}
         >
-          {/* Animated Sliding Subtle Minimal Pill */}
+          {/* High-Opacity Frosted Glass Base - Opaque enough to completely mask scrolling cards */}
+          <BlurView
+            intensity={65}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(255, 255, 255, 0.96)", "rgba(255, 244, 247, 0.92)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Animated Sliding Bubble Behind Active Icon Only */}
           <Animated.View
             pointerEvents="none"
             style={[
               {
                 position: "absolute",
-                top: 5,
-                width: 64,
-                height: 46,
-                borderRadius: 23,
+                top: 4,
+                width: 56,
+                height: 30,
+                borderRadius: 15,
                 overflow: "hidden",
-                backgroundColor: "rgba(252, 128, 25, 0.08)",
+                backgroundColor: "rgba(244, 63, 94, 0.12)",
+                borderWidth: 1,
+                borderColor: "rgba(244, 63, 94, 0.22)",
               },
               animBubbleStyle,
             ]}
@@ -208,7 +236,7 @@ function TabsContent() {
 
           {TABS.map((t, idx) => {
             const focused = activeTabIndex === idx;
-            const color = focused ? colors.brandPrimary : colors.muted;
+            const color = focused ? "#F43F5E" : "#64748B";
             return (
               <Pressable
                 key={t.name}
@@ -224,20 +252,24 @@ function TabsContent() {
                   flex: 1,
                   alignItems: "center",
                   justifyContent: "center",
-                  paddingVertical: 6,
+                  paddingVertical: 2,
                   gap: 2,
+                  position: "relative",
                 }}
               >
-                <Ionicons
-                  name={focused ? t.active : t.icon}
-                  size={24}
-                  color={color}
-                />
+                <View style={{ width: 56, height: 30, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons
+                    name={focused ? t.active : t.icon}
+                    size={21}
+                    color={color}
+                  />
+                </View>
                 <Text
                   style={{
                     color,
-                    fontWeight: "700",
-                    fontSize: 11,
+                    fontWeight: focused ? "800" : "600",
+                    fontSize: 10,
+                    letterSpacing: -0.1,
                   }}
                 >
                   {t.title}

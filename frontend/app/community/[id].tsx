@@ -11,6 +11,7 @@ import { DELIVERY_AFTER, SellerPicker, TimePicker } from "@/src/components/picke
 import { timeLeft } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Button, ErrorState, Header, Input, Ionicons, Loader, Sheet, useToast } from "@/src/ui";
+import { ShareCodeModal } from "@/src/components/share-code-modal";
 
 type CD = { id: string; name: string; address: string; invite_code: string; my_flat: string; is_admin: boolean; resident_count: number; flats: string[];
   baskets: { id: string; title: string; seller_name: string; status: string; closes_at: string; flat_count: number }[] };
@@ -29,6 +30,7 @@ export default function CommunityDetail() {
   const [closes, setCloses] = useState<number | null>(60);
   const [after, setAfter] = useState<number | null>(45);
   const [busy, setBusy] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   if (q.isLoading) return <Loader />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />;
@@ -62,13 +64,16 @@ export default function CommunityDetail() {
           </LinearGradient>
         </View>
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
-          <Pressable testID="community-share-code" onPress={() => Share.share({ message: `Join ${c.name} on GathrCart with code ${c.invite_code}` })}
+          <Pressable testID="community-share-code" onPress={() => setShareModalVisible(true)}
             style={{ flexDirection: "row", alignItems: "center", padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.pastelSky }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.onPastelSky, fontWeight: "600", fontSize: font.sm + 1 }}>Resident invite code</Text>
+              <Text style={{ color: colors.onPastelSky, fontWeight: "600", fontSize: font.sm + 1 }}>Resident invite QR / link / code</Text>
               <Text testID="community-invite-code" style={{ color: colors.onPastelSky, fontWeight: "900", fontSize: font.xxl, letterSpacing: 2 }}>{c.invite_code}</Text>
             </View>
-            <Ionicons name="share-social" size={22} color={colors.onPastelSky} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Ionicons name="qr-code-outline" size={24} color={colors.onPastelSky} />
+              <Ionicons name="share-social" size={22} color={colors.onPastelSky} />
+            </View>
           </Pressable>
 
           <Text style={{ fontWeight: "800", fontSize: font.lg, color: colors.onSurface }}>Community baskets</Text>
@@ -99,6 +104,14 @@ export default function CommunityDetail() {
         <TimePicker testPrefix="basket-deliver" value={after} onChange={setAfter} options={DELIVERY_AFTER} />
         <Button testID="basket-create-submit" title="Open basket" loading={busy} onPress={create} />
       </Sheet>
+
+      <ShareCodeModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        type="community"
+        title={c.name}
+        code={c.invite_code}
+      />
     </View>
   );
 }

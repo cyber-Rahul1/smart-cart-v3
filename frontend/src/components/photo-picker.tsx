@@ -2,12 +2,12 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
-import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 
 import { getAccessToken } from "@/src/api";
 import { mediaUri } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
-import { Button, Sheet, useToast } from "@/src/ui";
+import { Button, Sheet, SkeletonBlock, useToast } from "@/src/ui";
 import { uploadForm } from "@/src/utils/upload";
 
 /** Pick a photo from the library (with a pre-permission explanation) and upload it to object storage. */
@@ -65,7 +65,7 @@ export function PhotoPicker({ url, onChange, testID, label = "Upload photo" }: {
       <Pressable testID={testID} onPress={start} disabled={busy}
         style={{ minHeight: 52, borderRadius: radius.md, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary,
           flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }}>
-        {busy ? <ActivityIndicator color={colors.brandPrimary} /> : <Ionicons name="camera-outline" size={20} color={colors.brandPrimary} />}
+        {busy ? <SkeletonBlock width={20} height={20} borderRadius={10} /> : <Ionicons name="camera-outline" size={20} color={colors.brandPrimary} />}
         <Text style={{ color: colors.brandPrimary, fontWeight: "800", fontSize: font.base }}>{busy ? "Uploading…" : url ? "Change photo" : label}</Text>
       </Pressable>
       <Sheet visible={!!explain} onClose={() => setExplain(null)} title="Allow photo access" testID={`${testID}-permission-sheet`}>

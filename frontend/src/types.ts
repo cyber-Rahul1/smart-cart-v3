@@ -29,7 +29,21 @@ export type Bill = {
   subtotal: number; discount: number; coupon?: string | null; delivery_fee: number; delivery_cost: number; delivery_funding: string;
   credit_used: number; convenience_fee: number; total: number; error?: string;
 };
-export type Line = { product_id: string; qty: number; name: string; price: number; image?: string; veg?: boolean; line_total: number; id?: string; user_id?: string; user_name?: string };
+export type Line = {
+  product_id: string;
+  qty: number;
+  name: string;
+  price: number;
+  image?: string;
+  veg?: boolean;
+  line_total: number;
+  id?: string;
+  user_id?: string;
+  user_name?: string;
+  seller_id?: string;
+  seller_name?: string;
+  seller_image?: string;
+};
 export type Address = { id: string; label: string; line: string; landmark: string; is_default: boolean; lat?: number; lng?: number };
 export type Order = {
   id: string; order_no: string; user_id: string; seller_id: string; seller_name: string; seller_image: string; kind: "individual" | "group" | "community_flat";
