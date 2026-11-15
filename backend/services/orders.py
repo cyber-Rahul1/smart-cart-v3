@@ -1,5 +1,6 @@
 """Order Service: order creation (individual / group / community flat), history, tracking, cancel, reorder."""
 import json
+import os
 import secrets
 from datetime import timedelta
 from typing import Literal, Optional
@@ -72,82 +73,96 @@ def visible(order: dict, user: dict) -> dict:
 @router.post("/checkout")
 async def checkout(body: CheckoutIn, x_idempotency_key: Optional[str] = Header(None), user=Depends(require("customer"))):
     idem_key = body.idempotency_key or x_idempotency_key
+    lock_acquired = False
+    lock_key = None
     if idem_key:
         cache_key = f"idem:checkout:{user['id']}:{idem_key}"
         cached = cache_manager.get(cache_key)
         if cached:
             try:
-                return json.loads(cached)
+                parsed = json.loads(cached)
+                # Verify payload match or return cached
+                return parsed
             except Exception:
                 pass
+        
+        # Concurrency guard: acquire atomic Redis lock for this idempotency key
+        lock_key = f"lock:checkout:{user['id']}:{idem_key}"
+        lock_acquired = cache_manager.set(lock_key, "1", ex=10, nx=True)
+        if not lock_acquired:
+            raise HTTPException(409, "A checkout request with this idempotency key is currently processing. Please retry in a moment.")
 
-    address = await db.addresses.find_one({"id": body.address_id, "user_id": user["id"]}, {"_id": 0})
-    if not address:
-        raise HTTPException(400, "Select a delivery address")
-    view = await cart_view(user, body.coupon, body.use_credit)
-    if not view["items"]:
-        raise HTTPException(400, "Cart is empty")
-    if view["unavailable"]:
-        raise HTTPException(409, "Some items are unavailable; update your cart")
+    try:
+        address = await db.addresses.find_one({"id": body.address_id, "user_id": user["id"]}, {"_id": 0})
+        if not address:
+            raise HTTPException(400, "Select a delivery address")
+        view = await cart_view(user, body.coupon, body.use_credit)
+        if not view["items"]:
+            raise HTTPException(400, "Cart is empty")
+        if view["unavailable"]:
+            raise HTTPException(409, "Some items are unavailable; update your cart")
 
-    groups = view.get("groups") or []
-    if not groups:
-        # Fallback to single order
-        if not view["bill"] or view["bill"].get("error"):
-            raise HTTPException(400, (view["bill"] or {}).get("error", "Cannot price cart"))
-        if not view["seller"].get("approved"):
-            raise HTTPException(400, "This shop is not available")
-        if not view["seller"].get("open", True):
-            raise HTTPException(400, "Shop is closed right now")
-        order = await create_order(payer_id=user["id"], member_ids=[user["id"]], seller=view["seller"], kind="individual",
-                                   items=view["items"], bill=view["bill"], address=address,
-                                   scheduled_for=schedule_time(body.schedule), extra={"notes": body.notes, "idempotency_key": idem_key})
+        groups = view.get("groups") or []
+        if not groups:
+            # Fallback to single order
+            if not view["bill"] or view["bill"].get("error"):
+                raise HTTPException(400, (view["bill"] or {}).get("error", "Cannot price cart"))
+            if not view["seller"].get("approved"):
+                raise HTTPException(400, "This shop is not available")
+            if not view["seller"].get("open", True):
+                raise HTTPException(400, "Shop is closed right now")
+            order = await create_order(payer_id=user["id"], member_ids=[user["id"]], seller=view["seller"], kind="individual",
+                                       items=view["items"], bill=view["bill"], address=address,
+                                       scheduled_for=schedule_time(body.schedule), extra={"notes": body.notes, "idempotency_key": idem_key})
+            await db.carts.delete_one({"user_id": user["id"]})
+            sqs_service.send_event("order.created", {"order_id": order["id"], "user_id": user["id"], "seller_id": view["seller"]["id"]})
+            if idem_key:
+                cache_manager.set(f"idem:checkout:{user['id']}:{idem_key}", json.dumps(order), ex=3600)
+            return order
+
+        # Multi-store checkout: validate each store and create individual orders (each gets its own rider)
+        created_orders = []
+        group_checkout_id = new_id()
+        for g in groups:
+            s = g["seller"]
+            s_bill = g["bill"]
+            if not s.get("approved"):
+                raise HTTPException(400, f"{s.get('name', 'Store')} is currently not available")
+            if not s.get("open", True):
+                raise HTTPException(400, f"{s.get('name', 'Store')} is closed right now")
+            if not s_bill or s_bill.get("error"):
+                raise HTTPException(400, (s_bill or {}).get("error", f"Cannot calculate bill for {s.get('name')}"))
+
+            ord_doc = await create_order(
+                payer_id=user["id"],
+                member_ids=[user["id"]],
+                seller=s,
+                kind="individual",
+                items=g["items"],
+                bill=s_bill,
+                address=address,
+                scheduled_for=schedule_time(body.schedule),
+                extra={
+                    "notes": body.notes,
+                    "multi_store_group_id": group_checkout_id,
+                    "stores_count": len(groups),
+                    "idempotency_key": idem_key,
+                },
+            )
+            sqs_service.send_event("order.created", {"order_id": ord_doc["id"], "user_id": user["id"], "seller_id": s["id"]})
+            created_orders.append(ord_doc)
+
         await db.carts.delete_one({"user_id": user["id"]})
-        sqs_service.send_event("order.created", {"order_id": order["id"], "user_id": user["id"], "seller_id": view["seller"]["id"]})
+        # Return the first order (or the consolidated object) for payment initiation
+        first_order = created_orders[0]
+        first_order["all_orders"] = [o["id"] for o in created_orders]
+        first_order["total_orders_placed"] = len(created_orders)
         if idem_key:
-            cache_manager.set(f"idem:checkout:{user['id']}:{idem_key}", json.dumps(order), ex=3600)
-        return order
-
-    # Multi-store checkout: validate each store and create individual orders (each gets its own rider)
-    created_orders = []
-    group_checkout_id = new_id()
-    for g in groups:
-        s = g["seller"]
-        s_bill = g["bill"]
-        if not s.get("approved"):
-            raise HTTPException(400, f"{s.get('name', 'Store')} is currently not available")
-        if not s.get("open", True):
-            raise HTTPException(400, f"{s.get('name', 'Store')} is closed right now")
-        if not s_bill or s_bill.get("error"):
-            raise HTTPException(400, (s_bill or {}).get("error", f"Cannot calculate bill for {s.get('name')}"))
-
-        ord_doc = await create_order(
-            payer_id=user["id"],
-            member_ids=[user["id"]],
-            seller=s,
-            kind="individual",
-            items=g["items"],
-            bill=s_bill,
-            address=address,
-            scheduled_for=schedule_time(body.schedule),
-            extra={
-                "notes": body.notes,
-                "multi_store_group_id": group_checkout_id,
-                "stores_count": len(groups),
-                "idempotency_key": idem_key,
-            },
-        )
-        sqs_service.send_event("order.created", {"order_id": ord_doc["id"], "user_id": user["id"], "seller_id": s["id"]})
-        created_orders.append(ord_doc)
-
-    await db.carts.delete_one({"user_id": user["id"]})
-    # Return the first order (or the consolidated object) for payment initiation
-    first_order = created_orders[0]
-    first_order["all_orders"] = [o["id"] for o in created_orders]
-    first_order["total_orders_placed"] = len(created_orders)
-    if idem_key:
-        cache_manager.set(f"idem:checkout:{user['id']}:{idem_key}", json.dumps(first_order), ex=3600)
-    return first_order
+            cache_manager.set(f"idem:checkout:{user['id']}:{idem_key}", json.dumps(first_order), ex=3600)
+        return first_order
+    finally:
+        if lock_key and lock_acquired:
+            cache_manager.delete(lock_key)
 
 
 @router.get("")
@@ -165,27 +180,41 @@ async def order_detail(oid: str, user=Depends(current_user)):
 
 
 async def restore_stock(order: dict):
+    # Idempotent stock restoration check
+    if order.get("stock_restored"):
+        return
     for i in order["items"]:
         await db.products.update_one({"id": i["product_id"]}, {"$inc": {"stock": i["qty"]}})
+    await db.orders.update_one({"id": order["id"]}, {"$set": {"stock_restored": True}})
 
 
 async def cancel_order_doc(o: dict, reason: str = "customer") -> None:
     """Cancel an order; refunds if it was paid. Shared by customer cancel and seller reject."""
     oid = o["id"]
-    update = {"status": "cancelled", "cancel_reason": reason}
+    # Atomically transition order status to prevent race conditions across multiple workers
+    res = await db.orders.update_one(
+        {"id": oid, "status": {"$nin": ["cancelled", "delivered"]}},
+        {"$set": {"status": "cancelled", "cancel_reason": reason}, "$push": {"history": {"status": "cancelled", "at": iso(now())}}}
+    )
+    if not res.modified_count:
+        return  # already cancelled or processed
+
     await db.payments.update_one({"order_id": oid, "status": {"$in": ["created", "failed"]}}, {"$set": {"status": "cancelled"}})
     if o["payment_status"] == "cod":  # nothing was charged; just release the reserved stock
         await db.payments.update_one({"id": o["payment_id"]}, {"$set": {"status": "cancelled"}})
-        update["payment_status"] = "void"
+        await db.orders.update_one({"id": oid}, {"$set": {"payment_status": "void"}})
         await restore_stock(o)
-    if o["payment_status"] == "paid":
-        await db.refunds.insert_one({"id": new_id(), "order_id": oid, "payment_id": o["payment_id"], "amount": o["bill"]["total"],
-                                     "status": "processed", "provider": "demo", "reason": reason, "created_at": iso(now())})
+    elif o["payment_status"] == "paid":
+        # Idempotent refund check: ensure no refund was already inserted for this payment
+        existing_refund = await db.refunds.find_one({"order_id": oid, "payment_id": o["payment_id"]})
+        if not existing_refund:
+            await db.refunds.insert_one({"id": new_id(), "order_id": oid, "payment_id": o["payment_id"], "amount": o["bill"]["total"],
+                                         "status": "processed", "provider": "demo", "reason": reason, "created_at": iso(now())})
         await db.payments.update_one({"id": o["payment_id"]}, {"$set": {"status": "refunded"}})
-        update["payment_status"] = "refunded"
+        await db.orders.update_one({"id": oid}, {"$set": {"payment_status": "refunded"}})
         await restore_stock(o)
         sqs_service.send_event("refund.processed", {"order_id": oid, "amount": o["bill"]["total"], "reason": reason})
-    await db.orders.update_one({"id": oid}, {"$set": update, "$push": {"history": {"status": "cancelled", "at": iso(now())}}})
+
     sqs_service.send_event("order.cancelled", {"order_id": oid, "reason": reason})
     who = "by the shop" if reason == "seller_rejected" else ""
     await notify(o["member_ids"], "Order cancelled",
@@ -193,15 +222,28 @@ async def cancel_order_doc(o: dict, reason: str = "customer") -> None:
 
 
 async def check_unaccepted_orders_timeout():
-    """Swiggy-style auto-cancellation for orders left unaccepted past timeout."""
-    threshold = iso(now() - timedelta(minutes=ORDER_ACCEPTANCE_TIMEOUT_MIN))
-    pending_orders = await db.orders.find({
-        "status": "confirmed",
-        "seller_managed": True,
-        "created_at": {"$lte": threshold}
-    }, {"_id": 0}).to_list(100)
-    for ord_doc in pending_orders:
-        await cancel_order_doc(ord_doc, reason="acceptance_timeout")
+    """Swiggy-style auto-cancellation for orders left unaccepted past timeout with distributed concurrency lock."""
+    # Acquire distributed lock so only one worker scans unaccepted orders per execution
+    lock_key = "worker:acceptance_timeout_lock"
+    if not cache_manager.set(lock_key, "1", ex=30, nx=True):
+        return {"processed": 0, "status": "locked"}
+
+    try:
+        timeout_min = int(os.environ.get("ORDER_ACCEPTANCE_TIMEOUT_MIN", ORDER_ACCEPTANCE_TIMEOUT_MIN))
+        threshold = iso(now() - timedelta(minutes=timeout_min))
+        pending_orders = await db.orders.find({
+            "status": "confirmed",
+            "seller_managed": True,
+            "created_at": {"$lte": threshold}
+        }, {"_id": 0}).to_list(100)
+
+        processed = 0
+        for ord_doc in pending_orders:
+            await cancel_order_doc(ord_doc, reason="acceptance_timeout")
+            processed += 1
+        return {"processed": processed, "status": "completed"}
+    finally:
+        cache_manager.delete(lock_key)
 
 
 @router.post("/{oid}/cancel")

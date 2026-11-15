@@ -148,6 +148,128 @@ def test_acceptance_timeout_handler():
         with patch("services.orders.db") as mock_db, \
              patch("services.orders.cancel_order_doc", new_callable=AsyncMock) as mock_cancel:
             mock_db.orders.find.return_value.to_list = AsyncMock(return_value=[old_order])
-            await check_unaccepted_orders_timeout()
+            res = await check_unaccepted_orders_timeout()
+            assert res["processed"] == 1
             mock_cancel.assert_called_once_with(old_order, reason="acceptance_timeout")
     asyncio.run(_run())
+
+
+def test_concurrent_idempotent_checkout_lock():
+    """Verify that simultaneous requests with the same idempotency key are protected by Redis lock."""
+    from fastapi import HTTPException
+    from services.orders import checkout, CheckoutIn
+
+    body = CheckoutIn(address_id="addr_1", idempotency_key="idem_concurrent_123")
+    user = {"id": "user_conc_1", "role": "customer"}
+
+    async def _run():
+        # Pre-seed the lock key in cache_manager
+        cache_manager.set(f"lock:checkout:{user['id']}:{body.idempotency_key}", "1", ex=10)
+        
+        with pytest.raises(HTTPException) as exc_info:
+            await checkout(body, user=user)
+        assert exc_info.value.status_code == 409
+        assert "currently processing" in exc_info.value.detail
+        cache_manager.delete(f"lock:checkout:{user['id']}:{body.idempotency_key}")
+    asyncio.run(_run())
+
+
+def test_multi_store_checkout_splitting():
+    """Verify that multi-store cart groups produce distinct orders each with their own seller."""
+    from services.orders import checkout, CheckoutIn
+
+    body = CheckoutIn(address_id="addr_1", idempotency_key="idem_split_1")
+    user = {"id": "user_split_1", "role": "customer"}
+
+    mock_view = {
+        "items": [{"product_id": "p1", "qty": 1}, {"product_id": "p2", "qty": 2}],
+        "unavailable": [],
+        "groups": [
+            {
+                "seller": {"id": "s1", "name": "Bawarchi", "approved": True, "open": True, "category": "food"},
+                "bill": {"subtotal": 200, "total": 240, "commission": 20},
+                "items": [{"product_id": "p1", "qty": 1}]
+            },
+            {
+                "seller": {"id": "s2", "name": "Ratnadeep Supermarket", "approved": True, "open": True, "category": "grocery"},
+                "bill": {"subtotal": 350, "total": 380, "commission": 30},
+                "items": [{"product_id": "p2", "qty": 2}]
+            }
+        ]
+    }
+
+    async def _run():
+        with patch("services.orders.cart_view", new_callable=AsyncMock, return_value=mock_view), \
+             patch("services.orders.db") as mock_db:
+            mock_db.addresses.find_one = AsyncMock(return_value={"id": "addr_1", "user_id": user["id"], "line": "Flat 101"})
+            mock_db.orders.insert_one = AsyncMock()
+            mock_db.carts.delete_one = AsyncMock()
+
+            res = await checkout(body, user=user)
+            assert res["total_orders_placed"] == 2
+            assert len(res["all_orders"]) == 2
+            # 2 distinct order inserts
+            assert mock_db.orders.insert_one.call_count == 2
+    asyncio.run(_run())
+
+
+def test_duplicate_stock_restoration_prevention():
+    """Verify that once an order has stock_restored: True, subsequent calls do not increment stock again."""
+    mock_order = {
+        "id": "ord_already_restored",
+        "stock_restored": True,
+        "items": [{"product_id": "p1", "qty": 2}]
+    }
+
+    async def _run():
+        with patch("services.orders.db") as mock_db:
+            mock_db.products.update_one = AsyncMock()
+            from services.orders import restore_stock
+            await restore_stock(mock_order)
+            # Products update should not be called
+            mock_db.products.update_one.assert_not_called()
+    asyncio.run(_run())
+
+
+def test_seller_menu_cache_invalidation_on_availability_toggle():
+    """Verify that toggling product availability invalidates Redis seller menu cache."""
+    sid = "seller_kitch_1"
+    pid = "prod_biryani_1"
+    cache_key = f"seller_menu:{sid}"
+    cache_manager.set(cache_key, '{"cached": "menu"}')
+    assert cache_manager.get(cache_key) is not None
+
+    # Trigger simulated availability toggle
+    from services.seller import toggle_product_availability, StockToggleIn
+    user = {"id": "owner_1", "role": "seller"}
+    mock_shop = {"id": sid, "owner_id": "owner_1"}
+
+    async def _run():
+        with patch("services.seller.my_shop", new_callable=AsyncMock, return_value=mock_shop), \
+             patch("services.seller.db") as mock_db:
+            mock_db.products.update_one = AsyncMock(return_value=MagicMock(matched_count=1))
+            res = await toggle_product_availability(pid, StockToggleIn(available=False), user=user)
+            assert res["ok"] is True
+            assert res["available"] is False
+            # Verify cache was invalidated
+            assert cache_manager.get(cache_key) is None
+    asyncio.run(_run())
+
+
+def test_websocket_tracking_authorization_and_idor_rejection():
+    """Verify WebSocket authorization rejects unauthorized users with 4403."""
+    from services.delivery import ws_track
+    mock_ws = AsyncMock()
+    mock_ws.query_params = {"token": "test_tok"}
+    mock_ws.close = AsyncMock()
+
+    # User u_attacker trying to track order owned by u_victim
+    with patch("services.delivery.decode_token", return_value={"id": "u_attacker", "sub": "u_attacker", "role": "customer"}), \
+         patch("services.delivery.db") as mock_db:
+        mock_db.orders.find_one = AsyncMock(return_value={"id": "ord_target", "member_ids": ["u_victim"], "status": "out_for_delivery"})
+
+        async def _run():
+            await ws_track(mock_ws, "ord_target", token="test_tok")
+            mock_ws.close.assert_called_once_with(code=4403, reason="Unauthorized access to order tracking")
+        asyncio.run(_run())
+

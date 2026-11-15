@@ -99,32 +99,45 @@ async def assign_rider(order: dict) -> dict:
     """Swiggy-style Dispatch Engine:
     Selects the optimal delivery partner balancing proximity (first-mile haversine distance),
     vehicle carrying capacity, active load, and rating.
+    Uses distributed lock per order to prevent double-assignment under concurrency.
     """
-    pickup, _ = await order_points(order)
-    candidates = await db.riders.find({"available": True, "verified": True}, {"_id": 0}).to_list(100)
-    if not candidates:
-        # Fallback to demo fleet if no registered live rider online
-        rider = await db.riders.find_one({"verified": True}, {"_id": 0}, sort=[("active_jobs", 1)])
-        if not rider:
-            raise HTTPException(409, "No delivery partners available right now")
-        await db.riders.update_one({"id": rider["id"]}, {"$inc": {"active_jobs": 1}})
-        return {"id": rider["id"], "name": rider["name"], "phone": rider["phone"], "vehicle": rider["vehicle"]}
+    oid = order.get("id")
+    lock_key = f"lock:rider_assign:{oid}" if oid else None
+    if lock_key and not cache_manager.set(lock_key, "1", ex=10, nx=True):
+        # Already being assigned concurrently; fetch existing assignment if any
+        existing = await db.orders.find_one({"id": oid}, {"_id": 0, "rider": 1})
+        if (existing or {}).get("rider"):
+            return existing["rider"]
 
-    # Score each candidate: lower score = better assignment
-    scored = []
-    for r in candidates:
-        loc = r.get("location")
-        dist = 2.0  # default 2 km estimate if location ping pending
-        if loc and pickup:
-            dist = haversine_km((loc["lat"], loc["lng"]), (pickup["lat"], pickup["lng"]))
-        # Cost function: distance (km) * 1.5 + active_jobs * 2.5
-        cost = dist * 1.5 + r.get("active_jobs", 0) * 2.5
-        scored.append((cost, r))
+    try:
+        pickup, _ = await order_points(order)
+        candidates = await db.riders.find({"available": True, "verified": True}, {"_id": 0}).to_list(100)
+        if not candidates:
+            # Fallback to demo fleet if no registered live rider online
+            rider = await db.riders.find_one({"verified": True}, {"_id": 0}, sort=[("active_jobs", 1)])
+            if not rider:
+                raise HTTPException(409, "No delivery partners available right now")
+            await db.riders.update_one({"id": rider["id"]}, {"$inc": {"active_jobs": 1}})
+            return {"id": rider["id"], "name": rider["name"], "phone": rider["phone"], "vehicle": rider["vehicle"]}
 
-    scored.sort(key=lambda x: x[0])
-    chosen = scored[0][1]
-    await db.riders.update_one({"id": chosen["id"]}, {"$inc": {"active_jobs": 1}})
-    return {"id": chosen["id"], "name": chosen["name"], "phone": chosen["phone"], "vehicle": chosen["vehicle"]}
+        # Score each candidate: lower score = better assignment
+        scored = []
+        for r in candidates:
+            loc = r.get("location")
+            dist = 2.0  # default 2 km estimate if location ping pending
+            if loc and pickup:
+                dist = haversine_km((loc["lat"], loc["lng"]), (pickup["lat"], pickup["lng"]))
+            # Cost function: distance (km) * 1.5 + active_jobs * 2.5
+            cost = dist * 1.5 + r.get("active_jobs", 0) * 2.5
+            scored.append((cost, r))
+
+        scored.sort(key=lambda x: x[0])
+        chosen = scored[0][1]
+        await db.riders.update_one({"id": chosen["id"]}, {"$inc": {"active_jobs": 1}})
+        return {"id": chosen["id"], "name": chosen["name"], "phone": chosen["phone"], "vehicle": chosen["vehicle"]}
+    finally:
+        if lock_key:
+            cache_manager.delete(lock_key)
 
 
 def drop_point(o: dict, community: dict | None) -> Optional[dict]:

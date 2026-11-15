@@ -36,9 +36,9 @@ class RedisCacheManager:
         except Exception:
             return None
 
-    def set(self, key: str, value: str, ex: Optional[int] = None) -> bool:
+    def set(self, key: str, value: str, ex: Optional[int] = None, nx: bool = False) -> bool:
         try:
-            return bool(self.client.set(key, value, ex=ex))
+            return bool(self.client.set(key, value, ex=ex, nx=nx))
         except Exception:
             return False
 
@@ -76,7 +76,9 @@ class InMemoryCacheFallback:
     def get(self, key: str) -> Optional[str]:
         return self._store.get(key)
 
-    def set(self, key: str, value: str, ex: Optional[int] = None) -> bool:
+    def set(self, key: str, value: str, ex: Optional[int] = None, nx: bool = False) -> bool:
+        if nx and key in self._store:
+            return False
         self._store[key] = value
         return True
 

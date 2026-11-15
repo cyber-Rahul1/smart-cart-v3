@@ -174,11 +174,30 @@ async def discover_feed(
 
 @router.get("/sellers/{sid}")
 async def seller_detail(sid: str):
+    cache_key = f"seller_menu:{sid}"
+    try:
+        from services.async_event_service import cache_manager
+        cached = cache_manager.get(cache_key)
+        if cached:
+            import json
+            return json.loads(cached)
+    except Exception:
+        pass
+
     s = await db.sellers.find_one({"id": sid, **PUBLIC}, {"_id": 0})
     if not s:
         raise HTTPException(404, "Shop not found")
     products = await db.products.find({"seller_id": sid}, {"_id": 0}).sort("category", 1).to_list(500)
-    return {"seller": s, "products": products}
+    result = {"seller": s, "products": products}
+
+    try:
+        from services.async_event_service import cache_manager
+        import json
+        cache_manager.set(cache_key, json.dumps(result), ex=300)
+    except Exception:
+        pass
+
+    return result
 
 
 @router.get("/search")

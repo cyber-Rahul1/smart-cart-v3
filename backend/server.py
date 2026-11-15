@@ -53,7 +53,7 @@ async def ensure_indexes():
 
 
 async def scheduler():
-    """Background jobs: closing-soon reminders, auto-close group carts & community baskets at deadline."""
+    """Background jobs: closing-soon reminders, auto-close group carts & community baskets, and order acceptance timeout."""
     while True:
         try:
             soon = iso(now() + timedelta(minutes=10))
@@ -69,6 +69,8 @@ async def scheduler():
                     await community.close_basket_doc(b)
                 else:
                     await db.baskets.update_one({"id": b["id"]}, {"$set": {"status": "expired"}})
+            # Automatic acceptance timeout check (Swiggy pattern)
+            await orders.check_unaccepted_orders_timeout()
         except Exception as exc:
             logger.exception("scheduler error: %s", exc)
         await asyncio.sleep(20)
