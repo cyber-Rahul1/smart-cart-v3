@@ -59,7 +59,7 @@ export default function OrderDetail() {
   const openReorder = () => run("re", async () => setReorder(await api(`/orders/${o.id}/reorder`, { method: "POST", body: { confirm: false } })));
   const confirmReorder = () => run("rec", async () => {
     await api(`/orders/${o.id}/reorder`, { method: "POST", body: { confirm: true } });
-    setReorder(null); qc.invalidateQueries({ queryKey: ["cart"] }); router.push("/(tabs)/cart");
+    setReorder(null); qc.invalidateQueries({ queryKey: ["cart"] }); router.push("/cart");
   });
 
   return (

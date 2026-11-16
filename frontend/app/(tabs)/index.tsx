@@ -37,6 +37,8 @@ import { SellerFullCard, SellerTile } from "@/src/components/seller-card";
 import { VegToggle } from "@/src/components/veg-toggle";
 import { VoiceSearchModal } from "@/src/components/voice-search-modal";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
+import { BrandFooter } from "@/src/components/brand-footer";
+import { HomeSkeleton } from "@/src/components/home-skeleton";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, softShadow, spacing, ThemeColors, tileGradient, useTheme } from "@/src/theme";
 import { Address, Seller } from "@/src/types";
@@ -131,6 +133,7 @@ const TILES: {
       iconColor: "#DB2777",
       cardBg: ["#FDF2F8", "#FFFFFF"],
       borderColor: "#FCE7F3",
+      href: "/reels",
     },
   ];
 
@@ -482,7 +485,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const grads = tileGradient(colors);
   const { user } = useAuth();
-  const { tabBarTranslateY, setPagerScrollEnabled, scrollPageTo, setIsBottomNavHidden } = useTabBarVisibility();
+  const { tabBarTranslateY, setPagerScrollEnabled, scrollPageTo, setIsBottomNavHidden, activeTabIndex } = useTabBarVisibility();
 
   const [vegOnly, setVegOnly] = useState(false);
 
@@ -536,6 +539,14 @@ export default function HomeScreen() {
   const collapseProgress = useSharedValue(0); // 0: fully expanded, 1: fully collapsed
   const stickyChipsProgress = useSharedValue(0); // 0: hidden behind search bar, 1: revealed below search bar
   const tilesSectionY = useRef<number>(240); // Track position of top options section
+
+  // When navigating away from Home tab (activeTabIndex !== 0), automatically dismiss the vertical rail and reopen pill
+  useEffect(() => {
+    if (activeTabIndex !== 0) {
+      setShowVerticalRail(false);
+      railProgress.value = 0;
+    }
+  }, [activeTabIndex]);
 
   // Scroll tracking ref to compute delta
   const lastScrollY = useRef(0);
@@ -597,7 +608,10 @@ export default function HomeScreen() {
     const currentY = e.nativeEvent.contentOffset.y;
     const diff = currentY - lastScrollY.current;
 
-    // Trigger cart message collapse on active scroll (only update when delta is significant to prevent re-render thrashing)
+    // Ignore microscopic noise (< 1px) or micro-trembles while holding finger
+    if (Math.abs(diff) < 1) return;
+
+    // Trigger cart message collapse on active scroll
     if (Math.abs(diff) > 20) {
       const now = Date.now();
       if (now - lastScrollTimestampRef.current > 600) {
@@ -607,7 +621,6 @@ export default function HomeScreen() {
     }
 
     // Trigger vertical rail ONLY when scrolled into the "All shops nearby" card list
-    // (i.e. strictly past the section header and at the first card, disappearing immediately when scrolling up)
     const inNearby = currentY >= nearbySectionY.current + 20;
     if (inNearby) {
       if (!showVerticalRail) {
@@ -625,7 +638,6 @@ export default function HomeScreen() {
     }
 
     // Show sticky horizontal chips only when user scrolls down past the main top options grid (tiles section)
-    // When scrolling back up, they stay visible until we scroll all the way back up to where the main tiles section appears!
     const tilesBottom = tilesSectionY.current > 0 ? tilesSectionY.current : 220;
     if (currentY >= tilesBottom - 40) {
       if (stickyChipsProgress.value < 1) {
@@ -633,7 +645,6 @@ export default function HomeScreen() {
       }
     } else {
       if (stickyChipsProgress.value > 0) {
-        // Smoothly retracts behind search bar and disappears as we reach the main options
         stickyChipsProgress.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) });
       }
     }
@@ -905,7 +916,7 @@ export default function HomeScreen() {
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
                 />
-                <Ionicons name="notifications-outline" size={20} color="#1E293B" />
+                <Ionicons name="notifications-outline" size={20} color="#475569" />
                 {notif.data?.unread ? (
                   <View style={s.dot}>
                     <Text style={s.dotText}>{Math.min(notif.data.unread, 9)}</Text>
@@ -933,7 +944,7 @@ export default function HomeScreen() {
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
                 />
-                <Ionicons name="person-outline" size={20} color="#1E293B" />
+                <Ionicons name="person-outline" size={20} color="#475569" />
               </Pressable>
             </View>
           </View>
@@ -1044,7 +1055,7 @@ export default function HomeScreen() {
               { key: "groceries", label: "Groceries", href: "/groceries" },
               { key: "group", label: "Group", href: "/groups" },
               { key: "apartment", label: "Apartment", href: "/community" },
-              { key: "bites", label: "Bites", href: "reels" },
+              { key: "bites", label: "Bites", href: "/reels" },
             ].map((pill) => {
               const isActive = activeCategoryPill === pill.key;
               return (
@@ -1053,9 +1064,7 @@ export default function HomeScreen() {
                   testID={`sticky-cat-pill-${pill.key}`}
                   onPress={() => {
                     setActiveCategoryPill(pill.key);
-                    if (pill.href === "reels") {
-                      scrollPageTo(1);
-                    } else if (pill.href) {
+                    if (pill.href) {
                       router.push(pill.href as any);
                     }
                   }}
@@ -1100,7 +1109,11 @@ export default function HomeScreen() {
         }}
       />
 
-      {q.isLoading ? <Loader /> : q.isError ? <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} /> : (
+      {q.isLoading ? (
+        <HomeSkeleton />
+      ) : q.isError ? (
+        <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />
+      ) : (
         <ScrollView
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -1176,9 +1189,9 @@ export default function HomeScreen() {
               {
                 key: "bites",
                 title: "Bites",
-                sub: "& Deals",
-                icon: "pricetag-outline" as const,
-                href: "/offers",
+                sub: "& Reels",
+                icon: "play-circle-outline" as const,
+                href: "/reels",
               },
             ].map((item) => (
               <Pressable
@@ -1247,22 +1260,52 @@ export default function HomeScreen() {
           {/* Veg mode banner with 'Change >' (only shown when veg mode is on) */}
           {vegOnly ? (
             <View style={s.modernVegBanner}>
+              {/* Liquid frosted glass layer */}
+              <BlurView
+                intensity={28}
+                tint="light"
+                style={StyleSheet.absoluteFill}
+              />
+              <LinearGradient
+                colors={["rgba(255, 255, 255, 0.90)", "rgba(240, 253, 244, 0.75)", "rgba(255, 241, 242, 0.55)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {/* Top glass reflection highlight */}
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 14,
+                  right: 14,
+                  height: 1,
+                  backgroundColor: "rgba(255, 255, 255, 0.85)",
+                }}
+              />
+
               <View style={s.modernVegBannerLeft}>
-                <Ionicons name="leaf" size={16} color="#15803D" />
+                <View style={s.modernVegLeafCircle}>
+                  <Ionicons name="leaf" size={13} color="#15803D" />
+                </View>
                 <Text style={s.modernVegBannerBold}>Veg mode on</Text>
-                <View style={s.modernVegDivider} />
+                <Text style={s.modernVegBannerBullet}>•</Text>
                 <Text style={s.modernVegBannerText} numberOfLines={1}>
-                  Showing shops with veg options only
+                  Showing veg options only
                 </Text>
               </View>
 
               <Pressable
                 onPress={() => setVegOnly(false)}
-                style={s.modernVegChangeBtn}
+                style={({ pressed }) => [
+                  s.modernVegChangeBtn,
+                  pressed && { opacity: 0.75, transform: [{ scale: 0.97 }] },
+                ]}
                 hitSlop={8}
               >
-                <Text style={s.modernVegChangeText}>Change</Text>
-                <Ionicons name="chevron-forward" size={13} color="#15803D" />
+                <Text style={s.modernVegChangeText}>Turn off</Text>
+                <Ionicons name="close-circle-outline" size={14} color="#15803D" />
               </Pressable>
             </View>
           ) : null}
@@ -1677,13 +1720,13 @@ export default function HomeScreen() {
                 />
               </View>
             ))}
-            <EndOfListIndicator message="You've explored all shops nearby" />
+            <BrandFooter />
           </Animated.View>
         </ScrollView>
       )}
 
-      {/* Floating Vertical Food Category Rail (shows only when in "All shops nearby" section) */}
-      {showVerticalRail && (
+      {/* Floating Vertical Food Category Rail (shows only on Home tab when in "All shops nearby" section) */}
+      {showVerticalRail && activeTabIndex === 0 && (
         <Animated.View
           style={[
             s.verticalRailWrapper,
@@ -1838,8 +1881,8 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-      {/* Floating Reopen Button at screen edge when collapsed */}
-      {showVerticalRail && (
+      {/* Floating Reopen Button at screen edge when collapsed (only on Home tab) */}
+      {showVerticalRail && activeTabIndex === 0 && (
         <Animated.View
           style={[
             s.reopenPillContainer,
@@ -2043,8 +2086,8 @@ const useStyles = makeStyles((c) => ({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.9)",
+    borderWidth: 1.2,
+    borderColor: "rgba(0, 0, 0, 0.08)",
   },
   menuIconWrap: {
     width: 18,
@@ -2298,8 +2341,8 @@ const useStyles = makeStyles((c) => ({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.2,
-    borderColor: "rgba(255, 255, 255, 0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.8)",
     overflow: "hidden",
     position: "relative",
     shadowColor: "#F43F5E",
@@ -2570,35 +2613,48 @@ const useStyles = makeStyles((c) => ({
   modernVegBanner: {
     marginHorizontal: spacing.lg,
     marginTop: 14,
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
     borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.25)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    shadowColor: "#15803D",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1.5 },
+    elevation: 1,
   },
   modernVegBannerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 7,
     flex: 1,
+  },
+  modernVegLeafCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(34, 197, 94, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modernVegBannerBold: {
     color: "#15803D",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: 12.5,
+    fontWeight: "800",
+    letterSpacing: -0.2,
   },
-  modernVegDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: "#BBF7D0",
-    marginHorizontal: 2,
+  modernVegBannerBullet: {
+    color: "rgba(21, 128, 61, 0.4)",
+    fontSize: 12,
+    marginHorizontal: 1,
   },
   modernVegBannerText: {
-    color: "#166534",
+    color: "#475569",
     fontSize: 11.5,
     fontWeight: "500",
     flex: 1,
@@ -2606,12 +2662,18 @@ const useStyles = makeStyles((c) => ({
   modernVegChangeBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    paddingHorizontal: 8,
+    paddingVertical: 4.5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.22)",
   },
   modernVegChangeText: {
     color: "#15803D",
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "700",
   },
 
   /* 5. Modern Offer Cards */

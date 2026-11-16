@@ -24,6 +24,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   Easing,
+  interpolate,
 } from "react-native-reanimated";
 
 import { api, ApiError } from "@/src/api";
@@ -34,8 +35,15 @@ import { AppImage, EmptyState, ErrorState, Header, IconName, Ionicons, Loader, S
 import { AnimatedPlaceholder } from "@/src/components/animated-placeholder";
 import { VegToggle } from "@/src/components/veg-toggle";
 import { VoiceSearchModal } from "@/src/components/voice-search-modal";
+import { FoodSkeleton } from "@/src/components/food-skeleton";
 import { DiscoverSkeleton } from "@/src/components/discover-skeleton";
+import ProductDetailModal from "@/src/components/product-detail-modal";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+import { BrandFooter } from "@/src/components/brand-footer";
+import { FloatingCartBar } from "@/src/components/floating-cart-bar";
+import { useCartSummary } from "@/src/cart";
 
 const TITLES: Record<string, [string, string]> = {
   food: ["Food", "Restaurants & cloud kitchens near you"],
@@ -47,11 +55,17 @@ const TITLES: Record<string, [string, string]> = {
 function ShopWithItemsCard({
   seller,
   onAddToCart,
+  onChangeQty,
+  qtyOf,
+  onProductPress,
   addingPid,
   vegOnly = false,
 }: {
   seller: Seller;
   onAddToCart: (p: Product) => void;
+  onChangeQty: (p: Product, qty: number) => void;
+  qtyOf: (pid: string) => number;
+  onProductPress?: (p: Product, s: Seller) => void;
   addingPid: string | null;
   vegOnly?: boolean;
 }) {
@@ -274,8 +288,9 @@ function ShopWithItemsCard({
           {products.slice(0, 8).map((p) => {
             const isAdding = addingPid === p.id;
             return (
-              <View
+              <Pressable
                 key={p.id}
+                onPress={() => onProductPress?.(p, seller)}
                 style={{
                   width: 144,
                   backgroundColor: "transparent",
@@ -300,48 +315,109 @@ function ShopWithItemsCard({
                     transition={200}
                   />
 
-                  {/* Floating ADD button placed over bottom of image */}
-                  <Pressable
-                    disabled={isAdding}
-                    onPress={() => onAddToCart(p)}
-                    style={({ pressed }) => [
-                      {
-                        position: "absolute",
-                        bottom: 6,
-                        alignSelf: "center",
-                        backgroundColor: "#FFFFFF",
-                        borderWidth: 1,
-                        borderColor: "rgba(252, 128, 25, 0.4)",
-                        borderRadius: radius.pill,
-                        paddingHorizontal: 16,
-                        paddingVertical: 4,
-                        minWidth: 68,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 4,
-                        elevation: 3,
-                      },
-                      pressed && { transform: [{ scale: 0.94 }] },
-                    ]}
-                  >
-                    {isAdding ? (
-                      <SkeletonBlock width={32} height={14} borderRadius={7} />
-                    ) : (
-                      <Text
-                        style={{
-                          color: "#EA580C",
-                          fontWeight: "900",
-                          fontSize: 12,
-                          letterSpacing: 0.4,
+                  {/* Floating ADD or Stepper button placed over bottom of image */}
+                  {(() => {
+                    const itemQty = qtyOf(p.id);
+                    if (itemQty > 0) {
+                      return (
+                        <View
+                          style={{
+                            position: "absolute",
+                            bottom: 6,
+                            alignSelf: "center",
+                            backgroundColor: "#FFFFFF",
+                            borderWidth: 1,
+                            borderColor: "rgba(252, 128, 25, 0.4)",
+                            borderRadius: radius.pill,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            height: 28,
+                            paddingHorizontal: 6,
+                            minWidth: 80,
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 4,
+                            elevation: 3,
+                          }}
+                        >
+                          <Pressable
+                            disabled={isAdding}
+                            hitSlop={8}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              onChangeQty(p, itemQty - 1);
+                            }}
+                            style={{ width: 22, height: 24, alignItems: "center", justifyContent: "center" }}
+                          >
+                            <Ionicons name="remove" size={14} color="#EA580C" />
+                          </Pressable>
+                          <Text style={{ fontWeight: "900", color: "#EA580C", fontSize: 12, minWidth: 16, textAlign: "center" }}>
+                            {itemQty}
+                          </Text>
+                          <Pressable
+                            disabled={isAdding}
+                            hitSlop={8}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              onChangeQty(p, itemQty + 1);
+                            }}
+                            style={{ width: 22, height: 24, alignItems: "center", justifyContent: "center" }}
+                          >
+                            <Ionicons name="add" size={14} color="#EA580C" />
+                          </Pressable>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <Pressable
+                        disabled={isAdding}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onAddToCart(p);
                         }}
+                        style={({ pressed }) => [
+                          {
+                            position: "absolute",
+                            bottom: 6,
+                            alignSelf: "center",
+                            backgroundColor: "#FFFFFF",
+                            borderWidth: 1,
+                            borderColor: "rgba(252, 128, 25, 0.4)",
+                            borderRadius: radius.pill,
+                            paddingHorizontal: 16,
+                            paddingVertical: 4,
+                            minWidth: 68,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 4,
+                            elevation: 3,
+                          },
+                          pressed && { transform: [{ scale: 0.94 }] },
+                        ]}
                       >
-                        ADD
-                      </Text>
-                    )}
-                  </Pressable>
+                        {isAdding ? (
+                          <SkeletonBlock width={32} height={14} borderRadius={7} />
+                        ) : (
+                          <Text
+                            style={{
+                              color: "#EA580C",
+                              fontWeight: "900",
+                              fontSize: 12,
+                              letterSpacing: 0.4,
+                            }}
+                          >
+                            ADD
+                          </Text>
+                        )}
+                      </Pressable>
+                    );
+                  })()}
                 </View>
 
                 {/* Dish name & details */}
@@ -372,7 +448,7 @@ function ShopWithItemsCard({
                     {rupee(p.price)}
                   </Text>
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -536,6 +612,37 @@ function ExactDiscoverShopCard({
 
   return (
     <View style={discoverCardStyles.cardContainer} testID={`discover-shop-${seller.id}`}>
+      {/* Backdrop blur layer for liquid glass */}
+      <BlurView
+        intensity={24}
+        tint="light"
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Blush-pink liquid glass gradient tint */}
+      <LinearGradient
+        colors={[
+          "rgba(255, 255, 255, 0.88)",
+          "rgba(255, 240, 245, 0.60)",
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Specular glass highlight reflection along top edge */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 16,
+          right: 16,
+          height: 1,
+          backgroundColor: "rgba(255, 255, 255, 0.95)",
+        }}
+      />
+
       {/* 1. HERO BANNER WITH ROUNDED CORNERS, TOP BADGES, HEART & CAROUSEL */}
       <View
         style={discoverCardStyles.heroBannerWrapper}
@@ -599,7 +706,7 @@ function ExactDiscoverShopCard({
                 <Ionicons name="bookmark-outline" size={22} color="#FFFFFF" />
               </View>
             ) : (
-              <Ionicons name="bookmark" size={22} color="#EA580C" />
+              <Ionicons name="bookmark" size={22} color="#F43F5E" />
             )}
           </Pressable>
         </View>
@@ -679,7 +786,7 @@ function ExactDiscoverShopCard({
           testID={`discover-view-menu-${seller.id}`}
         >
           <Text style={discoverCardStyles.viewMenuBtnText}>View Menu</Text>
-          <Ionicons name="chevron-forward" size={13} color="#EA580C" />
+          <Ionicons name="chevron-forward" size={13} color="#F43F5E" />
         </Pressable>
       </View>
 
@@ -711,10 +818,10 @@ function ExactDiscoverShopCard({
 
       {/* 5. ADDRESS & CALL / DIRECTIONS SECTION (Split box layout) */}
       <View style={discoverCardStyles.addressSectionRow}>
-        {/* Left: Address with Orange Location Pin */}
+        {/* Left: Address with Rose Location Pin */}
         <View style={discoverCardStyles.addressCol}>
           <View style={discoverCardStyles.addressPinWrap}>
-            <Ionicons name="location-sharp" size={15} color="#EA580C" />
+            <Ionicons name="location-sharp" size={15} color="#F43F5E" />
           </View>
           <View style={discoverCardStyles.addressTextCol}>
             <Text style={discoverCardStyles.addressHeading}>Address</Text>
@@ -741,7 +848,7 @@ function ExactDiscoverShopCard({
           </Pressable>
 
           <Pressable style={discoverCardStyles.directionsBtn} onPress={handleDirections}>
-            <Ionicons name="navigate" size={12} color="#EA580C" />
+            <Ionicons name="navigate" size={12} color="#F43F5E" />
             <Text style={discoverCardStyles.directionsBtnText}>Directions</Text>
           </Pressable>
         </View>
@@ -796,36 +903,72 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   const isDiscoverMode = !params.schedule && (!activeType || activeType === "new");
 
   const [vegOnly, setVegOnly] = useState(false);
+  const [foodCuisineFilter, setFoodCuisineFilter] = useState<string>("All");
+  const stickyChipsProgress = useSharedValue(0);
+  const foodCategorySectionY = useRef(150);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
+  const { tabBarTranslateY } = useTabBarVisibility();
 
   const collapseProgress = useSharedValue(0);
   const [titleRowHeight, setTitleRowHeight] = useState(56);
   const lastScrollY = useRef(0);
   const isHiddenRef = useRef(false);
+  const accumulatedDiff = useRef(0);
 
   const TIMING_CONFIG = {
-    duration: 260,
-    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    duration: 300,
+    easing: Easing.out(Easing.cubic),
   };
 
   const handleListingScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const currentY = e.nativeEvent.contentOffset.y;
     const diff = currentY - lastScrollY.current;
 
-    if (currentY <= 10) {
+    // Reveal sticky category chips when scrolling down past the inline category section
+    const triggerY = Math.max(100, foodCategorySectionY.current - 60);
+    if (currentY >= triggerY) {
+      if (stickyChipsProgress.value < 1) {
+        stickyChipsProgress.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
+      }
+    } else {
+      if (stickyChipsProgress.value > 0) {
+        stickyChipsProgress.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) });
+      }
+    }
+
+    // Only trigger when scrolled past top padding or pulled down
+    if (currentY <= 15) {
+      accumulatedDiff.current = 0;
+      // At the very top, always show header and tab bar smoothly
       if (isHiddenRef.current) {
         isHiddenRef.current = false;
         collapseProgress.value = withTiming(0, TIMING_CONFIG);
+        tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
       }
-    } else if (diff > 12 && currentY > 40) {
-      if (!isHiddenRef.current) {
-        isHiddenRef.current = true;
-        collapseProgress.value = withTiming(1, TIMING_CONFIG);
+    } else {
+      // Accumulate scroll displacement in consistent direction
+      if ((diff > 0 && accumulatedDiff.current < 0) || (diff < 0 && accumulatedDiff.current > 0)) {
+        accumulatedDiff.current = 0;
       }
-    } else if (diff < -12) {
-      if (isHiddenRef.current) {
-        isHiddenRef.current = false;
-        collapseProgress.value = withTiming(0, TIMING_CONFIG);
+      accumulatedDiff.current += diff;
+
+      // Hysteresis threshold: requires intentional, sustained drag (>= 50px) before flipping
+      if (accumulatedDiff.current > 50 && currentY > 80) {
+        // User is intentionally scrolling content UP -> hide header & bottom tab bar
+        if (!isHiddenRef.current) {
+          isHiddenRef.current = true;
+          collapseProgress.value = withTiming(1, TIMING_CONFIG);
+          tabBarTranslateY.value = withTiming(100, TIMING_CONFIG);
+        }
+      } else if (accumulatedDiff.current < -50) {
+        // User is intentionally scrolling content DOWN -> reveal both smoothly from bottom
+        if (isHiddenRef.current) {
+          isHiddenRef.current = false;
+          collapseProgress.value = withTiming(0, TIMING_CONFIG);
+          tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
+        }
       }
     }
 
@@ -837,6 +980,17 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
     return {
       marginTop: -collapseProgress.value * totalShift,
       opacity: 1 - collapseProgress.value,
+    };
+  });
+
+  const stickyChipsAnimStyle = useAnimatedStyle(() => {
+    return {
+      maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 48]),
+      opacity: stickyChipsProgress.value,
+      transform: [
+        { translateY: interpolate(stickyChipsProgress.value, [0, 1], [-20, 0]) },
+      ],
+      pointerEvents: stickyChipsProgress.value > 0.5 ? ("auto" as const) : ("none" as const),
     };
   });
 
@@ -912,10 +1066,13 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
 
   const totalShopsCount = data?.pages?.[0]?.total ?? 32;
 
-  const addToCart = async (product: Product, seller: Seller) => {
+  const { items: cartSummaryItems, totalCount: cartCount } = useCartSummary();
+  const qtyOf = (pid: string) => cartSummaryItems.find((i) => i.product_id === pid)?.qty ?? 0;
+
+  const addToCart = async (product: Product, seller: Seller, qty: number = 1) => {
     setAddingPid(product.id);
     try {
-      await api("/cart/items", { method: "POST", body: { product_id: product.id, qty: 1 } });
+      await api("/cart/items", { method: "POST", body: { product_id: product.id, qty } });
       qc.invalidateQueries({ queryKey: ["cart"] });
       toast(`Added ${product.name} to cart`);
     } catch (e: any) {
@@ -923,6 +1080,22 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
         toast("Cart contains items from another shop. Clear cart first or open shop.", "err");
       } else {
         toast(e.message || "Could not add item", "err");
+      }
+    } finally {
+      setAddingPid(null);
+    }
+  };
+
+  const changeQty = async (product: Product, seller: Seller, qty: number) => {
+    setAddingPid(product.id);
+    try {
+      await api("/cart/items", { method: "POST", body: { product_id: product.id, qty, replace: true } });
+      qc.invalidateQueries({ queryKey: ["cart"] });
+    } catch (e: any) {
+      if (e instanceof ApiError && e.status === 409) {
+        toast("Cart contains items from another shop. Clear cart first or open shop.", "err");
+      } else {
+        toast(e.message || "Could not update item", "err");
       }
     } finally {
       setAddingPid(null);
@@ -940,7 +1113,15 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
 
   if (isListViewMode) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+        {/* Background Graphic matching Home Screen */}
+        <Image
+          source={require("@/assets/images/gathr_home_bg.jpg")}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          priority="high"
+        />
+
         {/* Sticky Top Header */}
         <View
           style={{
@@ -948,7 +1129,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
             zIndex: 10,
             overflow: "hidden",
             borderBottomWidth: 0,
-            backgroundColor: colors.surface,
+            backgroundColor: "transparent",
           }}
         >
           {/* Collapsible Section ABOVE search: Back button, Title & Subtitle */}
@@ -1004,8 +1185,8 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
           <View
             style={{
               paddingHorizontal: spacing.lg,
-              paddingTop: spacing.md,
-              paddingBottom: spacing.lg,
+              paddingTop: spacing.xs,
+              paddingBottom: spacing.sm,
               flexDirection: "row",
               alignItems: "center",
               gap: spacing.sm,
@@ -1016,24 +1197,57 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
               onPress={() => router.push(`/search?${vegOnly ? "veg=1" : ""}`)}
               style={{
                 flex: 1,
-                height: 50,
-                borderRadius: radius.lg,
-                borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.9)",
-                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                height: 46,
+                borderRadius: 24,
+                borderWidth: 1.2,
+                borderColor: "rgba(255, 255, 255, 0.85)",
+                backgroundColor: "rgba(255, 255, 255, 0.55)",
+                overflow: "hidden",
+                position: "relative",
                 flexDirection: "row",
                 alignItems: "center",
                 gap: spacing.sm,
-                paddingHorizontal: spacing.lg,
-                shadowColor: colors.onSurface,
-                shadowOpacity: 0.08,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 4 },
+                paddingHorizontal: 16,
+                shadowColor: "#F43F5E",
+                shadowOpacity: 0.07,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 3 },
                 elevation: 3,
               }}
             >
-              <Ionicons name="search" size={18} color={colors.brandPrimary} />
-              <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
+              {/* Backdrop blur layer for liquid glass */}
+              <BlurView
+                intensity={20}
+                tint="light"
+                style={StyleSheet.absoluteFill}
+              />
+
+              {/* Blush-pink liquid glass gradient tint */}
+              <LinearGradient
+                colors={[
+                  "rgba(255, 255, 255, 0.65)",
+                  "rgba(255, 228, 235, 0.35)",
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+
+              {/* Specular glass highlight reflection along top edge */}
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 16,
+                  right: 16,
+                  height: 1,
+                  backgroundColor: "rgba(255, 255, 255, 0.85)",
+                }}
+              />
+
+              <Ionicons name="search" size={17} color="#F43F5E" />
+              <View style={{ flex: 1, height: 38, justifyContent: "center", position: "relative" }}>
                 <AnimatedPlaceholder
                   placeholders={[
                     "Search in " + listTitle + "...",
@@ -1050,14 +1264,14 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 onPress={() => setVoiceModalVisible(true)}
                 hitSlop={8}
                 style={{
-                  width: 34,
-                  height: 34,
+                  width: 32,
+                  height: 32,
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: radius.pill,
                 }}
               >
-                <Ionicons name="mic" size={20} color={colors.brandPrimary} />
+                <Ionicons name="mic" size={19} color="#F43F5E" />
               </Pressable>
             </Pressable>
 
@@ -1068,6 +1282,61 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
               testID="listing-veg-toggle"
             />
           </View>
+
+          {/* Sticky Cuisine/Category Filter Pills row in Food listing */}
+          <Animated.View style={[s.stickyChipsContainer, stickyChipsAnimStyle]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.categoryPillsScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              {[
+                { key: "All", label: "All" },
+                { key: "Biryani", label: "Biryani" },
+                { key: "South Indian", label: "South Indian" },
+                { key: "North Indian", label: "North Indian" },
+                { key: "Pizza", label: "Pizza" },
+                { key: "Burger", label: "Burger" },
+                { key: "Chinese", label: "Chinese" },
+                { key: "Desserts", label: "Desserts" },
+              ].map((c) => {
+                const isSelected = foodCuisineFilter === c.key;
+                return (
+                  <Pressable
+                    key={`food-cat-${c.key}`}
+                    testID={`food-cat-pill-${c.key}`}
+                    onPress={() => setFoodCuisineFilter(c.key)}
+                    style={({ pressed }) => [
+                      s.categoryPill,
+                      isSelected ? s.categoryPillActive : s.categoryPillInactive,
+                      pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                    ]}
+                  >
+                    {!isSelected && (
+                      <>
+                        <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
+                        <LinearGradient
+                          colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </>
+                    )}
+                    <Text
+                      style={[
+                        s.categoryPillText,
+                        isSelected ? s.categoryPillTextActive : s.categoryPillTextInactive,
+                      ]}
+                    >
+                      {c.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
         </View>
 
         {/* Schedule Delivery Mode Banner */}
@@ -1093,7 +1362,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
 
         {/* Main Shops Listing */}
         {categoryQuery.isLoading ? (
-          <Loader />
+          <FoodSkeleton />
         ) : categoryQuery.isError ? (
           <ErrorState
             message={(categoryQuery.error as Error)?.message || "Failed to load shops"}
@@ -1102,14 +1371,88 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
         ) : (
           <Animated.FlatList
             testID={`listing-${listCategory}`}
-            data={categoryQuery.data}
+            data={(categoryQuery.data || []).filter((s) => {
+              if (foodCuisineFilter === "All") return true;
+              const filterLower = foodCuisineFilter.toLowerCase();
+              return (
+                (s.cuisine && s.cuisine.toLowerCase().includes(filterLower)) ||
+                (s.name && s.name.toLowerCase().includes(filterLower))
+              );
+            })}
             keyExtractor={(s) => s.id}
             onScroll={handleListingScroll}
             scrollEventThrottle={16}
             contentContainerStyle={{
               paddingVertical: spacing.md,
-              paddingBottom: insets.bottom + spacing.xl,
+              paddingBottom: insets.bottom + (cartCount > 0 ? 120 : spacing.xl),
             }}
+            ListHeaderComponent={
+              <View
+                onLayout={(e) => {
+                  foodCategorySectionY.current = e.nativeEvent.layout.y;
+                }}
+                style={{ paddingBottom: spacing.sm }}
+              >
+                {/* Inline Section Title */}
+                <View style={{ paddingHorizontal: spacing.lg, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A", letterSpacing: -0.3 }}>
+                    What's on your mind?
+                  </Text>
+                </View>
+
+                {/* Inline Cuisine / Category Filter Pills */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.categoryPillsScroll}
+                >
+                  {[
+                    { key: "All", label: "All" },
+                    { key: "Biryani", label: "Biryani" },
+                    { key: "South Indian", label: "South Indian" },
+                    { key: "North Indian", label: "North Indian" },
+                    { key: "Pizza", label: "Pizza" },
+                    { key: "Burger", label: "Burger" },
+                    { key: "Chinese", label: "Chinese" },
+                    { key: "Desserts", label: "Desserts" },
+                  ].map((c) => {
+                    const isSelected = foodCuisineFilter === c.key;
+                    return (
+                      <Pressable
+                        key={`inline-food-cat-${c.key}`}
+                        testID={`inline-food-cat-pill-${c.key}`}
+                        onPress={() => setFoodCuisineFilter(c.key)}
+                        style={({ pressed }) => [
+                          s.categoryPill,
+                          isSelected ? s.categoryPillActive : s.categoryPillInactive,
+                          pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                        ]}
+                      >
+                        {!isSelected && (
+                          <>
+                            <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
+                            <LinearGradient
+                              colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={StyleSheet.absoluteFill}
+                            />
+                          </>
+                        )}
+                        <Text
+                          style={[
+                            s.categoryPillText,
+                            isSelected ? s.categoryPillTextActive : s.categoryPillTextInactive,
+                          ]}
+                        >
+                          {c.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            }
             ItemSeparatorComponent={() => (
               <View
                 style={{
@@ -1134,7 +1477,15 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 seller={item}
                 vegOnly={vegOnly}
                 onAddToCart={(p) => {
-                  addToCart(p, item);
+                  addToCart(p, item, 1);
+                }}
+                onChangeQty={(p, n) => {
+                  changeQty(p, item, n);
+                }}
+                qtyOf={qtyOf}
+                onProductPress={(p, s) => {
+                  setSelectedProduct(p);
+                  setSelectedSeller(s);
                 }}
                 addingPid={addingPid}
               />
@@ -1146,8 +1497,41 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 body="We couldn't find any open shops in this category near your location."
               />
             }
+            ListFooterComponent={
+              categoryQuery.data && categoryQuery.data.length > 0 ? (
+                <View style={{ paddingHorizontal: spacing.md }}>
+                  <BrandFooter />
+                </View>
+              ) : undefined
+            }
           />
         )}
+
+        {/* Product Detail Bottom Sheet Modal */}
+        <ProductDetailModal
+          visible={!!selectedProduct}
+          product={selectedProduct}
+          seller={selectedSeller}
+          currentQty={selectedProduct ? qtyOf(selectedProduct.id) : 0}
+          onClose={() => {
+            setSelectedProduct(null);
+            setSelectedSeller(null);
+          }}
+          onAddToCart={(p, qty, cookingRequest) => {
+            if (selectedSeller) {
+              addToCart(p, selectedSeller, qty);
+            }
+            if (cookingRequest) {
+              toast(`Note for chef: "${cookingRequest}"`);
+            }
+          }}
+        />
+
+        {/* Floating Cart Bar positioned cleanly above bottom tab navigation */}
+        <FloatingCartBar
+          bottomOffset={insets.bottom > 0 ? insets.bottom + 52 : 60}
+          dockSide="left"
+        />
       </View>
     );
   }
@@ -1155,6 +1539,14 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   /* ---------------- DISCOVER PAGE EXACT REDESIGN ---------------- */
   return (
     <View style={s.root}>
+      {/* Background Graphic matching Home Screen */}
+      <Image
+        source={require("@/assets/images/gathr_home_bg.jpg")}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        priority="high"
+      />
+
       {/* 1. TOP HEADER & SEARCH & CATEGORY CHIPS */}
       <View style={[s.headerContainer, { paddingTop: insets.top + spacing.xs }]}>
         {/* Title row with Back button on top left & Location Selector on top right */}
@@ -1183,7 +1575,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
             onPress={() => router.push("/addresses")}
             style={s.locationPill}
           >
-            <Ionicons name="location-sharp" size={14} color="#EA580C" />
+            <Ionicons name="location-sharp" size={14} color="#F43F5E" />
             <Text style={s.locationPillText} numberOfLines={1}>
               {defaultAddress?.label || "Visakhapatnam"}
             </Text>
@@ -1191,9 +1583,40 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
           </Pressable>
         </View>
 
-        {/* Pill Search Bar with Filters Sliders Icon */}
+        {/* Pill Search Bar with Filters Sliders Icon (Home Page Liquid Glass Style) */}
         <View style={s.pillSearchBar}>
-          <Ionicons name="search" size={18} color="#7A7A7A" />
+          {/* Backdrop blur layer for liquid glass */}
+          <BlurView
+            intensity={20}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Blush-pink liquid glass gradient tint */}
+          <LinearGradient
+            colors={[
+              "rgba(255, 255, 255, 0.65)",
+              "rgba(255, 228, 235, 0.35)",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Specular glass highlight reflection along top edge */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 16,
+              right: 16,
+              height: 1,
+              backgroundColor: "rgba(255, 255, 255, 0.85)",
+            }}
+          />
+
+          <Ionicons name="search" size={17} color="#F43F5E" />
           <TextInput
             style={s.pillSearchInput}
             placeholder="Search for shops, cuisines, dishes..."
@@ -1236,7 +1659,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 <Ionicons
                   name={cat.icon}
                   size={14}
-                  color={isSelected ? "#EA580C" : "#1A1A1A"}
+                  color={isSelected ? "#F43F5E" : "#1A1A1A"}
                 />
                 <Text
                   style={[
@@ -1275,21 +1698,39 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
           viewabilityConfig={viewabilityConfig}
           ListHeaderComponent={
             <View style={{ paddingHorizontal: 16 }}>
-              {/* Peach Gradient Promo Card */}
+              {/* Rose Liquid Glass Promo Card */}
               <View style={s.promoBannerCard}>
+                <BlurView
+                  intensity={25}
+                  tint="light"
+                  style={StyleSheet.absoluteFill}
+                />
                 <LinearGradient
-                  colors={["#FFF4ED", "#FFE5D3", "#FFD7BE"]}
+                  colors={["rgba(255, 255, 255, 0.85)", "rgba(255, 228, 235, 0.55)", "rgba(254, 205, 211, 0.40)"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
                 />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 14,
+                    right: 14,
+                    height: 1,
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                  }}
+                />
                 {/* Left Promo Text */}
                 <View style={s.promoContentLeft}>
-                  <Text style={s.promoOverline}>EXPLORE</Text>
+                  <View style={s.promoOverlineWrap}>
+                    <Text style={s.promoOverline}>EXPLORE</Text>
+                  </View>
                   <Text style={s.promoHeadline}>
                     Newly Opened{"\n"}
-                    <Text style={{ color: "#EA580C" }}>Shops </Text>
-                    <Text style={{ color: "#EA580C" }}>Near You</Text>
+                    <Text style={{ color: "#F43F5E" }}>Shops </Text>
+                    <Text style={{ color: "#F43F5E" }}>Near You</Text>
                   </Text>
                   <Text style={s.promoSubtext}>
                     Fresh listings, local favorites & cloud kitchens in your area.
@@ -1318,7 +1759,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 <Text style={s.sectionHeaderTitle}>Newly Added Shops</Text>
                 <Pressable style={s.viewAllRow} onPress={() => setSelectedCat("all")}>
                   <Text style={s.viewAllText}>View All ({totalShopsCount})</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#EA580C" />
+                  <Ionicons name="chevron-forward" size={14} color="#F43F5E" />
                 </Pressable>
               </View>
             </View>
@@ -1341,12 +1782,19 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
             );
           }}
           ListFooterComponent={
-            isFetchingNextPage ? (
-              <View style={[s.footerLoader, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }]}>
-                <SkeletonBlock width={16} height={16} borderRadius={8} />
-                <Text style={s.footerText}>Loading more businesses...</Text>
-              </View>
-            ) : undefined
+            <View>
+              {isFetchingNextPage ? (
+                <View style={[s.footerLoader, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }]}>
+                  <SkeletonBlock width={16} height={16} borderRadius={8} />
+                  <Text style={s.footerText}>Loading more businesses...</Text>
+                </View>
+              ) : null}
+              {showcaseItems.length > 0 && (
+                <View style={{ paddingHorizontal: spacing.md }}>
+                  <BrandFooter />
+                </View>
+              )}
+            </View>
           }
           ListEmptyComponent={
             <EmptyState
@@ -1376,10 +1824,10 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
 const useStyles = makeStyles(() => ({
   root: {
     flex: 1,
-    backgroundColor: "#FDFBF9",
+    backgroundColor: "transparent",
   },
   headerContainer: {
-    backgroundColor: "#FDFBF9",
+    backgroundColor: "transparent",
     paddingHorizontal: 16,
     paddingBottom: 8,
   },
@@ -1438,18 +1886,20 @@ const useStyles = makeStyles(() => ({
   pillSearchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    height: 46,
+    borderRadius: 24,
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.85)",
+    backgroundColor: "rgba(255, 255, 255, 0.55)",
+    overflow: "hidden",
+    position: "relative",
     paddingHorizontal: 16,
-    height: 48,
     gap: 10,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   pillSearchInput: {
     flex: 1,
@@ -1479,9 +1929,9 @@ const useStyles = makeStyles(() => ({
     borderRadius: 14,
   },
   categoryChipSelected: {
-    backgroundColor: "#FFF7ED",
+    backgroundColor: "#FFF1F3",
     borderWidth: 1.5,
-    borderColor: "#EA580C",
+    borderColor: "#F43F5E",
   },
   categoryChipUnselected: {
     backgroundColor: "#FFFFFF",
@@ -1492,7 +1942,7 @@ const useStyles = makeStyles(() => ({
     fontSize: 12.5,
   },
   categoryChipTextSelected: {
-    color: "#EA580C",
+    color: "#F43F5E",
     fontWeight: "700",
   },
   categoryChipTextUnselected: {
@@ -1508,7 +1958,7 @@ const useStyles = makeStyles(() => ({
     padding: 16,
     minHeight: 140,
     position: "relative",
-    shadowColor: "#EA580C",
+    shadowColor: "#F43F5E",
     shadowOpacity: 0.08,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -1518,12 +1968,19 @@ const useStyles = makeStyles(() => ({
     flex: 1.1,
     paddingRight: 6,
   },
+  promoOverlineWrap: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(244, 63, 94, 0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
   promoOverline: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: "#6B7280",
-    marginBottom: 4,
+    color: "#F43F5E",
   },
   promoHeadline: {
     fontSize: 18,
@@ -1547,7 +2004,7 @@ const useStyles = makeStyles(() => ({
     width: 14,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#EA580C",
+    backgroundColor: "#F43F5E",
   },
   promoDotInactive: {
     width: 5,
@@ -1586,7 +2043,7 @@ const useStyles = makeStyles(() => ({
   viewAllText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#EA580C",
+    color: "#F43F5E",
   },
   footerLoader: {
     flexDirection: "row",
@@ -1617,21 +2074,71 @@ const useStyles = makeStyles(() => ({
     width: "100%",
     height: "80%",
   },
+  stickyChipsContainer: {
+    position: "relative",
+    zIndex: 5,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+    paddingBottom: spacing.xs,
+  },
+  categoryPillsScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: 8,
+    alignItems: "center",
+  },
+  categoryPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.8)",
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1.5 },
+  },
+  categoryPillActive: {
+    backgroundColor: "#F43F5E",
+    borderColor: "#F43F5E",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  categoryPillInactive: {
+    backgroundColor: "transparent",
+  },
+  categoryPillText: {
+    fontSize: 12.5,
+    letterSpacing: -0.1,
+  },
+  categoryPillTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  categoryPillTextInactive: {
+    color: "#334155",
+    fontWeight: "700",
+  },
 }));
 
 const discoverCardStyles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
+    backgroundColor: "rgba(255, 255, 255, 0.72)",
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.9)",
     marginBottom: 16,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
     paddingBottom: 14,
   },
   heroBannerWrapper: {
@@ -1657,7 +2164,7 @@ const discoverCardStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#EA580C",
+    backgroundColor: "#F43F5E",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
@@ -1721,14 +2228,14 @@ const discoverCardStyles = StyleSheet.create({
   },
   activeDotFill: {
     height: "100%",
-    backgroundColor: "#EA580C",
+    backgroundColor: "#F43F5E",
     borderRadius: 3,
   },
   inactiveRoundDot: {
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#EA580C",
+    backgroundColor: "#F43F5E",
   },
   identityRow: {
     flexDirection: "row",
@@ -1775,6 +2282,8 @@ const discoverCardStyles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     backgroundColor: "#DCFCE7",
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.22)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
@@ -1819,9 +2328,9 @@ const discoverCardStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
-    backgroundColor: "#FFF7ED",
+    backgroundColor: "#FFF1F3",
     borderWidth: 1,
-    borderColor: "#FFEDD5",
+    borderColor: "#FECDD3",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1830,7 +2339,7 @@ const discoverCardStyles = StyleSheet.create({
   viewMenuBtnText: {
     fontSize: 11.5,
     fontWeight: "800",
-    color: "#EA580C",
+    color: "#F43F5E",
   },
   descriptionBox: {
     paddingHorizontal: 14,
@@ -1882,7 +2391,7 @@ const discoverCardStyles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#FFF7ED",
+    backgroundColor: "#FFF1F3",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 1,
@@ -1929,17 +2438,17 @@ const discoverCardStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#FFF7ED",
+    backgroundColor: "#FFF1F3",
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: "#FFEDD5",
+    borderColor: "#FECDD3",
   },
   directionsBtnText: {
     fontSize: 10.5,
     fontWeight: "800",
-    color: "#EA580C",
+    color: "#F43F5E",
   },
   ambienceImagesRow: {
     flexDirection: "row",

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/src/api";
 import { font, radius, spacing, useTheme } from "@/src/theme";
+import { ListCardsSkeleton } from "@/src/components/list-cards-skeleton";
 import { Button, EmptyState, ErrorState, Header, Input, Ionicons, Loader, Sheet, useToast } from "@/src/ui";
 import { QrScanModal } from "@/src/components/qr-scan-modal";
 
@@ -51,7 +52,7 @@ export default function Groups() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <Header title="Roommate groups" subtitle="Shared carts for bachelors & flatmates" />
-      {q.isLoading ? <Loader /> : q.isError ? <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} /> : (
+      {q.isLoading ? <ListCardsSkeleton /> : q.isError ? <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} /> : (
         <FlatList
           testID="groups-list"
           data={q.data}

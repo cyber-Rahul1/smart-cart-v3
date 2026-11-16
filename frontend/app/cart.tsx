@@ -15,7 +15,7 @@ import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Address } from "@/src/types";
 import { BillRow, Button, Chip, ChipRow, EmptyState, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
 import { CartQuoteResponse, CartStoreGroup, CouponItem } from "@/src/cart";
-import { navigateToTab, useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+import { CartSkeleton } from "@/src/components/cart-skeleton";
 
 const SCHEDULES = [
   { key: "now", label: "Instant (25-30 mins)", icon: "flash-outline" },
@@ -49,8 +49,7 @@ export default function CartScreen() {
   const [tempNoteText, setTempNoteText] = useState("");
 
   const addresses = useAddresses();
-  const tabBarHeight = insets.bottom > 0 ? insets.bottom + 52 : 60;
-  const bottomChrome = usesNativeTabs ? insets.bottom : tabBarHeight;
+  const bottomChrome = insets.bottom > 0 ? insets.bottom : spacing.sm;
 
   const q = useQuery({
     queryKey: ["cart", applied, useCredit],
@@ -149,8 +148,6 @@ export default function CartScreen() {
       ]
     : [];
 
-  const { previousTabIndex } = useTabBarVisibility();
-
   const toggleStoreCollapse = (sellerId: string) => {
     setCollapsedStores((prev) => ({
       ...prev,
@@ -162,7 +159,7 @@ export default function CartScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      navigateToTab(previousTabIndex !== undefined && previousTabIndex !== 2 ? previousTabIndex : 0);
+      router.replace("/");
     }
   };
 
@@ -179,6 +176,14 @@ export default function CartScreen() {
 
   return (
     <View style={s.root}>
+      {/* Background Graphic matching Home/Groceries/Listing screens */}
+      <Image
+        source={require("@/assets/images/gathr_home_bg.jpg")}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        priority="high"
+      />
+
       {/* Redesigned Header Matching User UI */}
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
         <View style={s.headerRow}>
@@ -224,7 +229,7 @@ export default function CartScreen() {
       ) : null}
 
       {q.isLoading ? (
-        <Loader />
+        <CartSkeleton />
       ) : q.isError ? (
         <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />
       ) : !data?.items.length && !data?.unavailable.length ? (
@@ -724,15 +729,15 @@ export default function CartScreen() {
 }
 
 const useStyles = makeStyles((c) => ({
-  root: { flex: 1, backgroundColor: "#F8FAFC" },
+  root: { flex: 1, backgroundColor: "#FFFFFF" },
 
   // Redesigned Header
   header: {
     paddingHorizontal: spacing.md,
     paddingBottom: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "rgba(226, 232, 240, 0.6)",
   },
   headerRow: {
     flexDirection: "row",
@@ -776,12 +781,12 @@ const useStyles = makeStyles((c) => ({
   savingsBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "rgba(255, 241, 242, 0.88)",
     paddingHorizontal: spacing.lg,
     paddingVertical: 9,
     gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#DBEAFE",
+    borderBottomColor: "rgba(254, 205, 211, 0.6)",
   },
   savingsEmoji: {
     fontSize: 15,
@@ -789,7 +794,7 @@ const useStyles = makeStyles((c) => ({
   savingsText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#2563EB",
+    color: "#E11D48",
   },
   savingsBold: {
     fontWeight: "900",
@@ -797,15 +802,15 @@ const useStyles = makeStyles((c) => ({
 
   // Redesigned Store Card
   storeCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderRadius: 16,
     paddingTop: 14,
     paddingBottom: 12,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "rgba(255, 228, 230, 0.7)",
     shadowColor: "#000",
-    shadowOpacity: 0.01,
-    shadowRadius: 2,
+    shadowOpacity: 0.015,
+    shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 0.5,
   },
@@ -857,7 +862,7 @@ const useStyles = makeStyles((c) => ({
   storeDivider: {
     height: 1,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(254, 205, 211, 0.5)",
     borderStyle: "dotted",
     marginHorizontal: 14,
     marginBottom: 4,
@@ -903,9 +908,9 @@ const useStyles = makeStyles((c) => ({
     justifyContent: "space-between",
     width: 84,
     height: 30,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#FECDD3",
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 4,
   },
@@ -918,7 +923,7 @@ const useStyles = makeStyles((c) => ({
   stepperQtyText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#EF4444",
+    color: "#F43F5E",
   },
   linePriceText: {
     fontSize: 12.5,
@@ -943,7 +948,7 @@ const useStyles = makeStyles((c) => ({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#FFF1F2",
   },
   activeNoteText: {
     flex: 1,
@@ -970,7 +975,7 @@ const useStyles = makeStyles((c) => ({
     backgroundColor: "#FFFFFF",
   },
   saveNoteBtn: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#F43F5E",
     paddingHorizontal: 12,
     height: 36,
     borderRadius: 8,
@@ -1009,13 +1014,13 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: 7,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#FECDD3",
+    backgroundColor: "#FFF1F2",
   },
   actionPillRedText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#EF4444",
+    color: "#F43F5E",
   },
   actionPillGray: {
     flexDirection: "row",
@@ -1025,7 +1030,7 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: 7,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(226, 232, 240, 0.9)",
     backgroundColor: "#FFFFFF",
   },
   actionPillActive: {
@@ -1040,14 +1045,14 @@ const useStyles = makeStyles((c) => ({
 
   // Base Card (Schedules, Offers, Bill Details)
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderRadius: 16,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "rgba(255, 228, 230, 0.7)",
     shadowColor: "#000",
-    shadowOpacity: 0.01,
-    shadowRadius: 2,
+    shadowOpacity: 0.015,
+    shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 0.5,
     gap: spacing.sm,
@@ -1080,9 +1085,9 @@ const useStyles = makeStyles((c) => ({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: "#FECDD3",
     borderRadius: radius.md,
-    backgroundColor: c.surfaceSecondary,
+    backgroundColor: "#FFF8F9",
     overflow: "hidden",
     paddingLeft: spacing.md,
     marginTop: spacing.xs,
@@ -1098,7 +1103,7 @@ const useStyles = makeStyles((c) => ({
     height: 44,
     justifyContent: "center",
     paddingHorizontal: spacing.lg,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#F43F5E",
   },
   applyBtnText: {
     color: "#FFFFFF",
@@ -1152,7 +1157,7 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: 6,
   },
   viewCouponsText: {
-    color: "#EF4444",
+    color: "#F43F5E",
     fontWeight: "700",
     fontSize: font.sm,
   },
@@ -1199,12 +1204,12 @@ const useStyles = makeStyles((c) => ({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.pill,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#FFE4E6",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#FECDD3",
   },
   quickApplyBtnText: {
-    color: "#EF4444",
+    color: "#F43F5E",
     fontWeight: "800",
     fontSize: font.sm,
   },
@@ -1308,8 +1313,10 @@ const useStyles = makeStyles((c) => ({
     alignItems: "flex-start",
     gap: spacing.sm,
     padding: spacing.md,
-    backgroundColor: "rgba(0,0,0,0.02)",
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.6)",
   },
   policyText: {
     flex: 1,
@@ -1320,23 +1327,28 @@ const useStyles = makeStyles((c) => ({
 
   // Checkout Footer
   footer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
     paddingHorizontal: spacing.md,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "rgba(226, 232, 240, 0.8)",
     shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -3 },
-    elevation: 8,
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 3,
   },
   payButton: {
-    backgroundColor: "#F43F5E", // Vibrant rose-red matching image button
+    backgroundColor: "#F43F5E", // Vibrant rose-red matching app primary
     height: 52,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1.5,
   },
   payButtonText: {
     color: "#FFFFFF",

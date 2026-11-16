@@ -25,7 +25,24 @@ interface TabBarVisibilityContextType {
   setIsBottomNavHidden: (hidden: boolean) => void;
 }
 
-const TabBarVisibilityContext = createContext<TabBarVisibilityContextType | null>(null);
+const defaultSharedValue = { value: 0 } as SharedValue<number>;
+
+const defaultContextValue: TabBarVisibilityContextType = {
+  tabBarTranslateY: defaultSharedValue,
+  activeTabIndex: 0,
+  setActiveTabIndex: () => {},
+  previousTabIndex: 0,
+  scrollPageTo: () => {},
+  setScrollPageToHandler: () => {},
+  isPagerScrollEnabled: true,
+  setPagerScrollEnabled: () => {},
+  enablePagerScroll: () => {},
+  disablePagerScroll: () => {},
+  isBottomNavHidden: false,
+  setIsBottomNavHidden: () => {},
+};
+
+const TabBarVisibilityContext = createContext<TabBarVisibilityContextType>(defaultContextValue);
 
 export function TabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const tabBarTranslateY = useSharedValue(0);
@@ -94,9 +111,6 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
 
 export function useTabBarVisibility() {
   const ctx = useContext(TabBarVisibilityContext);
-  if (!ctx) {
-    throw new Error("useTabBarVisibility must be used within a TabBarVisibilityProvider");
-  }
   return ctx;
 }
 

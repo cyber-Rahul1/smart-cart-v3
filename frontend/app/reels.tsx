@@ -14,7 +14,7 @@ import { AppImage, ErrorState, Ionicons, Loader } from "@/src/ui";
 
 type Reel = { id: string; seller_id: string; seller_name: string; seller_image: string; title: string; media_url: string; sponsored: boolean; likes: number; trending?: boolean };
 
-export default function Reels() {
+export default function ReelsScreen() {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [liked, setLiked] = useState<Record<string, boolean>>({});
@@ -22,13 +22,11 @@ export default function Reels() {
   const s = useStyles();
   const { colors } = useTheme();
   const q = useQuery({ queryKey: ["reels"], queryFn: () => api<Reel[]>("/reels") });
-  const tabBarHeight = insets.bottom > 0 ? insets.bottom + 52 : 60;
-  const bottomChrome = usesNativeTabs ? insets.bottom : tabBarHeight;
+  const bottomChrome = insets.bottom > 0 ? insets.bottom + 16 : 24;
 
   // Determine which reels are "Trending" (e.g. top liked reels above threshold or marked trending)
   const reelsList = q.data || [];
   const maxLikes = Math.max(...reelsList.map((r) => r.likes), 0);
-  // High engagement threshold: within top tier of likes or marked trending
   const isReelTrending = (item: Reel) => {
     if (item.trending) return true;
     if (reelsList.length <= 1) return false;
@@ -50,18 +48,41 @@ export default function Reels() {
             return (
               <View style={{ height: h }}>
                 <Image source={{ uri: item.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={250} />
-                <LinearGradient colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.75)"]} style={StyleSheet.absoluteFill} />
+                <LinearGradient colors={["rgba(0,0,0,0.55)", "transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} />
+                
+                {/* Header row with Back button & Badges */}
                 <View style={[s.top, { top: insets.top + spacing.sm }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Pressable
+                      testID="reels-back-button"
+                      onPress={() => router.back()}
+                      hitSlop={12}
+                      style={({ pressed }) => [
+                        s.backBtn,
+                        pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
+                      ]}
+                    >
+                      <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+                    </Pressable>
+                    <Text style={s.topHeaderTitle}>Bites</Text>
+                  </View>
+
                   <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                     {showTrendingBadge ? (
                       <View style={s.trendingBadge}>
                         <Ionicons name="flame" size={13} color="#FFFFFF" />
                         <Text style={s.trendingBadgeText}>Trending</Text>
                       </View>
-                    ) : <View style={{ height: 26 }} />}
+                    ) : null}
+                    {item.sponsored ? (
+                      <View testID={`reel-sponsored-${item.id}`} style={s.sp}>
+                        <Text style={s.spText}>Sponsored</Text>
+                      </View>
+                    ) : null}
                   </View>
-                  {item.sponsored ? <View testID={`reel-sponsored-${item.id}`} style={s.sp}><Text style={s.spText}>Sponsored</Text></View> : null}
                 </View>
+
+                {/* Right side interaction buttons */}
                 <View style={[s.side, { bottom: bottomChrome + 130 }]}>
                   <Pressable testID={`reel-like-${item.id}`} onPress={() => setLiked((l) => ({ ...l, [item.id]: !l[item.id] }))} style={s.sideBtn}>
                     <Ionicons name={liked[item.id] ? "heart" : "heart-outline"} size={30} color={liked[item.id] ? colors.error : colors.onSurfaceInverse} />
@@ -72,6 +93,8 @@ export default function Reels() {
                     <Text style={s.sideText}>Shop</Text>
                   </Pressable>
                 </View>
+
+                {/* Bottom info section */}
                 <View style={[s.bottom, { bottom: bottomChrome + spacing.md }]}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                     <AppImage source={{ uri: mediaUri(item.seller_image) }} fallbackType="shop" style={s.avatar} />
@@ -95,16 +118,29 @@ export default function Reels() {
 
 const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: c.surfaceInverse },
-  top: { position: "absolute", left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  topTitle: { color: c.onSurfaceInverse, fontSize: font.xl, fontWeight: "800" },
-  trendingBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: c.brandPrimary, borderRadius: radius.pill, paddingHorizontal: spacing.sm + 2, paddingVertical: 3 },
+  top: { position: "absolute", left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 10 },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topHeaderTitle: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+  },
+  trendingBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: c.brandPrimary, borderRadius: radius.pill, paddingHorizontal: spacing.sm + 2, paddingVertical: 4 },
   trendingBadgeText: { color: "#FFFFFF", fontWeight: "800", fontSize: 11, letterSpacing: 0.2 },
   sp: { backgroundColor: c.warning, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 4 },
   spText: { color: c.onWarning, fontWeight: "800", fontSize: font.sm },
-  side: { position: "absolute", right: spacing.lg, gap: spacing.xl, alignItems: "center" },
+  side: { position: "absolute", right: spacing.lg, gap: spacing.xl, alignItems: "center", zIndex: 10 },
   sideBtn: { alignItems: "center", minWidth: 44, gap: 2 },
   sideText: { color: c.onSurfaceInverse, fontWeight: "700", fontSize: font.sm },
-  bottom: { position: "absolute", left: spacing.lg, right: 80, gap: spacing.sm },
+  bottom: { position: "absolute", left: spacing.lg, right: 80, gap: spacing.sm, zIndex: 10 },
   avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: c.onSurfaceInverse },
   seller: { color: c.onSurfaceInverse, fontWeight: "800", fontSize: font.lg },
   title: { color: c.onSurfaceInverse, fontSize: font.base + 1, lineHeight: 20 },

@@ -1,5 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { SkeletonBlock } from "@/src/ui";
 
 export function DiscoverSkeleton() {
@@ -7,17 +9,24 @@ export function DiscoverSkeleton() {
     <View style={styles.container}>
       {/* 1. Header Hero Banner Skeleton */}
       <View style={styles.bannerSkeleton}>
-        <SkeletonBlock width="100%" height={150} borderRadius={24} />
+        <SkeletonBlock width="100%" height={150} borderRadius={20} />
       </View>
 
       {/* 2. Newly Added Shops Title Skeleton */}
       <View style={styles.titleRowSkeleton}>
-        <SkeletonBlock width={180} height={24} borderRadius={8} />
-        <SkeletonBlock width={90} height={18} borderRadius={8} />
+        <SkeletonBlock width={180} height={20} borderRadius={6} />
+        <SkeletonBlock width={80} height={16} borderRadius={6} />
       </View>
 
       {/* 3. Shop Card Skeleton */}
       <View style={styles.cardSkeleton}>
+        <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={["rgba(255, 255, 255, 0.70)", "rgba(255, 235, 242, 0.30)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         {/* Banner with top badges skeleton */}
         <View style={styles.cardBannerSkeleton}>
           <SkeletonBlock width="100%" height={210} borderRadius={20} />
@@ -84,6 +93,8 @@ const styles = StyleSheet.create({
   },
   bannerSkeleton: {
     width: "100%",
+    borderRadius: 20,
+    overflow: "hidden",
   },
   titleRowSkeleton: {
     flexDirection: "row",
@@ -93,16 +104,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cardSkeleton: {
-    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#F0F0F0",
+    borderColor: "rgba(255, 220, 230, 0.45)",
     paddingBottom: 16,
     gap: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    overflow: "hidden",
+    position: "relative",
   },
   cardBannerSkeleton: {
     position: "relative",
@@ -133,7 +141,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     padding: 10,
     borderRadius: 12,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "rgba(255, 255, 255, 0.45)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 220, 230, 0.35)",
     gap: 10,
   },
   ambienceRowSkeleton: {

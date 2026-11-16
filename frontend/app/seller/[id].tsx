@@ -6,6 +6,7 @@ import {
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -13,8 +14,12 @@ import {
   Text,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
+  Extrapolate,
   interpolate,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
@@ -27,11 +32,15 @@ import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { AppImage, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
 import { navigateToTab } from "@/src/context/tab-bar-visibility";
+import ProductDetailModal from "@/src/components/product-detail-modal";
+import { TextInput } from "react-native";
 
 type ModeItem = { id: string; product_id: string; qty: number; user_id: string; flat?: string };
 
-const HERO_HEIGHT = 260;
-const ESTIMATED_CARD_HEIGHT = 200;
+const HERO_HEIGHT = 400;
+const ESTIMATED_CARD_HEIGHT = 185;
+
+const AnimatedSectionList = Animated.createAnimatedComponent<any>(SectionList);
 
 export default function SellerScreen() {
   const { id, gc, bk } = useLocalSearchParams<{ id: string; gc?: string; bk?: string }>();
@@ -44,6 +53,8 @@ export default function SellerScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
   const [measuredCardHeight, setMeasuredCardHeight] = useState(ESTIMATED_CARD_HEIGHT);
   const sectionListRef = useRef<any>(null);
@@ -105,50 +116,51 @@ export default function SellerScreen() {
     }
   };
 
-  // The bottom edge of the hero image is at HERO_HEIGHT (260).
+  // The hero background extends behind the card down to HERO_HEIGHT (400)
+  // The card is positioned overlapping the lower part of the hero image, leaving a snug ~10-12px of the rounded hero image visible below it
   const cardHeight = Math.max(160, measuredCardHeight);
-  const initialCardTop = HERO_HEIGHT - 65; // Overlaps bottom of hero by 65px
-  // The below section begins under the vertical center point of the title card
-  const belowSectionStartTop = initialCardTop + cardHeight / 2;
-  const paddingForCoveredHalfCard = cardHeight / 2 + 10;
-  const dockTargetTop = 0; // Dock flush to the very top edge of the screen
+  const bottomImageMargin = 10; // Tight, snug margin below the resizable card
+  const initialCardTop = HERO_HEIGHT - cardHeight - bottomImageMargin;
+  // The below section (filter bar & items) begins cleanly below the rounded hero container
+  const belowSectionStartTop = HERO_HEIGHT + 12;
+  const dockTargetTop = insets.top; // Dock gracefully at top safe area
   const maxScroll = Math.max(1, initialCardTop - dockTargetTop);
 
-  // Smooth docking animation driven directly on the UI thread via transform translateY
+  // Smooth GPU-accelerated docking animation driven on the UI thread
   const cardAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
-
     const translateY = -Math.min(y, maxScroll);
-    const left = interpolate(progress, [0, 1], [spacing.lg, 0]);
-    const right = interpolate(progress, [0, 1], [spacing.lg, 0]);
 
-    // Border radius transitions to 0 on top when docked flush to top screen edge
-    const borderTopLeftRadius = interpolate(progress, [0, 1], [24, 0]);
-    const borderTopRightRadius = interpolate(progress, [0, 1], [24, 0]);
-    const borderBottomLeftRadius = interpolate(progress, [0, 1], [24, 16]);
-    const borderBottomRightRadius = interpolate(progress, [0, 1], [24, 16]);
+    // Expand width to full screen width as it docks: horizontal margin decreases from 16 to 0
+    const marginHorizontal = interpolate(progress, [0, 1], [0, -spacing.lg], Extrapolate.CLAMP);
 
-    // Animate top padding to respect status bar insets as it docks to screen edge
-    const paddingTop = interpolate(progress, [0, 1], [14, insets.top + 10]);
+    // Smoothly flatten top corners when flush with the top
+    const borderTopLeftRadius = interpolate(progress, [0.6, 1], [22, 0], Extrapolate.CLAMP);
+    const borderTopRightRadius = interpolate(progress, [0.6, 1], [22, 0], Extrapolate.CLAMP);
+    const borderBottomLeftRadius = interpolate(progress, [0.6, 1], [22, 20], Extrapolate.CLAMP);
+    const borderBottomRightRadius = interpolate(progress, [0.6, 1], [22, 20], Extrapolate.CLAMP);
+
+    const paddingTop = interpolate(progress, [0, 1], [14, insets.top + 8], Extrapolate.CLAMP);
+    const paddingHorizontal = interpolate(progress, [0, 1], [14, 16], Extrapolate.CLAMP);
 
     return {
       transform: [{ translateY }],
-      left,
-      right,
+      marginHorizontal,
       borderTopLeftRadius,
       borderTopRightRadius,
       borderBottomLeftRadius,
       borderBottomRightRadius,
       paddingTop,
+      paddingHorizontal,
     };
   });
 
   const floatingBackBtnAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
-    const opacity = interpolate(progress, [0.5, 0.9], [1, 0]);
-    const scale = interpolate(progress, [0.5, 0.9], [1, 0.8]);
+    const opacity = interpolate(progress, [0.4, 0.8], [1, 0], Extrapolate.CLAMP);
+    const scale = interpolate(progress, [0.4, 0.8], [1, 0.8], Extrapolate.CLAMP);
     return {
       opacity,
       transform: [{ scale }],
@@ -158,8 +170,8 @@ export default function SellerScreen() {
   const cardBackBtnAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
-    const opacity = interpolate(progress, [0.75, 1], [0, 1]);
-    const translateX = interpolate(progress, [0.75, 1], [-16, 0]);
+    const opacity = interpolate(progress, [0.7, 1], [0, 1], Extrapolate.CLAMP);
+    const translateX = interpolate(progress, [0.7, 1], [-12, 0], Extrapolate.CLAMP);
     return {
       opacity,
       transform: [{ translateX }],
@@ -169,7 +181,7 @@ export default function SellerScreen() {
   const cardTitleAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
     const progress = Math.min(1, Math.max(0, y / maxScroll));
-    const paddingLeft = interpolate(progress, [0.75, 1], [0, 32]);
+    const paddingLeft = interpolate(progress, [0.7, 1], [0, 32], Extrapolate.CLAMP);
     return {
       paddingLeft,
     };
@@ -177,27 +189,51 @@ export default function SellerScreen() {
 
   const bgImageAnimStyle = useAnimatedStyle(() => {
     const y = scrollY.value;
+    const translateY = -y;
     const scale = y < 0 ? 1 + Math.abs(y) / HERO_HEIGHT : 1;
     return {
-      transform: [{ scale }],
+      transform: [{ translateY }, { scale }],
     };
   });
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    scrollY.value = e.nativeEvent.contentOffset.y;
-  };
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const allProducts = q.data?.products ?? [];
+
+  // Grouped sections for SectionList
+  const filteredProducts = useMemo(() => {
+    let list = allProducts;
+    if (selectedCategory !== "all") {
+      list = list.filter((p) => p.category === selectedCategory);
+    }
+    if (menuSearchQuery.trim()) {
+      const query = menuSearchQuery.trim().toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.category.toLowerCase().includes(query) ||
+          (p.description && p.description.toLowerCase().includes(query))
+      );
+    }
+    return list;
+  }, [allProducts, selectedCategory, menuSearchQuery]);
 
   if (q.isLoading) return <Loader />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   const { seller, products } = q.data!;
 
-  // Collect hero carousel images
+  // Collect store banner & showcase images strictly for the store carousel
+  // Only genuine seller banner/gallery images are shown (not random product images)
   const bannerImages = [
     seller.image,
     ...(seller.gallery && seller.gallery.length > 0 ? seller.gallery : []),
     seller.banner_url,
   ].filter(Boolean) as string[];
-  const heroList = Array.from(new Set(bannerImages)).slice(0, 5);
+  const heroList = Array.from(new Set(bannerImages)).slice(0, 6);
 
   // Group products into 3-column rows
   const rawCategories = Array.from(new Set(products.map((p) => p.category)));
@@ -211,11 +247,6 @@ export default function SellerScreen() {
     }
     return rows;
   };
-
-  // Grouped sections for SectionList
-  const filteredProducts = selectedCategory === "all"
-    ? products
-    : products.filter((p) => p.category === selectedCategory);
 
   const rawSections = Object.entries(
     filteredProducts.reduce<Record<string, Product[]>>((acc, p) => {
@@ -233,9 +264,17 @@ export default function SellerScreen() {
 
   return (
     <View style={s.root}>
-      {/* 1. FIXED BACKGROUND HERO CAROUSEL */}
-      <View style={s.fixedHeroContainer}>
-        <Animated.View style={[StyleSheet.absoluteFill, bgImageAnimStyle]}>
+      {/* Background Graphic matching Home and Listing pages */}
+      <Image
+        source={require("@/assets/images/gathr_home_bg.jpg")}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        priority="high"
+      />
+
+      {/* 1. SCROLLABLE STORE HERO CAROUSEL */}
+      <Animated.View style={[s.fixedHeroContainer, bgImageAnimStyle]}>
+        <View style={StyleSheet.absoluteFill}>
           <ScrollView
             ref={bannerScrollRef}
             horizontal
@@ -259,27 +298,23 @@ export default function SellerScreen() {
               </View>
             ))}
           </ScrollView>
-        </Animated.View>
-        <View style={s.heroDarkGradient} />
+        </View>
+        {/* Gradient shadow overlay on bottom of hero image behind the resizable card */}
+        <LinearGradient
+          colors={["transparent", "rgba(51, 65, 85, 0.40)", "rgba(15, 23, 42, 0.75)"]}
+          locations={[0, 0.65, 1]}
+          style={s.heroBottomGradient}
+          pointerEvents="none"
+        />
 
-        {/* Carousel Page indicator (e.g., 1/5 ••••) on bottom right */}
+        {/* Carousel Page indicator (e.g., 2/6 with photo icon) brought close right above the resizable card */}
         {heroList.length > 1 && (
-          <View style={s.heroDotsBadge} pointerEvents="none">
+          <View style={[s.heroDotsBadge, { top: Math.max(70, initialCardTop - 34) }]} pointerEvents="none">
+            <Ionicons name="images-outline" size={13} color="#0F172A" />
             <Text style={s.heroDotsText}>{activeBannerIdx + 1}/{heroList.length}</Text>
-            <View style={s.heroDotsList}>
-              {heroList.map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    s.heroDot,
-                    i === activeBannerIdx ? s.heroDotActive : s.heroDotInactive,
-                  ]}
-                />
-              ))}
-            </View>
           </View>
         )}
-      </View>
+      </Animated.View>
 
       {/* 2. FLOATING FIXED TOP CONTROLS: Back button on left, Share button on right (No heart icon) */}
       <Animated.View style={[s.fixedBackButtonWrapper, { top: insets.top + spacing.xs }, floatingBackBtnAnimStyle]}>
@@ -305,88 +340,60 @@ export default function SellerScreen() {
       </Animated.View>
 
       {/* 3. SCROLLABLE MENU & SECTIONS */}
-      <SectionList
+      <AnimatedSectionList
         ref={sectionListRef}
         testID="seller-menu-list"
         style={s.sectionList}
         sections={rawSections}
-        keyExtractor={(_, index) => `row-${index}`}
+        keyExtractor={(_: any, index: number) => `row-${index}`}
         stickySectionHeadersEnabled={false}
         scrollEventThrottle={16}
-        onScroll={onScroll}
+        onScroll={scrollHandler}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+        removeClippedSubviews={Platform.OS === "android"}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
         ListHeaderComponent={
           <View>
-            {/* Transparent spacer so the below section begins at the vertical center of the card */}
+            {/* Transparent spacer so the below section begins right below the title card */}
             <View style={{ height: belowSectionStartTop }} />
 
-            {/* Solid background container for entire menu section below the title card */}
-            <View style={[s.menuContentContainer, { paddingTop: paddingForCoveredHalfCard }]}>
-              {/* Flat Promo Offer Banner Pill */}
-              <View style={{ paddingHorizontal: 16 }}>
-                <Pressable
-                  testID="seller-offer-banner"
-                  onPress={() => toast(seller.offer || "Flat ₹30 OFF applied on checkout")}
-                  style={s.promoOfferBanner}
+            {/* Menu section container below the title card */}
+            <View style={s.menuContentContainer}>
+              {/* Filter capsule bar matching reference UI (enclosed pill with internal scroll) */}
+              <View style={s.filterCapsuleContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.filterCapsuleScroll}
                 >
-                  <View style={s.promoOfferLeft}>
-                    <View style={s.promoIconBox}>
-                      <Ionicons name="pricetag" size={15} color="#EA580C" />
-                    </View>
-                    <Text style={s.promoOfferText}>
-                      {seller.offer || "Flat ₹30 OFF on orders above ₹299"}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#EA580C" />
-                </Pressable>
+                  {categoryList.map((catKey) => {
+                    const isActive = selectedCategory === catKey;
+                    const label = catKey === "all" ? "All Items" : catKey;
+
+                    return (
+                      <Pressable
+                        key={catKey}
+                        onPress={() => setSelectedCategory(catKey)}
+                        style={[
+                          s.filterCapsuleTab,
+                          isActive && s.filterCapsuleTabActive,
+                        ]}
+                      >
+                        <Text style={[s.filterCapsuleTabText, isActive && s.filterCapsuleTabTextActive]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               </View>
-
-              {/* Category Filter Chips Horizontal Row */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.categoryChipsScroll}
-                style={{ marginTop: 12, marginBottom: 4 }}
-              >
-                {categoryList.map((catKey) => {
-                  const isActive = selectedCategory === catKey;
-                  const label = catKey === "all" ? "All Items" : catKey;
-                  const iconName = catKey === "all"
-                    ? "list-outline"
-                    : catKey.toLowerCase().includes("bake")
-                    ? "nutrition-outline"
-                    : catKey.toLowerCase().includes("dairy")
-                    ? "water-outline"
-                    : catKey.toLowerCase().includes("egg")
-                    ? "egg-outline"
-                    : "cafe-outline";
-
-                  return (
-                    <Pressable
-                      key={catKey}
-                      onPress={() => setSelectedCategory(catKey)}
-                      style={[
-                        s.categoryChip,
-                        isActive && s.categoryChipActive,
-                      ]}
-                    >
-                      <Ionicons
-                        name={iconName as any}
-                        size={15}
-                        color={isActive ? "#FFFFFF" : "#374151"}
-                      />
-                      <Text style={[s.categoryChipText, isActive && s.categoryChipTextActive]}>
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
             </View>
           </View>
         }
-        renderSectionHeader={({ section }) => {
+        renderSectionHeader={({ section }: any) => {
           const isCollapsed = !!collapsedSections[section.title];
           return (
             <Pressable
@@ -408,14 +415,35 @@ export default function SellerScreen() {
             </Pressable>
           );
         }}
-        renderItem={({ item: rowProducts }) => (
-          <View style={{ backgroundColor: "#FDFBF9" }}>
+        renderItem={({ item: rowProducts }: any) => (
+          <View style={{ backgroundColor: "transparent" }}>
             <View style={s.gridRow}>
-              {rowProducts.map((p) => {
+              {rowProducts.map((p: Product) => {
                 const qty = qtyOf(p.id);
                 const isBusy = busy === p.id;
                 return (
-                  <View key={p.id} style={s.gridCard} testID={`product-${p.id}`}>
+                  <Pressable
+                    key={p.id}
+                    style={s.gridCard}
+                    testID={`product-${p.id}`}
+                    onPress={() => setSelectedProduct(p)}
+                  >
+                    {/* Glassmorphic backdrop blur & themed translucent liquid rose gradient */}
+                    <BlurView intensity={Platform.OS === "ios" ? 18 : 8} tint="light" style={StyleSheet.absoluteFill} />
+                    <LinearGradient
+                      colors={["rgba(255, 245, 248, 0.75)", "rgba(255, 230, 238, 0.52)"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                      pointerEvents="none"
+                    />
+
+                    {/* Specular glass reflection along top edge */}
+                    <View
+                      pointerEvents="none"
+                      style={s.cardGlassHighlight}
+                    />
+
                     {/* Product Image Box */}
                     <View style={s.gridCardImageBox}>
                       <AppImage
@@ -432,12 +460,14 @@ export default function SellerScreen() {
                       </View>
                     </View>
 
-                    {/* Title & Price & Add/Stepper */}
+                    {/* Title & Price & Add/Stepper (Compact height) */}
                     <View style={s.gridCardContent}>
-                      <Text style={s.gridCardTitle} numberOfLines={2}>
-                        {p.name}
-                      </Text>
-                      <Text style={s.gridCardPrice}>{rupee(p.price)}</Text>
+                      <View>
+                        <Text style={s.gridCardTitle} numberOfLines={2}>
+                          {p.name}
+                        </Text>
+                        <Text style={s.gridCardPrice}>{rupee(p.price)}</Text>
+                      </View>
 
                       {/* Action button: '+ Add' pill or Stepper */}
                       <View style={s.gridCardActionRow}>
@@ -445,14 +475,17 @@ export default function SellerScreen() {
                           <Pressable
                             testID={`product-add-${p.id}`}
                             disabled={!p.available || isBusy}
-                            onPress={() => change(p, 1)}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              change(p, 1);
+                            }}
                             style={({ pressed }) => [
                               s.gridAddBtn,
                               pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
                               (!p.available || isBusy) && { opacity: 0.4 },
                             ]}
                           >
-                            <Ionicons name="add" size={14} color={colors.brandPrimary} />
+                            <Ionicons name="add" size={13} color={colors.brandPrimary} />
                             <Text style={s.gridAddBtnText}>Add</Text>
                           </Pressable>
                         ) : (
@@ -467,22 +500,111 @@ export default function SellerScreen() {
                         )}
                       </View>
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
               {/* Fillers for incomplete 3-column rows */}
               {rowProducts.length === 1 && (
                 <>
-                  <View style={[s.gridCard, { opacity: 0 }]} />
-                  <View style={[s.gridCard, { opacity: 0 }]} />
+                  <View style={{ flex: 1 }} />
+                  <View style={{ flex: 1 }} />
                 </>
               )}
               {rowProducts.length === 2 && (
-                <View style={[s.gridCard, { opacity: 0 }]} />
+                <View style={{ flex: 1 }} />
               )}
             </View>
           </View>
         )}
+        ListFooterComponent={
+          <View style={s.storeFooterContainer}>
+            {/* Disclaimer Box */}
+            <View style={s.disclaimerSection}>
+              <Text style={s.disclaimerHeading}>Disclaimer :</Text>
+              <View style={s.bulletItem}>
+                <View style={s.bulletDot} />
+                <Text style={s.bulletText}>
+                  All prices, discounts, and item availability are set directly by the merchant.
+                </Text>
+              </View>
+              <View style={s.bulletItem}>
+                <View style={s.bulletDot} />
+                <Text style={s.bulletText}>
+                  Nutritional and allergen information is indicative, supplied by the merchant, and may vary depending on ingredients and preparation.
+                </Text>
+              </View>
+              <View style={s.bulletItem}>
+                <View style={s.bulletDot} />
+                <Text style={s.bulletText}>
+                  An average active adult requires 2,000 kcal energy per day; however, individual calorie needs may vary.
+                </Text>
+              </View>
+              <View style={s.bulletItem}>
+                <View style={s.bulletDot} />
+                <Text style={s.bulletText}>
+                  Product descriptions and imagery may be enhanced by SmartCart AI for a better shopping experience.
+                </Text>
+              </View>
+            </View>
+
+            {/* Report an issue with the menu / store */}
+            <Pressable
+              style={({ pressed }) => [s.reportIssueRow, pressed && { opacity: 0.75 }]}
+              onPress={() => toast("Feedback recorded. Our support team will review this menu.")}
+            >
+              <View style={s.reportIssueLeft}>
+                <Ionicons name="alert-circle-outline" size={17} color="#475569" />
+                <Text style={s.reportIssueText}>Report an issue with the menu or pricing</Text>
+              </View>
+              <Ionicons name="play" size={11} color="#64748B" />
+            </Pressable>
+
+            {/* License / Registration details (if available, otherwise fallback) */}
+            <View style={s.licenseSection}>
+              {seller.fssai_number ? (
+                <View style={s.licenseRow}>
+                  <Text style={s.licenseLabel}>
+                    {seller.category === "food" ? "FSSAI License No." : "Registration No."}
+                  </Text>
+                  <Text style={s.licenseValue}>{seller.fssai_number}</Text>
+                </View>
+              ) : seller.registration_no ? (
+                <View style={s.licenseRow}>
+                  <Text style={s.licenseLabel}>Registration No.</Text>
+                  <Text style={s.licenseValue}>{seller.registration_no}</Text>
+                </View>
+              ) : (
+                <View style={s.licenseRow}>
+                  <Text style={s.licenseLabel}>Merchant Verification</Text>
+                  <Text style={s.licenseValueMuted}>
+                    {seller.fssai_status === "verified"
+                      ? "Verified Partner Store"
+                      : "Registered Merchant on SmartCart"}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Store Title & Address Section */}
+            <View style={s.storeIdentitySection}>
+              <Text style={s.footerStoreName}>{seller.name}</Text>
+              {seller.cuisine ? (
+                <Text style={s.footerOutletSub}>
+                  (Specialty : {seller.cuisine})
+                </Text>
+              ) : null}
+
+              <View style={s.addressRow}>
+                <Ionicons name="location-outline" size={16} color="#475569" style={{ marginTop: 2 }} />
+                <Text style={s.addressText}>
+                  {seller.address && seller.address.trim()
+                    ? seller.address
+                    : "Registered store location available upon order fulfillment."}
+                </Text>
+              </View>
+            </View>
+          </View>
+        }
       />
 
       {/* 4. DOCKED / FLOATING CARD MATCHING FIRST IMAGE */}
@@ -491,87 +613,144 @@ export default function SellerScreen() {
         pointerEvents="box-none"
         onLayout={(e) => {
           const h = e.nativeEvent.layout.height;
-          if (h > 50 && Math.abs(h - measuredCardHeight) > 2) {
+          if (h > 0 && Math.abs(h - measuredCardHeight) > 2) {
             setMeasuredCardHeight(h);
           }
         }}
       >
+        <BlurView intensity={28} tint="light" style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={["rgba(255, 255, 255, 0.94)", "rgba(255, 245, 247, 0.88)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Specular top highlight */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 1,
+            backgroundColor: "rgba(255, 255, 255, 0.95)",
+          }}
+        />
         <View style={s.cardBodyRow}>
-          {/* Shop Logo Avatar Box */}
-          <View style={s.shopLogoBox}>
-            {seller.image ? (
-              <AppImage
-                source={{ uri: mediaUri(seller.image) }}
-                fallbackType={seller.category === "grocery" ? "groceries" : "shop"}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-              />
-            ) : (
-              <Ionicons
-                name={seller.category === "grocery" ? "basket" : "restaurant"}
-                size={26}
-                color="#FFFFFF"
-              />
-            )}
-          </View>
-
-          {/* Center Shop Details */}
+          {/* Shop Details arranged exactly matching reference image */}
           <View style={s.shopInfoCol}>
-            <View style={s.cardTitleRow}>
-              {/* Back button when docked */}
-              <Animated.View style={[s.cardBackBtnWrapper, cardBackBtnAnimStyle]}>
-                <Pressable
-                  testID="seller-docked-back-button"
-                  onPress={() => router.back()}
-                  style={s.cardBackBtn}
-                  hitSlop={8}
-                >
-                  <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
-                </Pressable>
-              </Animated.View>
-              <Animated.Text testID="seller-name" style={[s.shopNameTitle, cardTitleAnimStyle]} numberOfLines={1}>
-                {seller.name}
-              </Animated.Text>
-              <Ionicons name="checkmark-circle" size={17} color="#22C55E" style={{ marginLeft: 4 }} />
+            {/* Row 1: Title (left) & Rating Badge (right) */}
+            <View style={s.cardHeaderRow}>
+              <View style={s.cardTitleRow}>
+                {/* Back button when docked */}
+                <Animated.View style={[s.cardBackBtnWrapper, cardBackBtnAnimStyle]}>
+                  <Pressable
+                    testID="seller-docked-back-button"
+                    onPress={() => router.back()}
+                    style={s.cardBackBtn}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
+                  </Pressable>
+                </Animated.View>
+                <Animated.Text testID="seller-name" style={[s.shopNameTitle, cardTitleAnimStyle]} numberOfLines={1}>
+                  {seller.name}
+                </Animated.Text>
+              </View>
+
+              {/* Rating badge on right side */}
+              <View style={s.ratingBadgeRightCol}>
+                <View style={s.ratingBadgeGreen}>
+                  <Text style={s.ratingBadgeText}>{seller.rating ? seller.rating.toFixed(1) : "4.4"}</Text>
+                  <Ionicons name="star" size={11} color="#FFFFFF" />
+                </View>
+                <Text style={s.reviewsCountText}>
+                  {seller.reviews_count ? `${(seller.reviews_count / 1000).toFixed(1)}k ratings` : "819 ratings"}
+                </Text>
+              </View>
             </View>
 
-            {/* Subtitle: Cuisine / Category & Area */}
+            {/* Row 2: Distance & Area with dropdown chevron */}
+            <View style={s.distanceLocationRow}>
+              <Text style={s.distanceLocationText} numberOfLines={1}>
+                {seller.distance_km || 0.7} km · {seller.address || "Siripuram, Vizag"}
+              </Text>
+              <Ionicons name="caret-down" size={13} color="#0D9488" style={{ marginLeft: 3 }} />
+            </View>
+
+            {/* Row 3: Cuisine & Min order / price for two */}
             <Text style={s.shopSubtitleText} numberOfLines={1}>
-              {seller.cuisine ? seller.cuisine.replace(/,/g, ", ") : (seller.category === "grocery" ? "Grocery, Staples" : "South Indian, Meals")} • {seller.address || "Koramangala, Bengaluru"}
+              {seller.cuisine ? seller.cuisine.replace(/,/g, ", ") : (seller.category === "grocery" ? "Grocery, Staples" : "North Indian, Continental")} | {rupee(seller.min_order || 49)} min order
             </Text>
 
-            {/* Rating Pill & Reviews */}
-            <View style={s.shopRatingRow}>
-              <View style={s.ratingBadgeGreen}>
-                <Ionicons name="star" size={11} color="#FFFFFF" />
-                <Text style={s.ratingBadgeText}>{seller.rating ? seller.rating.toFixed(1) : "4.4"}</Text>
+            {/* Row 4: Action pills (Open till 11PM, Directions, Call) themed with rose/pastel tones */}
+            <View style={s.actionPillsRow}>
+              <View style={s.openTillPill}>
+                <Ionicons name="time-outline" size={13} color="#E11D48" style={{ marginRight: 4 }} />
+                <Text style={s.openTillPillText}>
+                  <Text style={{ color: "#E11D48", fontWeight: "800" }}>Open</Text> till 11PM
+                </Text>
+                <Ionicons name="chevron-down" size={13} color="#FB7185" style={{ marginLeft: 3 }} />
               </View>
-              <Text style={s.reviewsCountText}>
-                ({seller.reviews_count ? `${(seller.reviews_count / 1000).toFixed(1)}k` : "2.8k"} reviews)
-              </Text>
-            </View>
 
-            {/* Metrics: ETA | Distance | Prep time */}
-            <View style={s.shopMetricsRow}>
-              <View style={s.metricItem}>
-                <Ionicons name="time-outline" size={14} color="#64748B" />
-                <Text style={s.metricItemText}>{seller.eta_min || 17} mins</Text>
-              </View>
-              <View style={s.metricItemDivider} />
-              <View style={s.metricItem}>
-                <Ionicons name="location-outline" size={14} color="#64748B" />
-                <Text style={s.metricItemText}>{seller.distance_km || 0.7} km</Text>
-              </View>
-              <View style={s.metricItemDivider} />
-              <View style={s.metricItem}>
-                <Ionicons name="restaurant-outline" size={14} color="#64748B" />
-                <Text style={s.metricItemText}>Prep {seller.prep_time_min || 15} mins</Text>
-              </View>
-            </View>
+              {/* Directions Icon Circle */}
+              <Pressable
+                onPress={() => toast("Opening directions...")}
+                style={s.actionCircleBtn}
+                hitSlop={6}
+              >
+                <Ionicons name="navigate-outline" size={15} color="#E11D48" />
+              </Pressable>
 
-            {/* Min order */}
-            <Text style={s.minOrderText}>Min order: {rupee(seller.min_order || 49)}</Text>
+              {/* Call Icon Circle */}
+              <Pressable
+                onPress={() => toast("Calling restaurant...")}
+                style={s.actionCircleBtn}
+                hitSlop={6}
+              >
+                <Ionicons name="call-outline" size={15} color="#E11D48" />
+              </Pressable>
+            </View>
           </View>
+        </View>
+
+        {/* Search Bar on Resizable Card matching theme with light glassmorphic background */}
+        <View style={s.cardSearchBar}>
+          <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={["rgba(255, 255, 255, 0.85)", "rgba(255, 240, 244, 0.60)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Subtle top specular glass highlight */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 14,
+              right: 14,
+              height: 1,
+              backgroundColor: "rgba(255, 255, 255, 0.95)",
+            }}
+          />
+          <Ionicons name="search" size={16} color="#F43F5E" />
+          <TextInput
+            value={menuSearchQuery}
+            onChangeText={setMenuSearchQuery}
+            placeholder={`Search in ${seller.name}...`}
+            placeholderTextColor="#94A3B8"
+            style={s.cardSearchInput}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+          {menuSearchQuery.length > 0 && (
+            <Pressable onPress={() => setMenuSearchQuery("")} hitSlop={8} style={{ padding: 2 }}>
+              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+            </Pressable>
+          )}
         </View>
 
         {modeLabel ? (
@@ -590,8 +769,7 @@ export default function SellerScreen() {
             style={s.cartBarInner}
             onPress={() => {
               if (mode === "cart") {
-                navigateToTab(2);
-                router.back();
+                router.push("/cart");
               } else {
                 router.back();
               }
@@ -628,12 +806,27 @@ export default function SellerScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      {/* 6. ITEM DETAIL BOTTOM SHEET MODAL */}
+      <ProductDetailModal
+        visible={!!selectedProduct}
+        product={selectedProduct}
+        seller={seller}
+        currentQty={selectedProduct ? qtyOf(selectedProduct.id) : 0}
+        onClose={() => setSelectedProduct(null)}
+        onAddToCart={(p, qty, cookingRequest) => {
+          change(p, qty);
+          if (cookingRequest) {
+            toast(`Note for chef: "${cookingRequest}"`);
+          }
+        }}
+      />
     </View>
   );
 }
 
 const useStyles = makeStyles((c) => ({
-  root: { flex: 1, backgroundColor: "#FDFBF9" },
+  root: { flex: 1, backgroundColor: "#FFFFFF" },
 
   /* Fixed Hero Background */
   fixedHeroContainer: {
@@ -643,49 +836,37 @@ const useStyles = makeStyles((c) => ({
     right: 0,
     height: HERO_HEIGHT,
     backgroundColor: c.surfaceTertiary,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     overflow: "hidden",
     zIndex: 0,
   },
-  heroDarkGradient: {
+  heroBottomGradient: {
     position: "absolute",
-    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.22)",
+    height: 180,
   },
   heroDotsBadge: {
     position: "absolute",
-    bottom: 24,
-    right: 16,
+    right: 18,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    gap: 5,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 3,
   },
   heroDotsText: {
-    color: "#FFFFFF",
+    color: "#0F172A",
     fontSize: 11,
     fontWeight: "700",
-  },
-  heroDotsList: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  heroDot: {
-    width: 4.5,
-    height: 4.5,
-    borderRadius: 2.5,
-  },
-  heroDotActive: {
-    backgroundColor: "#FFFFFF",
-  },
-  heroDotInactive: {
-    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   /* Fixed Top Buttons */
@@ -717,9 +898,7 @@ const useStyles = makeStyles((c) => ({
     backgroundColor: "transparent",
   },
   menuContentContainer: {
-    backgroundColor: "#FDFBF9",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: "transparent",
     paddingTop: 8,
     marginTop: -8,
   },
@@ -729,40 +908,39 @@ const useStyles = makeStyles((c) => ({
     position: "absolute",
     left: spacing.lg,
     right: spacing.lg,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingHorizontal: 14,
+    backgroundColor: "#FBF7EE", // Warm off-white surface matching reference image
+    borderRadius: 24,
+    paddingTop: 16,
+    paddingHorizontal: 16,
     paddingBottom: 14,
-    shadowColor: "#000000",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
     zIndex: 30,
-    elevation: 6,
+    elevation: 8,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "rgba(255, 255, 255, 0.95)",
+    overflow: "hidden",
   },
   cardBodyRow: {
     flexDirection: "row",
     alignItems: "flex-start",
   },
-  shopLogoBox: {
-    width: 68,
-    height: 68,
-    borderRadius: 12,
-    backgroundColor: "#166534",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
   shopInfoCol: {
     flex: 1,
-    marginLeft: 12,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
   },
   cardTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     position: "relative",
+    flex: 1,
+    marginRight: 8,
   },
   cardBackBtnWrapper: {
     position: "absolute",
@@ -779,70 +957,104 @@ const useStyles = makeStyles((c) => ({
     justifyContent: "center",
   },
   shopNameTitle: {
-    fontSize: 18,
+    fontSize: 21,
     fontWeight: "900",
     color: "#0F172A",
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     flexShrink: 1,
   },
-  shopSubtitleText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#64748B",
-    marginTop: 2,
-  },
-  shopRatingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 5,
+  ratingBadgeRightCol: {
+    alignItems: "flex-end",
   },
   ratingBadgeGreen: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#16A34A",
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: "#0FA974", // Emerald green pill matching reference
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   ratingBadgeText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "800",
   },
   reviewsCountText: {
-    fontSize: 11.5,
-    fontWeight: "500",
+    fontSize: 10.5,
+    fontWeight: "600",
     color: "#64748B",
+    marginTop: 3,
+    textDecorationLine: "underline",
+    textDecorationStyle: "dotted",
   },
-  shopMetricsRow: {
+  distanceLocationRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 7,
+    marginTop: 6,
   },
-  metricItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  metricItemText: {
-    fontSize: 11.5,
+  distanceLocationText: {
+    fontSize: 13,
     fontWeight: "600",
     color: "#334155",
   },
-  metricItemDivider: {
-    width: 1,
-    height: 10,
-    backgroundColor: "#CBD5E1",
-    marginHorizontal: 1,
-  },
-  minOrderText: {
-    fontSize: 11,
+  shopSubtitleText: {
+    fontSize: 12.5,
     fontWeight: "500",
     color: "#64748B",
-    marginTop: 5,
+    marginTop: 4,
+  },
+  actionPillsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+  openTillPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF1F3",
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.16)",
+  },
+  openTillPillText: {
+    fontSize: 11.5,
+    color: "#881337",
+    fontWeight: "600",
+  },
+  actionCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FFF1F3",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(244, 63, 94, 0.16)",
+  },
+  cardSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.70)",
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    height: 38,
+    marginTop: 10,
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 1,
+    borderColor: "rgba(245, 129, 164, 0.14)", // Very light maroon/rose border
+  },
+  cardSearchInput: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#1E293B",
+    marginLeft: 6,
+    paddingVertical: 0,
   },
   mode: {
     flexDirection: "row",
@@ -865,9 +1077,9 @@ const useStyles = makeStyles((c) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFF7ED",
+    backgroundColor: "#FFF1F3",
     borderWidth: 1,
-    borderColor: "#FFEDD5",
+    borderColor: "#FECDD3",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -882,44 +1094,53 @@ const useStyles = makeStyles((c) => ({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#FFEDD5",
+    backgroundColor: "rgba(244, 63, 94, 0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   promoOfferText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#C2410C",
+    color: "#E11D48",
     flex: 1,
   },
 
-  /* Category Filter Chips */
-  categoryChipsScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-    alignItems: "center",
-  },
-  categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+  /* Filter Capsule Bar matching Reference UI & App Theme */
+  filterCapsuleContainer: {
+    marginHorizontal: 16,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(244, 63, 94, 0.18)",
+    backgroundColor: "rgba(255, 255, 255, 0.38)",
+    overflow: "hidden",
+    justifyContent: "center",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  categoryChipActive: {
-    backgroundColor: c.brandPrimary,
-    borderColor: c.brandPrimary,
+  filterCapsuleScroll: {
+    paddingHorizontal: 3,
+    alignItems: "center",
+    gap: 3,
   },
-  categoryChipText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#334155",
+  filterCapsuleTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  categoryChipTextActive: {
+  filterCapsuleTabActive: {
+    backgroundColor: "#0B0F19", // Solid black active background
+  },
+  filterCapsuleTabText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  filterCapsuleTabTextActive: {
     color: "#FFFFFF",
     fontWeight: "800",
   },
@@ -932,7 +1153,7 @@ const useStyles = makeStyles((c) => ({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: "#FDFBF9",
+    backgroundColor: "transparent",
   },
   sectionTitleText: {
     fontSize: 16,
@@ -943,7 +1164,7 @@ const useStyles = makeStyles((c) => ({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: c.brandTertiary,
+    backgroundColor: "#FFF1F3",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -958,75 +1179,81 @@ const useStyles = makeStyles((c) => ({
   },
   gridCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#F1F5F9",
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
+    borderColor: "rgba(255, 220, 230, 0.80)",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.06,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 1.5,
+  },
+  cardGlassHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 8,
+    right: 8,
+    height: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.65)",
+    zIndex: 10,
   },
   gridCardImageBox: {
     width: "100%",
-    height: 105,
-    backgroundColor: c.surfaceTertiary,
+    height: 100,
+    backgroundColor: "transparent",
     position: "relative",
   },
   gridCardVegBox: {
     position: "absolute",
-    bottom: 6,
-    left: 6,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 4,
-    padding: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    bottom: 5,
+    left: 5,
+    zIndex: 10,
   },
   gridCardContent: {
-    padding: 8,
+    paddingHorizontal: 7,
+    paddingTop: 5,
+    paddingBottom: 6,
     justifyContent: "space-between",
-    minHeight: 88,
+    minHeight: 66,
+    backgroundColor: "transparent",
   },
   gridCardTitle: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "700",
     color: "#1E293B",
-    lineHeight: 15,
+    lineHeight: 14,
+    backgroundColor: "transparent",
   },
   gridCardPrice: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: "800",
     color: "#0F172A",
-    marginTop: 4,
+    marginTop: 2,
+    backgroundColor: "transparent",
   },
   gridCardActionRow: {
-    marginTop: 6,
+    marginTop: 4,
     alignItems: "flex-end",
   },
   gridAddBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-    backgroundColor: c.brandTertiary,
+    gap: 2.5,
+    backgroundColor: "#FFF1F3",
     borderWidth: 1,
-    borderColor: "#FED7AA",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4.5,
+    borderColor: "#FECDD3",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 3.5,
   },
   gridAddBtnText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "800",
-    color: c.brandPrimary,
+    color: "#F43F5E",
   },
   stepperWrapper: {
-    transform: [{ scale: 0.85 }],
+    transform: [{ scale: 0.80 }],
     marginRight: -6,
   },
 
@@ -1113,5 +1340,120 @@ const useStyles = makeStyles((c) => ({
     color: "#16A34A",
     fontWeight: "800",
     fontSize: 12,
+  },
+
+  /* Store Footer: Disclaimer, License & Registered Address */
+  storeFooterContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 24,
+    backgroundColor: "transparent",
+  },
+  disclaimerSection: {
+    paddingBottom: 16,
+  },
+  disclaimerHeading: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#475569",
+    marginBottom: 8,
+  },
+  bulletItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
+  bulletDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: "#94A3B8",
+    marginTop: 6,
+    marginRight: 8,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  reportIssueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.8)",
+    marginVertical: 12,
+  },
+  reportIssueLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  reportIssueText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  licenseSection: {
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.8)",
+  },
+  licenseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  licenseLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  licenseValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: 0.3,
+  },
+  licenseValueMuted: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  storeIdentitySection: {
+    paddingTop: 16,
+    gap: 4,
+  },
+  footerStoreName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  footerOutletSub: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 6,
+  },
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 2,
+  },
+  addressText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#64748B",
+    fontWeight: "500",
   },
 }));

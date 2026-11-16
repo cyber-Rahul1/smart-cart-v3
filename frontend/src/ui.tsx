@@ -175,7 +175,7 @@ export function SkeletonBlock({
 
   const opacity = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.35, 0.85],
+    outputRange: [0.18, 0.42],
   });
 
   return (
@@ -185,8 +185,10 @@ export function SkeletonBlock({
           width: width as any,
           height,
           borderRadius,
-          backgroundColor: colors.borderStrong || "#E2E5E9",
+          backgroundColor: "#CBD5E1",
           opacity,
+          shadowOpacity: 0,
+          elevation: 0,
         },
         style,
       ]}

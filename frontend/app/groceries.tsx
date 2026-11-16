@@ -1,6 +1,7 @@
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
@@ -9,6 +10,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   Easing,
+  interpolate,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,15 +21,18 @@ import { SellerTile } from "@/src/components/seller-card";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { Button, EmptyState, ErrorState, IconName, Ionicons, Loader, SectionTitle, Sheet, useToast } from "@/src/ui";
-import { navigateToTab } from "@/src/context/tab-bar-visibility";
+import { navigateToTab, useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+import { BrandFooter } from "@/src/components/brand-footer";
+import { GroceriesSkeleton } from "@/src/components/groceries-skeleton";
+import { FloatingCartBar } from "@/src/components/floating-cart-bar";
 
 const GROCERY_CATEGORIES = [
-  { key: "All", label: "All", icon: "grid-outline", isIcon: true },
-  { key: "Bakery", label: "Bakery", image: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&q=70" },
-  { key: "Dairy", label: "Dairy", image: "https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=400&q=70" },
-  { key: "Beverages", label: "Beverages", image: "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=400&q=70" },
-  { key: "Snacks", label: "Snacks", image: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400&q=70" },
-  { key: "Staples", label: "Staples", image: "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&q=70" },
+  { key: "All", label: "All" },
+  { key: "Dairy", label: "Dairy" },
+  { key: "Bakery", label: "Bakery" },
+  { key: "Beverages", label: "Beverages" },
+  { key: "Snacks", label: "Snacks" },
+  { key: "Staples", label: "Staples" },
 ];
 
 export default function Groceries() {
@@ -40,35 +45,68 @@ export default function Groceries() {
     const [aisle, setAisle] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [conflict, setConflict] = useState<{ p: Product; qty: number } | null>(null);
+    const { tabBarTranslateY } = useTabBarVisibility();
 
     const collapseProgress = useSharedValue(0);
+    const stickyChipsProgress = useSharedValue(0);
     const [titleRowHeight, setTitleRowHeight] = useState(56);
     const lastScrollY = useRef(0);
     const isHiddenRef = useRef(false);
+    const accumulatedDiff = useRef(0);
+    const categorySectionY = useRef(350);
 
     const TIMING_CONFIG = {
-        duration: 260,
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
     };
 
     const handleGroceriesScroll = (e: any) => {
         const currentY = e.nativeEvent.contentOffset.y;
         const diff = currentY - lastScrollY.current;
 
-        if (currentY <= 10) {
+        // Sticky filter pills trigger when scrolled past the category section
+        const triggerY = Math.max(180, categorySectionY.current - 80);
+        if (currentY >= triggerY) {
+            if (stickyChipsProgress.value < 1) {
+                stickyChipsProgress.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
+            }
+        } else {
+            if (stickyChipsProgress.value > 0) {
+                stickyChipsProgress.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) });
+            }
+        }
+
+        // Only trigger when scrolled past top padding or pulled down
+        if (currentY <= 15) {
+            accumulatedDiff.current = 0;
+            // At the very top, always show header and tab bar smoothly
             if (isHiddenRef.current) {
                 isHiddenRef.current = false;
                 collapseProgress.value = withTiming(0, TIMING_CONFIG);
+                tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
             }
-        } else if (diff > 12 && currentY > 40) {
-            if (!isHiddenRef.current) {
-                isHiddenRef.current = true;
-                collapseProgress.value = withTiming(1, TIMING_CONFIG);
+        } else {
+            // Accumulate scroll displacement in consistent direction
+            if ((diff > 0 && accumulatedDiff.current < 0) || (diff < 0 && accumulatedDiff.current > 0)) {
+                accumulatedDiff.current = 0;
             }
-        } else if (diff < -12) {
-            if (isHiddenRef.current) {
-                isHiddenRef.current = false;
-                collapseProgress.value = withTiming(0, TIMING_CONFIG);
+            accumulatedDiff.current += diff;
+
+            // Hysteresis threshold: requires intentional, sustained drag (>= 50px) before flipping
+            if (accumulatedDiff.current > 50 && currentY > 80) {
+                // User is intentionally scrolling content UP -> hide header & bottom tab bar
+                if (!isHiddenRef.current) {
+                    isHiddenRef.current = true;
+                    collapseProgress.value = withTiming(1, TIMING_CONFIG);
+                    tabBarTranslateY.value = withTiming(100, TIMING_CONFIG);
+                }
+            } else if (accumulatedDiff.current < -50) {
+                // User is intentionally scrolling content DOWN -> reveal both smoothly from bottom
+                if (isHiddenRef.current) {
+                    isHiddenRef.current = false;
+                    collapseProgress.value = withTiming(0, TIMING_CONFIG);
+                    tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
+                }
             }
         }
 
@@ -80,6 +118,17 @@ export default function Groceries() {
         return {
             marginTop: -collapseProgress.value * totalShift,
             opacity: 1 - collapseProgress.value,
+        };
+    });
+
+    const stickyChipsAnimStyle = useAnimatedStyle(() => {
+        return {
+            maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 48]),
+            opacity: stickyChipsProgress.value,
+            transform: [
+                { translateY: interpolate(stickyChipsProgress.value, [0, 1], [-20, 0]) },
+            ],
+            pointerEvents: stickyChipsProgress.value > 0.5 ? ("auto" as const) : ("none" as const),
         };
     });
 
@@ -132,12 +181,20 @@ export default function Groceries() {
     const cardW = (width - spacing.lg * 2 - gap) / 2;
     const refresh = () => { stores.refetch(); menus.forEach((m) => m.refetch()); cart.refetch(); };
 
-    if (stores.isLoading) return <Loader />;
+    if (stores.isLoading) return <GroceriesSkeleton />;
     if (stores.isError) return <ErrorState message={(stores.error as Error).message} onRetry={() => stores.refetch()} />;
     const loadingMenus = menus.some((m) => m.isLoading);
 
     return (
         <View style={s.root}>
+            {/* Background Graphic matching Home Screen */}
+            <Image
+                source={require("@/assets/images/gathr_home_bg.jpg")}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                priority="high"
+            />
+
             {/* Sticky Top Header */}
             <View
                 style={{
@@ -145,7 +202,7 @@ export default function Groceries() {
                     zIndex: 10,
                     overflow: "hidden",
                     borderBottomWidth: 0,
-                    backgroundColor: colors.surface,
+                    backgroundColor: "transparent",
                 }}
             >
                 {/* Collapsible Section ABOVE search: Small back button & Title & Subtitle */}
@@ -193,8 +250,7 @@ export default function Groceries() {
                     {/* Cart icon with badge */}
                     <Pressable
                         onPress={() => {
-                            navigateToTab(2);
-                            router.back();
+                            router.push("/cart");
                         }}
                         style={s.topCartBtn}
                     >
@@ -220,8 +276,39 @@ export default function Groceries() {
                         onPress={() => router.push("/search")}
                         style={s.searchBarBox}
                     >
-                        <Ionicons name="search" size={20} color="#0F172A" />
-                        <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
+                        {/* Backdrop blur layer for liquid glass */}
+                        <BlurView
+                            intensity={20}
+                            tint="light"
+                            style={StyleSheet.absoluteFill}
+                        />
+
+                        {/* Blush-pink liquid glass gradient tint */}
+                        <LinearGradient
+                            colors={[
+                                "rgba(255, 255, 255, 0.65)",
+                                "rgba(255, 228, 235, 0.35)",
+                            ]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFill}
+                        />
+
+                        {/* Specular glass highlight reflection along top edge */}
+                        <View
+                            pointerEvents="none"
+                            style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 16,
+                                right: 16,
+                                height: 1,
+                                backgroundColor: "rgba(255, 255, 255, 0.85)",
+                            }}
+                        />
+
+                        <Ionicons name="search" size={17} color="#F43F5E" />
+                        <View style={{ flex: 1, height: 38, justifyContent: "center", position: "relative" }}>
                             <AnimatedPlaceholder
                                 placeholders={[
                                     "Search for milk, bread, fruits...",
@@ -233,9 +320,55 @@ export default function Groceries() {
                                 ]}
                             />
                         </View>
-                        <Ionicons name="mic-outline" size={20} color="#0F172A" />
+                        <Ionicons name="mic-outline" size={19} color="#F43F5E" />
                     </Pressable>
                 </View>
+
+                {/* Collapsible Horizontal Category Filter Pills below Search Bar */}
+                <Animated.View style={[s.stickyChipsContainer, stickyChipsAnimStyle]}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={s.categoryPillsScroll}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {GROCERY_CATEGORIES.map((c) => {
+                            const isSelected = (!aisle && c.key === "All") || (aisle === c.key);
+                            return (
+                                <Pressable
+                                    key={`sticky-${c.key}`}
+                                    testID={`sticky-groceries-cat-${c.key}`}
+                                    onPress={() => setAisle(c.key === "All" ? null : c.key)}
+                                    style={({ pressed }) => [
+                                        s.categoryPill,
+                                        isSelected ? s.categoryPillActive : s.categoryPillInactive,
+                                        pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                                    ]}
+                                >
+                                    {!isSelected && (
+                                        <>
+                                            <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
+                                            <LinearGradient
+                                                colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={StyleSheet.absoluteFill}
+                                            />
+                                        </>
+                                    )}
+                                    <Text
+                                        style={[
+                                            s.categoryPillText,
+                                            isSelected ? s.categoryPillTextActive : s.categoryPillTextInactive,
+                                        ]}
+                                    >
+                                        {c.label}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                </Animated.View>
             </View>
 
             <Animated.ScrollView
@@ -243,46 +376,47 @@ export default function Groceries() {
                 onScroll={handleGroceriesScroll}
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom + (cartCount ? 96 : spacing.xl) }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + (cartCount ? 120 : spacing.xl) }}
                 refreshControl={<RefreshControl refreshing={stores.isRefetching} onRefresh={refresh} tintColor={colors.brandPrimary} />}
             >
-                {/* 1. Hero Banner matching reference image */}
+                {/* 1. Hero Banner matching reference image exactly */}
                 <View style={s.heroBanner}>
+                    {/* Clean background image with no blurry gradient */}
                     <Image
-                        source={{ uri: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=1200&q=80" }}
+                        source={require("@/assets/images/grocery_banner.jpg")}
                         style={StyleSheet.absoluteFill}
                         contentFit="cover"
                     />
-                    <LinearGradient
-                        colors={["rgba(232, 245, 233, 0.94)", "rgba(241, 248, 233, 0.82)", "rgba(255, 255, 255, 0.3)"]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={StyleSheet.absoluteFill}
-                    />
+
+                    {/* Left content positioned over the clean banner */}
                     <View style={s.heroLeftCol}>
+                        {/* Daily Essentials Capsule Pill */}
                         <View style={s.dailyTag}>
                             <Ionicons name="flash" size={13} color="#EAB308" />
                             <Text style={s.dailyTagText}>Daily Essentials</Text>
                         </View>
-                        <Text style={s.heroTitle}>Fresh groceries{"\n"}at your doorstep</Text>
-                        
+
+                        {/* Title: Fresh groceries at your doorstep */}
+                        <View style={{ marginTop: 6, marginBottom: 2 }}>
+                            <Text style={s.heroTitle}>Fresh groceries</Text>
+                            <Text style={s.heroTitleSecondRow}>
+                                at your <Text style={s.heroTitleHighlight}>doorstep</Text>
+                            </Text>
+                            {/* Organic green flourish curve underline under doorstep */}
+                            <View style={s.curveUnderline} />
+                        </View>
+
+                        {/* Fast delivery | Quality assured */}
                         <View style={s.heroFeaturesRow}>
                             <View style={s.heroFeatureItem}>
-                                <Ionicons name="bicycle" size={14} color="#15803D" />
+                                <Ionicons name="bicycle-outline" size={15} color="#166534" />
                                 <Text style={s.heroFeatureText}>Fast delivery</Text>
                             </View>
                             <View style={s.heroFeatureDivider} />
                             <View style={s.heroFeatureItem}>
-                                <Ionicons name="shield-checkmark" size={14} color="#15803D" />
+                                <Ionicons name="checkmark-circle" size={15} color="#166534" />
                                 <Text style={s.heroFeatureText}>Quality assured</Text>
                             </View>
-                        </View>
-
-                        {/* Carousel indicator dots */}
-                        <View style={s.heroDotsRow}>
-                            <View style={[s.heroDot, s.heroDotActive]} />
-                            <View style={s.heroDot} />
-                            <View style={s.heroDot} />
                         </View>
                     </View>
                 </View>
@@ -290,32 +424,32 @@ export default function Groceries() {
                 {/* 2. Feature highlights strip matching reference */}
                 <View style={s.featureStrip}>
                     <View style={s.featureItem}>
-                        <Ionicons name="flash" size={16} color="#16A34A" />
-                        <View>
+                        <Ionicons name="flash" size={18} color="#16A34A" />
+                        <View style={{ marginLeft: 2 }}>
                             <Text style={s.featureItemTitle}>Quick</Text>
                             <Text style={s.featureItemTitle}>Delivery</Text>
                         </View>
                     </View>
                     <View style={s.stripDivider} />
                     <View style={s.featureItem}>
-                        <Ionicons name="pricetag" size={16} color="#16A34A" />
-                        <View>
+                        <Ionicons name="pricetag" size={18} color="#16A34A" />
+                        <View style={{ marginLeft: 2 }}>
                             <Text style={s.featureItemTitle}>Great</Text>
                             <Text style={s.featureItemTitle}>Offers</Text>
                         </View>
                     </View>
                     <View style={s.stripDivider} />
                     <View style={s.featureItem}>
-                        <Ionicons name="leaf" size={16} color="#16A34A" />
-                        <View>
+                        <Ionicons name="leaf" size={18} color="#16A34A" />
+                        <View style={{ marginLeft: 2 }}>
                             <Text style={s.featureItemTitle}>Fresh</Text>
                             <Text style={s.featureItemTitle}>& Safe</Text>
                         </View>
                     </View>
                     <View style={s.stripDivider} />
                     <View style={s.featureItem}>
-                        <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
-                        <View>
+                        <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
+                        <View style={{ marginLeft: 2 }}>
                             <Text style={s.featureItemTitle}>Trusted</Text>
                             <Text style={s.featureItemTitle}>Shops</Text>
                         </View>
@@ -323,15 +457,19 @@ export default function Groceries() {
                 </View>
 
                 {/* 3. Shop by category row */}
-                <View style={s.categoryHeaderRow}>
+                <View
+                    onLayout={(e) => {
+                        categorySectionY.current = e.nativeEvent.layout.y;
+                    }}
+                    style={s.categoryHeaderRow}
+                >
                     <Text style={s.sectionTitleText}>Shop by category</Text>
-                    <Ionicons name="chevron-down" size={18} color="#0F172A" />
                 </View>
 
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={s.categoryListScroll}
+                    contentContainerStyle={s.categoryPillsScroll}
                 >
                     {GROCERY_CATEGORIES.map((c) => {
                         const isSelected = (!aisle && c.key === "All") || (aisle === c.key);
@@ -339,20 +477,29 @@ export default function Groceries() {
                             <Pressable
                                 key={c.key}
                                 onPress={() => setAisle(c.key === "All" ? null : c.key)}
-                                style={s.categoryCardItem}
+                                style={({ pressed }) => [
+                                    s.categoryPill,
+                                    isSelected ? s.categoryPillActive : s.categoryPillInactive,
+                                    pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
+                                ]}
                             >
-                                <View style={[s.categoryIconBox, isSelected && s.categoryIconBoxActive]}>
-                                    {c.isIcon ? (
-                                        <Ionicons name="grid-outline" size={24} color={isSelected ? "#16A34A" : "#64748B"} />
-                                    ) : (
-                                        <Image
-                                            source={{ uri: c.image }}
-                                            style={s.categoryImg}
-                                            contentFit="cover"
+                                {!isSelected && (
+                                    <>
+                                        <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
+                                        <LinearGradient
+                                            colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={StyleSheet.absoluteFill}
                                         />
-                                    )}
-                                </View>
-                                <Text style={[s.categoryLabel, isSelected && s.categoryLabelActive]} numberOfLines={1}>
+                                    </>
+                                )}
+                                <Text
+                                    style={[
+                                        s.categoryPillText,
+                                        isSelected ? s.categoryPillTextActive : s.categoryPillTextInactive,
+                                    ]}
+                                >
                                     {c.label}
                                 </Text>
                             </Pressable>
@@ -401,23 +548,16 @@ export default function Groceries() {
                         {stores.data!.map((st) => <SellerTile key={st.id} s={st} testID={`groceries-store-${st.id}`} />)}
                     </ScrollView>
                 ) : <EmptyState icon="storefront-outline" title="No grocery stores nearby" body="We're onboarding kirana stores in your area." />}
+
+                <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
+                    <BrandFooter title={"Shop\nLocal!"} />
+                </View>
             </Animated.ScrollView>
 
-            {cartCount > 0 && isGroceryCart ? (
-                <View style={[s.bar, { bottom: insets.bottom + spacing.lg }]}>
-                    <Pressable
-                        testID="groceries-view-cart-bar"
-                        style={s.barInner}
-                        onPress={() => {
-                            navigateToTab(2);
-                            router.back();
-                        }}
-                    >
-                        <Text style={s.barText}>{cartCount} item{cartCount > 1 ? "s" : ""} · {cart.data?.seller?.name}</Text>
-                        <Text style={s.barText}>View cart  ›</Text>
-                    </Pressable>
-                </View>
-            ) : null}
+            <FloatingCartBar
+                bottomOffset={insets.bottom > 0 ? insets.bottom + 52 : 60}
+                dockSide="left"
+            />
         </View>
     );
 }
@@ -453,59 +593,89 @@ const useStyles = makeStyles((c) => ({
 
     // Search bar
     searchBarBox: {
-        height: 48,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        backgroundColor: "#FFFFFF",
+        height: 46,
+        borderRadius: 24,
+        borderWidth: 1.2,
+        borderColor: "rgba(255, 255, 255, 0.85)",
+        backgroundColor: "rgba(255, 255, 255, 0.55)",
+        overflow: "hidden",
+        position: "relative",
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.sm,
-        paddingHorizontal: spacing.md,
+        paddingHorizontal: 16,
+        shadowColor: "#F43F5E",
+        shadowOpacity: 0.07,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 3,
     },
 
     // 1. Hero Banner
     heroBanner: {
         marginHorizontal: spacing.lg,
         marginTop: 10,
-        borderRadius: 16,
+        borderRadius: 22,
         overflow: "hidden",
-        height: 180,
+        height: 195,
         flexDirection: "row",
         position: "relative",
     },
     heroLeftCol: {
-        flex: 1,
-        padding: 16,
+        width: "55%",
+        paddingTop: 16,
+        paddingBottom: 16,
+        paddingLeft: 18,
         justifyContent: "space-between",
         zIndex: 2,
     },
     dailyTag: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
-        backgroundColor: "#DCFCE7",
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
+        gap: 5,
+        backgroundColor: "rgba(255, 255, 255, 0.90)",
+        paddingHorizontal: 11,
+        paddingVertical: 5,
+        borderRadius: 20,
         alignSelf: "flex-start",
+        borderWidth: 1,
+        borderColor: "rgba(226, 232, 240, 0.6)",
     },
     dailyTagText: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: "800",
         color: "#166534",
     },
     heroTitle: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: "900",
         color: "#0F172A",
-        letterSpacing: -0.5,
-        lineHeight: 25,
+        letterSpacing: -0.6,
+        lineHeight: 27,
+    },
+    heroTitleSecondRow: {
+        fontSize: 22,
+        fontWeight: "900",
+        color: "#0F172A",
+        letterSpacing: -0.6,
+        lineHeight: 27,
+    },
+    heroTitleHighlight: {
+        color: "#15803D",
+        fontWeight: "900",
+    },
+    curveUnderline: {
+        width: 68,
+        height: 3,
+        borderRadius: 1.5,
+        backgroundColor: "#22C55E",
+        marginTop: 4,
     },
     heroFeaturesRow: {
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
+        marginTop: 4,
     },
     heroFeatureItem: {
         flexDirection: "row",
@@ -514,69 +684,46 @@ const useStyles = makeStyles((c) => ({
     },
     heroFeatureDivider: {
         width: 1,
-        height: 10,
-        backgroundColor: "#94A3B8",
-    },
-    heroFeatureText: {
-        fontSize: 11,
-        fontWeight: "700",
-        color: "#0F172A",
-    },
-    heroDotsRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-    },
-    heroDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
+        height: 12,
         backgroundColor: "#CBD5E1",
     },
-    heroDotActive: {
-        width: 16,
-        backgroundColor: "#166534",
-    },
-    heroImgWrap: {
-        width: "48%",
-        height: "100%",
-        position: "absolute",
-        right: 0,
-        bottom: 0,
-        top: 0,
-    },
-    heroImg: {
-        width: "100%",
-        height: "100%",
+    heroFeatureText: {
+        fontSize: 11.5,
+        fontWeight: "700",
+        color: "#1E293B",
     },
 
     // 2. Feature Strip
     featureStrip: {
         marginHorizontal: spacing.lg,
-        marginTop: 14,
-        backgroundColor: "#F0FDF4",
-        borderRadius: 12,
+        marginTop: 12,
+        backgroundColor: "#ECFDF5",
+        borderRadius: 16,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingVertical: 12,
         paddingHorizontal: 14,
+        borderWidth: 1,
+        borderColor: "rgba(167, 243, 208, 0.5)",
     },
     featureItem: {
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
+        flex: 1,
+        justifyContent: "center",
     },
     featureItemTitle: {
         fontSize: 11.5,
-        fontWeight: "700",
+        fontWeight: "800",
         color: "#0F172A",
         lineHeight: 14,
     },
     stripDivider: {
         width: 1,
-        height: 20,
-        backgroundColor: "#DCFCE7",
+        height: 24,
+        backgroundColor: "rgba(167, 243, 208, 0.8)",
     },
 
     // 3. Category Section
@@ -594,43 +741,55 @@ const useStyles = makeStyles((c) => ({
         color: "#0F172A",
         letterSpacing: -0.3,
     },
-    categoryListScroll: {
+    stickyChipsContainer: {
+        position: "relative",
+        zIndex: 5,
+        overflow: "hidden",
+        backgroundColor: "transparent",
+        paddingBottom: spacing.xs,
+    },
+    categoryPillsScroll: {
         paddingHorizontal: spacing.lg,
-        gap: 12,
-    },
-    categoryCardItem: {
+        gap: 8,
         alignItems: "center",
-        gap: 6,
-        width: 68,
     },
-    categoryIconBox: {
-        width: 68,
-        height: 68,
-        borderRadius: 14,
-        backgroundColor: "#F8FAFC",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
+    categoryPill: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
         alignItems: "center",
         justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "rgba(226, 232, 240, 0.8)",
         overflow: "hidden",
+        position: "relative",
+        shadowColor: "#F43F5E",
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 1.5 },
     },
-    categoryIconBoxActive: {
-        backgroundColor: "#F0FDF4",
-        borderColor: "#86EFAC",
-        borderWidth: 1.5,
+    categoryPillActive: {
+        backgroundColor: "#F43F5E",
+        borderColor: "#F43F5E",
+        shadowColor: "#F43F5E",
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
     },
-    categoryImg: {
-        width: "100%",
-        height: "100%",
+    categoryPillInactive: {
+        backgroundColor: "transparent",
     },
-    categoryLabel: {
-        fontSize: 12,
-        fontWeight: "700",
-        color: "#475569",
+    categoryPillText: {
+        fontSize: 12.5,
+        letterSpacing: -0.1,
     },
-    categoryLabelActive: {
-        color: "#16A34A",
+    categoryPillTextActive: {
+        color: "#FFFFFF",
         fontWeight: "800",
+    },
+    categoryPillTextInactive: {
+        color: "#334155",
+        fontWeight: "700",
     },
 
     // 4. Popular picks

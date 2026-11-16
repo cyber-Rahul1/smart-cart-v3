@@ -67,7 +67,7 @@ export function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
                                 hitSlop={6}
                                 style={s.stepBtn}
                             >
-                                <Ionicons name="remove" size={14} color="#16A34A" />
+                                <Ionicons name="remove" size={13} color="#EA580C" />
                             </Pressable>
                             <Text testID={`grocery-stepper-${p.id}-qty`} style={s.stepQty}>{qty}</Text>
                             <Pressable
@@ -76,7 +76,7 @@ export function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
                                 hitSlop={6}
                                 style={s.stepBtn}
                             >
-                                <Ionicons name="add" size={14} color="#16A34A" />
+                                <Ionicons name="add" size={13} color="#EA580C" />
                             </Pressable>
                         </View>
                     ) : (
@@ -88,10 +88,10 @@ export function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
                             style={({ pressed }) => [
                                 s.addBtn,
                                 (!p.available || busy) && { opacity: 0.4 },
-                                pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] },
+                                pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] },
                             ]}
                         >
-                            <Text style={s.addBtnText}>Add</Text>
+                            <Text style={s.addBtnText}>ADD</Text>
                         </Pressable>
                     )}
                 </View>
@@ -116,7 +116,7 @@ const useStyles = makeStyles((c) => ({
     },
     imgWrap: {
         width: "100%",
-        height: 135,
+        height: 104,
         position: "relative",
         borderRadius: 10,
         overflow: "hidden",
@@ -177,37 +177,54 @@ const useStyles = makeStyles((c) => ({
         letterSpacing: -0.3,
     },
     addBtn: {
-        backgroundColor: "#DCFCE7", // Pale fresh light green
-        paddingHorizontal: 22,
-        paddingVertical: 7,
-        borderRadius: 14,
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "rgba(252, 128, 25, 0.45)",
+        paddingHorizontal: 16,
+        paddingVertical: 5,
+        borderRadius: radius.pill,
+        minWidth: 64,
         alignItems: "center",
         justifyContent: "center",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1.5 },
+        shadowOpacity: 0.12,
+        shadowRadius: 3,
+        elevation: 2,
     },
     addBtnText: {
-        color: "#16A34A",
-        fontSize: 13,
-        fontWeight: "800",
+        color: "#EA580C",
+        fontSize: 12,
+        fontWeight: "900",
+        letterSpacing: 0.4,
     },
     stepperWrap: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#DCFCE7",
-        borderRadius: 14,
-        paddingHorizontal: 6,
-        height: 32,
-        gap: 6,
+        justifyContent: "space-between",
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "rgba(252, 128, 25, 0.45)",
+        borderRadius: radius.pill,
+        paddingHorizontal: 4,
+        height: 28,
+        minWidth: 72,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1.5 },
+        shadowOpacity: 0.12,
+        shadowRadius: 3,
+        elevation: 2,
     },
     stepBtn: {
         width: 22,
-        height: 28,
+        height: 24,
         alignItems: "center",
         justifyContent: "center",
     },
     stepQty: {
-        color: "#16A34A",
-        fontWeight: "800",
-        fontSize: 13,
+        color: "#EA580C",
+        fontWeight: "900",
+        fontSize: 12,
         minWidth: 16,
         textAlign: "center",
     },

@@ -63,11 +63,7 @@ export function FloatingCartBar({ bottomOffset = 0, dockSide = "left", scrollAct
   }, [isCollapsedState, defaultDockPos]);
 
   const navigateToCart = () => {
-    if (tabVisibility && typeof tabVisibility.scrollPageTo === "function") {
-      tabVisibility.scrollPageTo(2); // Index 2 is Cart tab in _layout
-    } else {
-      router.push("/(tabs)/cart");
-    }
+    router.push("/cart");
   };
 
   const handleCollapse = () => {
@@ -134,17 +130,31 @@ export function FloatingCartBar({ bottomOffset = 0, dockSide = "left", scrollAct
     };
   });
 
+  const tabNavAnimStyle = useAnimatedStyle(() => {
+    // When tab bar hides (tabBarTranslateY moves from 0 to ~100), shift the cart bar down into the space
+    // vacated by the bottom navbar, leaving safe margin from screen bottom
+    const shiftDown = interpolate(
+      tabVisibility.tabBarTranslateY.value,
+      [0, 100],
+      [0, Math.max(0, bottomOffset - spacing.xs)]
+    );
+    return {
+      transform: [{ translateY: shiftDown }],
+    };
+  });
+
   // Unconditional render check after all hooks have been invoked
-  if (!hasItems || !seller) return null;
+  if (!hasItems) return null;
 
   const discountRemaining = Math.max(0, 299 - grandTotal);
 
   return (
-    <View
+    <Animated.View
       pointerEvents="box-none"
       style={[
         styles.outerWrap,
         { bottom: bottomOffset + spacing.md },
+        tabNavAnimStyle,
       ]}
     >
       <Animated.View style={[styles.barCard, { shadowColor: "#16A34A" }, containerAnimStyle]}>
@@ -221,7 +231,7 @@ export function FloatingCartBar({ bottomOffset = 0, dockSide = "left", scrollAct
           </Pressable>
         </Animated.View>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 

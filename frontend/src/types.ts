@@ -4,6 +4,7 @@ export type Seller = {
   fssai_status: string; address: string; opened_on: string; trend_score?: number;
   banner_url?: string; description?: string; gallery?: string[]; highlights?: string[]; open?: boolean;
   reviews_count?: number; phone?: string;
+  fssai_number?: string; registration_no?: string; legal_entity_name?: string; outlet_name?: string;
 };
 export type ShowcaseItem = {
   seller: Seller;

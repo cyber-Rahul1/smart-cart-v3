@@ -31,8 +31,6 @@ import { TabBarVisibilityProvider, useTabBarVisibility } from "@/src/context/tab
 import { useCartSummary } from "@/src/cart";
 
 import HomeScreen from "./index";
-import Reels from "./reels";
-import CartScreen from "./cart";
 import ListingFood from "../listing/[type]";
 import GroceriesScreen from "../groceries";
 
@@ -82,12 +80,10 @@ function TabsContent() {
     });
   }, [activeTabIndex]);
 
-  // Ensure tab bar is always visible when navigating away from Home (activeTabIndex !== 0)
+  // When switching tabs, ensure tab bar is visible by default
   useEffect(() => {
-    if (activeTabIndex !== 0) {
-      tabBarTranslateY.value = withTiming(0, { duration: 200 });
-      setIsBottomNavHidden(false);
-    }
+    tabBarTranslateY.value = withTiming(0, { duration: 200 });
+    setIsBottomNavHidden(false);
   }, [activeTabIndex]);
 
   const tabWidth = pageWidth / TABS.length;
@@ -110,7 +106,7 @@ function TabsContent() {
     setScrollPageToHandler((index: number) => {
       setActiveTabIndex(index);
       if (pageWidth > 0) {
-        flatListRef.current?.scrollToOffset({ offset: index * pageWidth, animated: true });
+        flatListRef.current?.scrollToOffset({ offset: index * pageWidth, animated: false });
       }
     });
   }, [pageWidth]);
@@ -167,10 +163,10 @@ function TabsContent() {
         showsHorizontalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"
-        initialNumToRender={2}
-        maxToRenderPerBatch={2}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
         windowSize={3}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={false}
         renderItem={({ item }) => (
           <View style={{ width: pageWidth, flex: 1 }}>
             {renderPage(item.name)}
@@ -245,7 +241,7 @@ function TabsContent() {
                   setActiveTabIndex(idx);
                   flatListRef.current?.scrollToOffset({
                     offset: idx * pageWidth,
-                    animated: true,
+                    animated: false,
                   });
                 }}
                 style={{

@@ -67,9 +67,69 @@ async def seed():
             "radius_km": {"food": 5, "grocery": 5, "scheduled_food": 8, "scheduled_grocery": 10, "community": 10}})
     await db.platform_config.update_one({"id": "fees", "seller_auto_approve": {"$exists": False}}, {"$set": {"seller_auto_approve": False}})
     for (sid, name, cat, btype, cuisine, img, rating, dist, eta, is_new, offer, min_order) in SELLERS:
+        # Provide rich distinct store atmosphere & showcase images for the store carousel
+        store_gallery_map = {
+            "s-greens": [
+                IMG["veg"],
+                "https://images.unsplash.com/photo-1579113800032-c38bd7635818?w=800&q=70",
+                "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=800&q=70",
+                "https://images.unsplash.com/photo-1610832958506-aac56368f2f8?w=800&q=70",
+            ],
+            "s-paradise": [
+                IMG["biryani"],
+                "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=70",
+                "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=70",
+                "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=70",
+            ],
+            "s-udupi": [
+                IMG["dosa"],
+                "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=70",
+                "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&q=70",
+                "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&q=70",
+            ],
+            "s-slice": [
+                IMG["pizza"],
+                "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=70",
+                "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=70",
+            ],
+            "s-burger": [
+                IMG["burger"],
+                "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=800&q=70",
+                "https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&q=70",
+            ],
+            "s-dairy": [
+                IMG["milk"],
+                "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&q=70",
+                "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=800&q=70",
+            ],
+            "s-fresh": [
+                IMG["store"],
+                "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800&q=70",
+                "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=800&q=70",
+            ],
+            "s-brew": [
+                IMG["coffee"],
+                "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=800&q=70",
+                "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=70",
+            ],
+        }
+        gallery_imgs = store_gallery_map.get(sid, [IMG[img]])
+
         doc = {"id": sid, "name": name, "category": cat, "business_type": btype, "cuisine": cuisine, "image": IMG[img], "rating": rating,
                "distance_km": dist, "eta_min": eta + int(dist * 4), "prep_time_min": eta, "is_new": is_new, "offer": offer, "min_order": min_order,
                "approved": True, "open": True, "fssai_status": "verified" if cat == "food" else "not_required",
+               "fssai_number": {
+                   "s-greens": "11222334000963",
+                   "s-paradise": "11221333000542",
+                   "s-udupi": "11219334000189",
+                   "s-slice": "11220333001094",
+                   "s-burger": "11222333000871",
+                   "s-brew": "11223333000412",
+                   "s-dairy": "11218334000305",
+                   "s-fresh": "11221334000720",
+                   "s-rollwala": "11220334000551",
+               }.get(sid, "11220000000001"),
+               "gallery": gallery_imgs, "banner_url": gallery_imgs[0] if gallery_imgs else IMG[img],
                "address": "Koramangala, Bengaluru", "location": {"type": "Point", "coordinates": [77.6245 + dist / 200, 12.9352]},
                "opened_on": iso(now() - timedelta(days=7 if is_new else 400))}
         await db.sellers.update_one({"id": sid}, {"$set": doc, "$setOnInsert": {"trend_score": int(rating * 10), "orders_count": 0}}, upsert=True)

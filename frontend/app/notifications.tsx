@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { when } from "@/src/format";
 import { font, radius, spacing, useTheme } from "@/src/theme";
-import { EmptyState, Header, IconName, Ionicons, Loader } from "@/src/ui";
+import { EmptyState, Header, IconName, Ionicons } from "@/src/ui";
+import { ListCardsSkeleton } from "@/src/components/list-cards-skeleton";
 
 type N = { id: string; title: string; body: string; type: string; ref?: string; read: boolean; created_at: string };
 const ICON: Record<string, IconName> = { order: "receipt-outline", group: "people-outline", group_cart: "cart-outline", basket: "business-outline", community: "business-outline", referral: "gift-outline" };
@@ -30,7 +31,7 @@ export default function Notifications() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <Header title="Notifications" />
-      {q.isLoading ? <Loader /> : (
+      {q.isLoading ? <ListCardsSkeleton count={4} /> : (
         <FlatList
           testID="notifications-list"
           data={q.data?.items}
