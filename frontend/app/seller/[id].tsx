@@ -33,6 +33,7 @@ import { Product, Seller } from "@/src/types";
 import { AppImage, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
 import { navigateToTab } from "@/src/context/tab-bar-visibility";
 import ProductDetailModal from "@/src/components/product-detail-modal";
+import { applyOptimisticCartItem } from "@/src/cart";
 import { TextInput } from "react-native";
 
 type ModeItem = { id: string; product_id: string; qty: number; user_id: string; flat?: string };
@@ -96,7 +97,12 @@ export default function SellerScreen() {
   }, [mode, cart.data, myItems, q.data?.products]);
 
   const change = async (p: Product, next: number, replace = false) => {
-    setBusy(p.id);
+    let rollback: (() => void) | null = null;
+    if (mode === "cart") {
+      rollback = applyOptimisticCartItem(p, next, q.data?.seller);
+    } else {
+      setBusy(p.id);
+    }
     try {
       if (mode === "cart") {
         await api("/cart/items", { method: "POST", body: { product_id: p.id, qty: next, replace } });
@@ -109,10 +115,11 @@ export default function SellerScreen() {
         qc.invalidateQueries({ queryKey: mode === "group" ? ["group-cart", gc] : ["basket", bk] });
       }
     } catch (e) {
+      if (rollback) rollback();
       if (e instanceof ApiError && e.status === 409 && mode === "cart") setConflict({ product_id: p.id, qty: next });
       else toast((e as Error).message, "err");
     } finally {
-      setBusy(null);
+      if (mode !== "cart") setBusy(null);
     }
   };
 

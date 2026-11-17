@@ -21,7 +21,7 @@ import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { AppImage, Ionicons } from "@/src/ui";
 import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 
-export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
+export const SellerRow = React.memo(function SellerRow({ s, testID }: { s: Seller; testID: string }) {
   const st = useStyles();
   const { colors } = useTheme();
   return (
@@ -47,9 +47,9 @@ export function SellerRow({ s, testID }: { s: Seller; testID: string }) {
       </View>
     </Pressable>
   );
-}
+});
 
-export function SellerTile({
+export const SellerTile = React.memo(function SellerTile({
   s,
   testID,
   rank,
@@ -155,10 +155,10 @@ export function SellerTile({
       </View>
     </Pressable>
   );
-}
+});
 
 /** Full-width modern card with auto-scrolling & swipeable image carousel */
-export function SellerFullCard({
+export const SellerFullCard = React.memo(function SellerFullCard({
   s,
   testID,
   isActive = true,
@@ -543,7 +543,7 @@ export function SellerFullCard({
       </View>
     </Pressable>
   );
-}
+});
 
 const useStyles = makeStyles((c) => ({
   row: { flexDirection: "row", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: "center" },

@@ -14,7 +14,7 @@ import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Address } from "@/src/types";
 import { BillRow, Button, Chip, ChipRow, EmptyState, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
-import { CartQuoteResponse, CartStoreGroup, CouponItem } from "@/src/cart";
+import { CartQuoteResponse, CartStoreGroup, CouponItem, applyOptimisticCartItem } from "@/src/cart";
 import { CartSkeleton } from "@/src/components/cart-skeleton";
 
 const SCHEDULES = [
@@ -61,10 +61,30 @@ export default function CartScreen() {
   }, [addresses.data, addr]);
 
   const setQty = async (product_id: string, qty: number) => {
+    const item = q.data?.items.find((i) => i.product_id === product_id);
+    let rollback: (() => void) | null = null;
+    if (item) {
+      rollback = applyOptimisticCartItem(
+        {
+          id: item.product_id,
+          seller_id: item.seller_id || "",
+          name: item.name,
+          price: item.price,
+          category: "food",
+          veg: item.veg ?? true,
+          available: true,
+          stock: 99,
+          image: item.image || "",
+          description: "",
+        },
+        qty
+      );
+    }
     try {
       await api("/cart/items", { method: "POST", body: { product_id, qty } });
       qc.invalidateQueries({ queryKey: ["cart"] });
     } catch (e: any) {
+      if (rollback) rollback();
       toast(e.message, "err");
     }
   };

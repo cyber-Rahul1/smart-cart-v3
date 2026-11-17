@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated as RNAnimated,
+  BackHandler,
   Dimensions,
   FlatList,
   Linking,
@@ -43,7 +44,7 @@ import { BlurView } from "expo-blur";
 import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 import { BrandFooter } from "@/src/components/brand-footer";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
-import { useCartSummary } from "@/src/cart";
+import { useCartSummary, applyOptimisticCartItem } from "@/src/cart";
 
 const TITLES: Record<string, [string, string]> = {
   food: ["Food", "Restaurants & cloud kitchens near you"],
@@ -909,7 +910,26 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
-  const { tabBarTranslateY } = useTabBarVisibility();
+  const { tabBarTranslateY, scrollPageTo, activeTabIndex } = useTabBarVisibility();
+
+  // Handle hardware / mobile back button when loaded standalone: return to Home
+  useEffect(() => {
+    const onBackPress = () => {
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+      if (scrollPageTo) {
+        scrollPageTo(0);
+        return true;
+      }
+      router.replace("/(tabs)");
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => subscription.remove();
+  }, [scrollPageTo]);
 
   const collapseProgress = useSharedValue(0);
   const [titleRowHeight, setTitleRowHeight] = useState(56);
@@ -999,6 +1019,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
     queryKey: ["sellers", listCategory],
     queryFn: () => api<Seller[]>(`/sellers?category=${listCategory}`),
     enabled: isListViewMode,
+    staleTime: 60000,
   });
   const [listTitle, listSub] = TITLES[listCategory] ?? ["Shops", ""];
 
@@ -1070,35 +1091,33 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   const qtyOf = (pid: string) => cartSummaryItems.find((i) => i.product_id === pid)?.qty ?? 0;
 
   const addToCart = async (product: Product, seller: Seller, qty: number = 1) => {
-    setAddingPid(product.id);
+    const rollback = applyOptimisticCartItem(product, qty, seller);
+    toast(`Added ${product.name} to cart`);
     try {
       await api("/cart/items", { method: "POST", body: { product_id: product.id, qty } });
       qc.invalidateQueries({ queryKey: ["cart"] });
-      toast(`Added ${product.name} to cart`);
     } catch (e: any) {
+      rollback();
       if (e instanceof ApiError && e.status === 409) {
         toast("Cart contains items from another shop. Clear cart first or open shop.", "err");
       } else {
         toast(e.message || "Could not add item", "err");
       }
-    } finally {
-      setAddingPid(null);
     }
   };
 
   const changeQty = async (product: Product, seller: Seller, qty: number) => {
-    setAddingPid(product.id);
+    const rollback = applyOptimisticCartItem(product, qty, seller);
     try {
       await api("/cart/items", { method: "POST", body: { product_id: product.id, qty, replace: true } });
       qc.invalidateQueries({ queryKey: ["cart"] });
     } catch (e: any) {
+      rollback();
       if (e instanceof ApiError && e.status === 409) {
         toast("Cart contains items from another shop. Clear cart first or open shop.", "err");
       } else {
         toast(e.message || "Could not update item", "err");
       }
-    } finally {
-      setAddingPid(null);
     }
   };
 
@@ -1179,6 +1198,42 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 </Text>
               ) : null}
             </View>
+
+            {/* Top Cart Icon with Badge */}
+            <Pressable
+              testID="listing-top-cart-btn"
+              onPress={() => router.push("/cart")}
+              style={{
+                width: 36,
+                height: 36,
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+              }}
+              hitSlop={8}
+            >
+              <Ionicons name="cart-outline" size={24} color="#0F172A" />
+              {cartCount > 0 ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    right: 0,
+                    backgroundColor: "#16A34A",
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontSize: 9.5, fontWeight: "900" }}>
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
           </Animated.View>
 
           {/* Sticky Search bar & Veg/Non-Veg filter row */}

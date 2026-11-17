@@ -1,11 +1,9 @@
 import { Redirect } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  BackHandler,
   Dimensions,
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -56,7 +54,6 @@ function TabsContent() {
   } = useTabBarVisibility();
 
   const [pageWidth, setPageWidth] = useState(Dimensions.get("window").width);
-  const flatListRef = useRef<FlatList<any>>(null);
 
   // Bubble sliding animation physics
   const bubblePosition = useSharedValue(activeTabIndex);
@@ -86,6 +83,20 @@ function TabsContent() {
     setIsBottomNavHidden(false);
   }, [activeTabIndex]);
 
+  // Handle hardware / mobile back button on Android: if on Food or Groceries, navigate back to Home (tab 0)
+  useEffect(() => {
+    const onBackPress = () => {
+      if (activeTabIndex !== 0) {
+        setActiveTabIndex(0);
+        return true; // Prevent default closing of the app
+      }
+      return false; // On Home page, let default back button behavior occur
+    };
+
+    const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => subscription.remove();
+  }, [activeTabIndex, setActiveTabIndex]);
+
   const tabWidth = pageWidth / TABS.length;
 
   const animBubbleStyle = useAnimatedStyle(() => {
@@ -101,15 +112,12 @@ function TabsContent() {
     };
   });
 
-  // Expose scrollPageTo to context so any child or button can programmatically swipe
+  // Expose scrollPageTo to context so any child or button can programmatically switch tabs
   useEffect(() => {
     setScrollPageToHandler((index: number) => {
       setActiveTabIndex(index);
-      if (pageWidth > 0) {
-        flatListRef.current?.scrollToOffset({ offset: index * pageWidth, animated: false });
-      }
     });
-  }, [pageWidth]);
+  }, [setActiveTabIndex, setScrollPageToHandler]);
 
   const animTabBarStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: tabBarTranslateY.value }],
@@ -131,19 +139,6 @@ function TabsContent() {
     );
   }
 
-  const renderPage = (tabName: string) => {
-    switch (tabName) {
-      case "index":
-        return <HomeScreen />;
-      case "food":
-        return <ListingFood forcedType="food" />;
-      case "groceries":
-        return <GroceriesScreen />;
-      default:
-        return null;
-    }
-  };
-
   return (
     <View
       style={{ flex: 1, backgroundColor: colors.surface }}
@@ -152,27 +147,39 @@ function TabsContent() {
         if (w > 0 && w !== pageWidth) setPageWidth(w);
       }}
     >
-      {/* Smooth Carousel Transition Container for Tabs (Programmatic scroll only) */}
-      <FlatList
-        ref={flatListRef}
-        data={TABS}
-        keyExtractor={(item) => item.name}
-        horizontal
-        pagingEnabled
-        scrollEnabled={false}
-        showsHorizontalScrollIndicator={false}
-        bounces={false}
-        overScrollMode="never"
-        initialNumToRender={3}
-        maxToRenderPerBatch={3}
-        windowSize={3}
-        removeClippedSubviews={false}
-        renderItem={({ item }) => (
-          <View style={{ width: pageWidth, flex: 1 }}>
-            {renderPage(item.name)}
-          </View>
-        )}
-      />
+      {/* Instant Tab Switching Container: persistent views with zero layout thrashing */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          activeTabIndex === 0
+            ? { opacity: 1, zIndex: 1 }
+            : { opacity: 0, zIndex: 0, pointerEvents: "none" as const },
+        ]}
+      >
+        <HomeScreen />
+      </View>
+
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          activeTabIndex === 1
+            ? { opacity: 1, zIndex: 1 }
+            : { opacity: 0, zIndex: 0, pointerEvents: "none" as const },
+        ]}
+      >
+        <ListingFood forcedType="food" />
+      </View>
+
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          activeTabIndex === 2
+            ? { opacity: 1, zIndex: 1 }
+            : { opacity: 0, zIndex: 0, pointerEvents: "none" as const },
+        ]}
+      >
+        <GroceriesScreen />
+      </View>
 
       {/* Synchronized Custom Bottom Tab Bar with High-Opacity Frost Glass */}
       {!isBottomNavHidden && (
@@ -183,6 +190,8 @@ function TabsContent() {
               bottom: 0,
               left: 0,
               right: 0,
+              zIndex: 9999,
+              elevation: 9999,
               borderTopLeftRadius: 36,
               borderTopRightRadius: 36,
               overflow: "hidden",
@@ -239,10 +248,6 @@ function TabsContent() {
                 testID={`tab-${t.name}`}
                 onPress={() => {
                   setActiveTabIndex(idx);
-                  flatListRef.current?.scrollToOffset({
-                    offset: idx * pageWidth,
-                    animated: false,
-                  });
                 }}
                 style={{
                   flex: 1,

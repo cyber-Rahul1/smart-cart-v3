@@ -3,8 +3,8 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BackHandler, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -25,6 +25,7 @@ import { navigateToTab, useTabBarVisibility } from "@/src/context/tab-bar-visibi
 import { BrandFooter } from "@/src/components/brand-footer";
 import { GroceriesSkeleton } from "@/src/components/groceries-skeleton";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
+import { applyOptimisticCartItem } from "@/src/cart";
 
 const GROCERY_CATEGORIES = [
   { key: "All", label: "All" },
@@ -45,7 +46,26 @@ export default function Groceries() {
     const [aisle, setAisle] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [conflict, setConflict] = useState<{ p: Product; qty: number } | null>(null);
-    const { tabBarTranslateY } = useTabBarVisibility();
+    const { tabBarTranslateY, scrollPageTo } = useTabBarVisibility();
+
+    // Handle hardware / mobile back button: return to Home tab if no stack to pop
+    useEffect(() => {
+        const onBackPress = () => {
+            if (router.canGoBack()) {
+                router.back();
+                return true;
+            }
+            if (scrollPageTo) {
+                scrollPageTo(0);
+                return true;
+            }
+            router.replace("/(tabs)");
+            return true;
+        };
+
+        const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+        return () => subscription.remove();
+    }, [scrollPageTo]);
 
     const collapseProgress = useSharedValue(0);
     const stickyChipsProgress = useSharedValue(0);
@@ -132,11 +152,23 @@ export default function Groceries() {
         };
     });
 
-    const stores = useQuery({ queryKey: ["sellers", "grocery"], queryFn: () => api<Seller[]>("/sellers?category=grocery") });
-    const menus = useQueries({
-        queries: (stores.data ?? []).map((st) => ({ queryKey: ["seller", st.id], queryFn: () => api<{ seller: Seller; products: Product[] }>(`/sellers/${st.id}`) })),
+    const stores = useQuery({
+        queryKey: ["sellers", "grocery"],
+        queryFn: () => api<Seller[]>("/sellers?category=grocery"),
+        staleTime: 60000,
     });
-    const cart = useQuery({ queryKey: ["cart", null, false], queryFn: () => api<any>("/cart/quote", { method: "POST", body: {} }) });
+    const menus = useQueries({
+        queries: (stores.data ?? []).map((st) => ({
+            queryKey: ["seller", st.id],
+            queryFn: () => api<{ seller: Seller; products: Product[] }>(`/sellers/${st.id}`),
+            staleTime: 60000,
+        })),
+    });
+    const cart = useQuery({
+        queryKey: ["cart", null, false],
+        queryFn: () => api<any>("/cart/quote", { method: "POST", body: {} }),
+        staleTime: 5000,
+    });
 
     const products = useMemo(() => menus.flatMap((m) => (m.data ? m.data.products.map((p) => ({ ...p, seller_name: m.data!.seller.name })) : [])),
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,15 +197,15 @@ export default function Groceries() {
     const isGroceryCart = cart.data?.seller?.category === "grocery";
 
     const change = async (p: Product, qty: number, replace = false) => {
-        setBusy(p.id);
+        // Immediate optimistic UI update - button flips and count increments in 0ms
+        const rollback = applyOptimisticCartItem(p, qty);
         try {
             await api("/cart/items", { method: "POST", body: { product_id: p.id, qty, replace } });
             qc.invalidateQueries({ queryKey: ["cart"] });
         } catch (e) {
+            rollback();
             if (e instanceof ApiError && e.status === 409) setConflict({ p, qty });
             else toast((e as Error).message, "err");
-        } finally {
-            setBusy(null);
         }
     };
 

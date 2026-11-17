@@ -42,6 +42,9 @@ export function AppImage({
   return (
     <ExpoImage
       source={source}
+      cachePolicy="memory-disk"
+      priority="normal"
+      transition={150}
       onError={(err) => {
         setHasError(true);
         if (onError) onError(err);

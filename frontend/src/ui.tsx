@@ -311,20 +311,54 @@ export function Stepper({ qty, onChange, testID, disabled }: { qty: number; onCh
   const { colors } = useTheme();
   if (qty === 0) {
     return (
-      <Pressable testID={`${testID}-add`} disabled={disabled} onPress={() => onChange(1)}
-        style={{ minWidth: 84, height: 36, borderRadius: radius.sm + 2, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-          alignItems: "center", justifyContent: "center", opacity: disabled ? 0.4 : 1 }}>
+      <Pressable
+        testID={`${testID}-add`}
+        disabled={disabled}
+        onPress={() => onChange(1)}
+        style={({ pressed }) => [
+          {
+            minWidth: 84,
+            height: 36,
+            borderRadius: radius.sm + 2,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
+            transform: [{ scale: pressed ? 0.96 : 1 }],
+          },
+        ]}
+      >
         <Text style={{ color: colors.success, fontWeight: "800", fontSize: font.base }}>ADD</Text>
       </Pressable>
     );
   }
   return (
     <View style={{ minWidth: 96, height: 36, borderRadius: radius.sm + 2, backgroundColor: colors.pastelMint, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      <Pressable testID={`${testID}-dec`} disabled={disabled} onPress={() => onChange(qty - 1)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 4 }} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+      <Pressable
+        testID={`${testID}-dec`}
+        disabled={disabled}
+        onPress={() => onChange(qty - 1)}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+        style={({ pressed }) => [
+          { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+          pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] },
+        ]}
+      >
         <Ionicons name="remove" size={16} color={colors.onPastelMint} />
       </Pressable>
       <Text testID={`${testID}-qty`} style={{ fontWeight: "800", color: colors.onPastelMint }}>{qty}</Text>
-      <Pressable testID={`${testID}-inc`} disabled={disabled} onPress={() => onChange(qty + 1)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+      <Pressable
+        testID={`${testID}-inc`}
+        disabled={disabled}
+        onPress={() => onChange(qty + 1)}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+        style={({ pressed }) => [
+          { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+          pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] },
+        ]}
+      >
         <Ionicons name="add" size={16} color={colors.onPastelMint} />
       </Pressable>
     </View>

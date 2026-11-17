@@ -1,3 +1,4 @@
+import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
@@ -9,7 +10,7 @@ import { Product } from "@/src/types";
 import { Ionicons } from "@/src/ui";
 
 /** Redesigned grocery product card matching UI reference */
-export function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
+export const GroceryCard = React.memo(function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
     p: Product; qty: number; busy: boolean; onChange: (n: number) => void; onOpen: () => void; width: number;
 }) {
     const s = useStyles();
@@ -39,6 +40,8 @@ export function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
                     source={{ uri: mediaUri(p.image) }}
                     style={s.img}
                     contentFit="cover"
+                    cachePolicy="memory-disk"
+                    priority="normal"
                     transition={150}
                 />
                 {!p.available ? (
@@ -98,7 +101,7 @@ export function GroceryCard({ p, qty, busy, onChange, onOpen, width }: {
             </View>
         </Pressable>
     );
-}
+});
 
 const useStyles = makeStyles((c) => ({
     card: {
