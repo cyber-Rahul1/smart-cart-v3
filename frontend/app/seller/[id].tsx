@@ -32,6 +32,7 @@ import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { AppImage, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
 import ProductDetailModal from "@/src/components/product-detail-modal";
+import { SellerSkeleton } from "@/src/components/seller-skeleton";
 import { applyOptimisticCartItem } from "@/src/cart";
 import { TextInput } from "react-native";
 
@@ -228,7 +229,7 @@ export default function SellerScreen() {
     return list;
   }, [allProducts, selectedCategory, menuSearchQuery]);
 
-  if (q.isLoading) return <Loader />;
+  if (q.isLoading) return <SellerSkeleton />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />;
   const { seller, products } = q.data!;
 
@@ -495,13 +496,40 @@ export default function SellerScreen() {
                             <Text style={s.gridAddBtnText}>Add</Text>
                           </Pressable>
                         ) : (
-                          <View style={s.stepperWrapper}>
-                            <Stepper
-                              testID={`product-stepper-${p.id}`}
-                              qty={qty}
+                          <View style={s.gridStepperWrap}>
+                            <Pressable
+                              testID={`product-stepper-${p.id}-dec`}
                               disabled={!p.available || isBusy}
-                              onChange={(n) => change(p, n)}
-                            />
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                change(p, qty - 1);
+                              }}
+                              hitSlop={6}
+                              style={({ pressed }) => [
+                                s.gridStepBtn,
+                                pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] },
+                              ]}
+                            >
+                              <Ionicons name="remove" size={12} color="#F43F5E" />
+                            </Pressable>
+                            <Text testID={`product-stepper-${p.id}-qty`} style={s.gridStepQtyText}>
+                              {qty}
+                            </Text>
+                            <Pressable
+                              testID={`product-stepper-${p.id}-inc`}
+                              disabled={!p.available || isBusy}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                change(p, qty + 1);
+                              }}
+                              hitSlop={6}
+                              style={({ pressed }) => [
+                                s.gridStepBtn,
+                                pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] },
+                              ]}
+                            >
+                              <Ionicons name="add" size={12} color="#F43F5E" />
+                            </Pressable>
                           </View>
                         )}
                       </View>
@@ -1251,16 +1279,37 @@ const useStyles = makeStyles((c) => ({
     borderColor: "#FECDD3",
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 3.5,
+    height: 24,
+    minWidth: 54,
   },
   gridAddBtnText: {
     fontSize: 11,
     fontWeight: "800",
     color: "#F43F5E",
   },
-  stepperWrapper: {
-    transform: [{ scale: 0.80 }],
-    marginRight: -6,
+  gridStepperWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFF1F3",
+    borderWidth: 1,
+    borderColor: "#FECDD3",
+    borderRadius: 10,
+    height: 24,
+    minWidth: 62,
+    paddingHorizontal: 2,
+  },
+  gridStepBtn: {
+    width: 18,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gridStepQtyText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#F43F5E",
+    paddingHorizontal: 2,
   },
 
   /* Floating Bottom Cart Bar (Image 3 layout in our Theme) */
