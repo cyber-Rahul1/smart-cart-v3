@@ -485,7 +485,8 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const grads = tileGradient(colors);
   const { user } = useAuth();
-  const { tabBarTranslateY, setPagerScrollEnabled, scrollPageTo, setIsBottomNavHidden, activeTabIndex } = useTabBarVisibility();
+  const homeScrollRef = useRef<any>(null);
+  const { tabBarTranslateY, setPagerScrollEnabled, setIsBottomNavHidden, activeTabIndex } = useTabBarVisibility();
 
   const [vegOnly, setVegOnly] = useState(false);
 
@@ -731,8 +732,9 @@ export default function HomeScreen() {
     });
   };
 
-  // Auto-scroll animation for advertisement cards carousel
+  // Auto-scroll animation for advertisement cards carousel (only runs when Home tab is active)
   useEffect(() => {
+    if (activeTabIndex !== 0) return;
     const timer = setInterval(() => {
       setActiveAdBannerIdx((prev) => {
         const next = (prev + 1) % AD_BANNERS.length;
@@ -742,7 +744,7 @@ export default function HomeScreen() {
       });
     }, 4000);
     return () => clearInterval(timer);
-  }, []);
+  }, [activeTabIndex]);
 
   const locRowAnimStyle = useAnimatedStyle(() => {
     // Smoothly collapses the top brand and greeting row upwards
@@ -1115,6 +1117,7 @@ export default function HomeScreen() {
         <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />
       ) : (
         <ScrollView
+          ref={homeScrollRef}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: bottomChrome + 80 }}
@@ -1563,10 +1566,9 @@ export default function HomeScreen() {
                     onPress={() => {
                       if (pill.key === "nearby") {
                         if (nearbySectionY.current > 0) {
-                          scrollPageTo(nearbySectionY.current - 100);
+                          homeScrollRef.current?.scrollTo({ y: Math.max(0, nearbySectionY.current - 100), animated: true });
                         }
                       } else if (pill.key === "more") {
-                        router.push("/listing/food");
                       } else {
                         setActiveMindPill(pill.key);
                       }

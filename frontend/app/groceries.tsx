@@ -21,7 +21,7 @@ import { SellerTile } from "@/src/components/seller-card";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { Button, EmptyState, ErrorState, IconName, Ionicons, Loader, SectionTitle, Sheet, useToast } from "@/src/ui";
-import { navigateToTab, useTabBarVisibility } from "@/src/context/tab-bar-visibility";
+import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 import { BrandFooter } from "@/src/components/brand-footer";
 import { GroceriesSkeleton } from "@/src/components/groceries-skeleton";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
@@ -46,7 +46,7 @@ export default function Groceries() {
     const [aisle, setAisle] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [conflict, setConflict] = useState<{ p: Product; qty: number } | null>(null);
-    const { tabBarTranslateY, scrollPageTo } = useTabBarVisibility();
+    const { tabBarTranslateY, setActiveTabIndex } = useTabBarVisibility();
 
     // Handle hardware / mobile back button: return to Home tab if no stack to pop
     useEffect(() => {
@@ -55,17 +55,13 @@ export default function Groceries() {
                 router.back();
                 return true;
             }
-            if (scrollPageTo) {
-                scrollPageTo(0);
-                return true;
-            }
-            router.replace("/(tabs)");
+            setActiveTabIndex(0);
             return true;
         };
 
         const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
         return () => subscription.remove();
-    }, [scrollPageTo]);
+    }, [setActiveTabIndex]);
 
     const collapseProgress = useSharedValue(0);
     const stickyChipsProgress = useSharedValue(0);

@@ -910,7 +910,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
-  const { tabBarTranslateY, scrollPageTo, activeTabIndex } = useTabBarVisibility();
+  const { tabBarTranslateY, setActiveTabIndex, activeTabIndex } = useTabBarVisibility();
 
   // Handle hardware / mobile back button when loaded standalone: return to Home
   useEffect(() => {
@@ -919,17 +919,13 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
         router.back();
         return true;
       }
-      if (scrollPageTo) {
-        scrollPageTo(0);
-        return true;
-      }
-      router.replace("/(tabs)");
+      setActiveTabIndex(0);
       return true;
     };
 
     const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => subscription.remove();
-  }, [scrollPageTo]);
+  }, [setActiveTabIndex]);
 
   const collapseProgress = useSharedValue(0);
   const [titleRowHeight, setTitleRowHeight] = useState(56);

@@ -47,7 +47,6 @@ function TabsContent() {
     tabBarTranslateY,
     activeTabIndex,
     setActiveTabIndex,
-    setScrollPageToHandler,
     isPagerScrollEnabled,
     isBottomNavHidden,
     setIsBottomNavHidden,
@@ -111,13 +110,6 @@ function TabsContent() {
       ],
     };
   });
-
-  // Expose scrollPageTo to context so any child or button can programmatically switch tabs
-  useEffect(() => {
-    setScrollPageToHandler((index: number) => {
-      setActiveTabIndex(index);
-    });
-  }, []);
 
   const animTabBarStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: tabBarTranslateY.value }],

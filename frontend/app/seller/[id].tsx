@@ -31,7 +31,6 @@ import { rupee, mediaUri } from "@/src/format";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { AppImage, ErrorState, Ionicons, Loader, Stepper, useToast, VegMark } from "@/src/ui";
-import { navigateToTab } from "@/src/context/tab-bar-visibility";
 import ProductDetailModal from "@/src/components/product-detail-modal";
 import { applyOptimisticCartItem } from "@/src/cart";
 import { TextInput } from "react-native";

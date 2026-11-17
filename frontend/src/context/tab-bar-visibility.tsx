@@ -1,22 +1,11 @@
 import React, { createContext, useContext, ReactNode, useState } from "react";
 import { SharedValue, useSharedValue } from "react-native-reanimated";
 
-// Global tab navigation bridge across nested stack screens and components
-let globalScrollPageTo: ((idx: number) => void) | null = null;
-
-export function navigateToTab(idx: number) {
-  if (globalScrollPageTo) {
-    globalScrollPageTo(idx);
-  }
-}
-
 interface TabBarVisibilityContextType {
   tabBarTranslateY: SharedValue<number>;
   activeTabIndex: number;
   setActiveTabIndex: (idx: number | ((prev: number) => number)) => void;
   previousTabIndex: number;
-  scrollPageTo: (idx: number) => void;
-  setScrollPageToHandler: (fn: (idx: number) => void) => void;
   isPagerScrollEnabled: boolean;
   setPagerScrollEnabled: (enabled: boolean) => void;
   enablePagerScroll: () => void;
@@ -32,8 +21,6 @@ const defaultContextValue: TabBarVisibilityContextType = {
   activeTabIndex: 0,
   setActiveTabIndex: () => {},
   previousTabIndex: 0,
-  scrollPageTo: () => {},
-  setScrollPageToHandler: () => {},
   isPagerScrollEnabled: true,
   setPagerScrollEnabled: () => {},
   enablePagerScroll: () => {},
@@ -73,24 +60,12 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
     setPagerScrollEnabledState(true);
   }, []);
 
-  const scrollPageTo = React.useCallback((idx: number) => {
-    if (globalScrollPageTo) {
-      globalScrollPageTo(idx);
-    }
-  }, []);
-
-  const setScrollPageToHandler = React.useCallback((fn: (idx: number) => void) => {
-    globalScrollPageTo = fn;
-  }, []);
-
   const contextValue = React.useMemo(
     () => ({
       tabBarTranslateY,
       activeTabIndex,
       setActiveTabIndex,
       previousTabIndex,
-      scrollPageTo,
-      setScrollPageToHandler,
       isPagerScrollEnabled,
       setPagerScrollEnabled,
       enablePagerScroll,
@@ -103,8 +78,6 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
       activeTabIndex,
       setActiveTabIndex,
       previousTabIndex,
-      scrollPageTo,
-      setScrollPageToHandler,
       isPagerScrollEnabled,
       setPagerScrollEnabled,
       enablePagerScroll,
