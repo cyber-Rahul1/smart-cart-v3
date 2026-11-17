@@ -65,15 +65,15 @@ export function Button({
 }
 
 /* ---------------- Chip ---------------- */
-export function Chip({ label, selected, onPress, testID, icon }: { label: string; selected?: boolean; onPress?: () => void; testID?: string; icon?: IconName }) {
+export function Chip({ label, selected, onPress, testID, icon, style }: { label: string; selected?: boolean; onPress?: () => void; testID?: string; icon?: IconName; style?: any }) {
   const { colors } = useTheme();
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={{ height: 36, flexShrink: 0, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1, flexDirection: "row",
+      style={[{ height: 36, flexShrink: 0, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1, flexDirection: "row",
         alignItems: "center", gap: 6, borderColor: selected ? colors.brandPrimary : colors.border,
-        backgroundColor: selected ? colors.brandTertiary : colors.surface }}
+        backgroundColor: selected ? colors.brandTertiary : colors.surface }, style]}
     >
       {icon ? <Ionicons name={icon} size={14} color={selected ? colors.brandPrimary : colors.onSurfaceSecondary} /> : null}
       <Text style={{ fontSize: font.sm + 1, fontWeight: "600", color: selected ? colors.brandPrimary : colors.onSurfaceSecondary }}>{label}</Text>

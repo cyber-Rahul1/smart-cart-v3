@@ -502,6 +502,10 @@ export default function CartScreen() {
                       icon={x.icon}
                       selected={schedule === x.key}
                       onPress={() => setSchedule(x.key)}
+                      style={{
+                        backgroundColor: schedule === x.key ? colors.brandTertiary : "rgba(255, 255, 255, 0.7)",
+                        borderColor: schedule === x.key ? colors.brandPrimary : "rgba(255, 205, 215, 0.8)",
+                      }}
                     />
                   ))}
                 </ChipRow>
@@ -822,17 +826,16 @@ const useStyles = makeStyles((c) => ({
 
   // Redesigned Store Card
   storeCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
+    borderRadius: 18,
     paddingTop: 14,
     paddingBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 228, 230, 0.7)",
-    shadowColor: "#000",
-    shadowOpacity: 0.015,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 0.5,
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.9)",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
   },
   storeHeader: {
     flexDirection: "row",
@@ -931,7 +934,7 @@ const useStyles = makeStyles((c) => ({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#FECDD3",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255, 241, 243, 0.9)",
     paddingHorizontal: 4,
   },
   stepperBtn: {
@@ -987,12 +990,12 @@ const useStyles = makeStyles((c) => ({
     flex: 1,
     height: 36,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "rgba(254, 205, 211, 0.8)",
     borderRadius: 8,
     paddingHorizontal: 10,
     fontSize: 12,
     color: "#0F172A",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255, 241, 243, 0.75)",
   },
   saveNoteBtn: {
     backgroundColor: "#F43F5E",
@@ -1050,8 +1053,8 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: 7,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.9)",
-    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(255, 205, 215, 0.75)",
+    backgroundColor: "rgba(255, 255, 255, 0.65)",
   },
   actionPillActive: {
     borderColor: "#86EFAC",
@@ -1065,16 +1068,15 @@ const useStyles = makeStyles((c) => ({
 
   // Base Card (Schedules, Offers, Bill Details)
   card: {
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
+    borderRadius: 18,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: "rgba(255, 228, 230, 0.7)",
-    shadowColor: "#000",
-    shadowOpacity: 0.015,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 0.5,
+    borderWidth: 1.2,
+    borderColor: "rgba(255, 255, 255, 0.9)",
+    shadowColor: "#F43F5E",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
     gap: spacing.sm,
   },
   sectionHeaderRow: {
@@ -1107,7 +1109,7 @@ const useStyles = makeStyles((c) => ({
     borderWidth: 1,
     borderColor: "#FECDD3",
     borderRadius: radius.md,
-    backgroundColor: "#FFF8F9",
+    backgroundColor: "rgba(255, 241, 243, 0.7)",
     overflow: "hidden",
     paddingLeft: spacing.md,
     marginTop: spacing.xs,
@@ -1190,9 +1192,9 @@ const useStyles = makeStyles((c) => ({
     alignItems: "center",
     justifyContent: "space-between",
     padding: spacing.md,
-    backgroundColor: c.surfaceSecondary,
+    backgroundColor: "rgba(255, 241, 243, 0.65)",
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: "rgba(254, 205, 211, 0.8)",
     borderRadius: radius.md,
   },
   couponBadge: {
@@ -1333,10 +1335,10 @@ const useStyles = makeStyles((c) => ({
     alignItems: "flex-start",
     gap: spacing.sm,
     padding: spacing.md,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    backgroundColor: "rgba(255, 255, 255, 0.65)",
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.6)",
+    borderColor: "rgba(255, 220, 230, 0.7)",
   },
   policyText: {
     flex: 1,
