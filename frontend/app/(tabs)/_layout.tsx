@@ -117,7 +117,7 @@ function TabsContent() {
     setScrollPageToHandler((index: number) => {
       setActiveTabIndex(index);
     });
-  }, [setActiveTabIndex, setScrollPageToHandler]);
+  }, []);
 
   const animTabBarStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: tabBarTranslateY.value }],

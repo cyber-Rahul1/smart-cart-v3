@@ -8,6 +8,7 @@ import {
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -614,18 +615,17 @@ function ExactDiscoverShopCard({
   return (
     <View style={discoverCardStyles.cardContainer} testID={`discover-shop-${seller.id}`}>
       {/* Backdrop blur layer for liquid glass */}
-      <BlurView
-        intensity={24}
-        tint="light"
-        style={StyleSheet.absoluteFill}
-      />
+      {Platform.OS === "ios" && (
+        <BlurView
+          intensity={24}
+          tint="light"
+          style={StyleSheet.absoluteFill}
+        />
+      )}
 
       {/* Blush-pink liquid glass gradient tint */}
       <LinearGradient
-        colors={[
-          "rgba(255, 255, 255, 0.88)",
-          "rgba(255, 240, 245, 0.60)",
-        ]}
+        colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.88)", "rgba(255, 240, 245, 0.60)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}

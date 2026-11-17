@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,13 +24,15 @@ export const GroceryCard = React.memo(function GroceryCard({ p, qty, busy, onCha
             style={({ pressed }) => [s.card, { width }, pressed && { opacity: 0.95 }]}
         >
             {/* Liquid Glass Frosted Base Layer */}
-            <BlurView
-                intensity={18}
-                tint="light"
-                style={StyleSheet.absoluteFill}
-            />
+            {Platform.OS === "ios" && (
+                <BlurView
+                    intensity={18}
+                    tint="light"
+                    style={StyleSheet.absoluteFill}
+                />
+            )}
             <LinearGradient
-                colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 238, 244, 0.40)"]}
+                colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.78)", "rgba(255, 238, 244, 0.40)"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}

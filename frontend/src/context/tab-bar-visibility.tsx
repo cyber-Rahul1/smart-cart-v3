@@ -50,7 +50,6 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
   const [previousTabIndex, setPreviousTabIndex] = useState(0);
   const [isPagerScrollEnabled, setPagerScrollEnabledState] = useState(true);
   const [isBottomNavHidden, setIsBottomNavHidden] = useState(false);
-  const [scrollPageToFn, setScrollPageToFn] = useState<((idx: number) => void) | null>(null);
 
   const setActiveTabIndex = React.useCallback((val: number | ((prev: number) => number)) => {
     setActiveTabIndexState((prev) => {
@@ -74,36 +73,49 @@ export function TabBarVisibilityProvider({ children }: { children: ReactNode }) 
     setPagerScrollEnabledState(true);
   }, []);
 
-  const scrollPageTo = (idx: number) => {
-    if (scrollPageToFn) {
-      scrollPageToFn(idx);
-    } else if (globalScrollPageTo) {
+  const scrollPageTo = React.useCallback((idx: number) => {
+    if (globalScrollPageTo) {
       globalScrollPageTo(idx);
     }
-  };
+  }, []);
 
-  const setScrollPageToHandler = (fn: (idx: number) => void) => {
+  const setScrollPageToHandler = React.useCallback((fn: (idx: number) => void) => {
     globalScrollPageTo = fn;
-    setScrollPageToFn(() => fn);
-  };
+  }, []);
+
+  const contextValue = React.useMemo(
+    () => ({
+      tabBarTranslateY,
+      activeTabIndex,
+      setActiveTabIndex,
+      previousTabIndex,
+      scrollPageTo,
+      setScrollPageToHandler,
+      isPagerScrollEnabled,
+      setPagerScrollEnabled,
+      enablePagerScroll,
+      disablePagerScroll,
+      isBottomNavHidden,
+      setIsBottomNavHidden,
+    }),
+    [
+      tabBarTranslateY,
+      activeTabIndex,
+      setActiveTabIndex,
+      previousTabIndex,
+      scrollPageTo,
+      setScrollPageToHandler,
+      isPagerScrollEnabled,
+      setPagerScrollEnabled,
+      enablePagerScroll,
+      disablePagerScroll,
+      isBottomNavHidden,
+      setIsBottomNavHidden,
+    ]
+  );
 
   return (
-    <TabBarVisibilityContext.Provider
-      value={{
-        tabBarTranslateY,
-        activeTabIndex,
-        setActiveTabIndex,
-        previousTabIndex,
-        scrollPageTo,
-        setScrollPageToHandler,
-        isPagerScrollEnabled,
-        setPagerScrollEnabled,
-        enablePagerScroll,
-        disablePagerScroll,
-        isBottomNavHidden,
-        setIsBottomNavHidden,
-      }}
-    >
+    <TabBarVisibilityContext.Provider value={contextValue}>
       {children}
     </TabBarVisibilityContext.Provider>
   );

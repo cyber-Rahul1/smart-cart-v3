@@ -4,6 +4,7 @@ import {
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -95,13 +96,15 @@ export const SellerTile = React.memo(function SellerTile({
       style={({ pressed }) => [st.modernCard, pressed && { transform: [{ scale: 0.98 }] }]}
     >
       {/* Liquid Glass Frosted Base Layer */}
-      <BlurView
-        intensity={20}
-        tint="light"
-        style={StyleSheet.absoluteFill}
-      />
+      {Platform.OS === "ios" && (
+        <BlurView
+          intensity={20}
+          tint="light"
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       <LinearGradient
-        colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.42)"]}
+        colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.42)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -270,13 +273,15 @@ export const SellerFullCard = React.memo(function SellerFullCard({
       style={({ pressed }) => [st.fullCard, pressed && { opacity: 0.96 }]}
     >
       {/* Liquid Glass Frosted Base Layer */}
-      <BlurView
-        intensity={20}
-        tint="light"
-        style={StyleSheet.absoluteFill}
-      />
+      {Platform.OS === "ios" && (
+        <BlurView
+          intensity={20}
+          tint="light"
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       <LinearGradient
-        colors={["rgba(255, 255, 255, 0.82)", "rgba(255, 238, 244, 0.45)"]}
+        colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.82)", "rgba(255, 238, 244, 0.45)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
