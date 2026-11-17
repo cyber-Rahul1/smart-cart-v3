@@ -105,7 +105,11 @@ function ShopWithItemsCard({
           }}
         >
           {/* Shop Avatar & Name info */}
-          <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: spacing.sm }}>
+          <Pressable
+            onPress={() => router.push(`/seller/${seller.id}`)}
+            style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: spacing.sm }}
+            hitSlop={6}
+          >
             <View
               style={{
                 width: 44,
@@ -168,7 +172,7 @@ function ShopWithItemsCard({
                 {seller.cuisine || (seller.category === "grocery" ? "Kirana & Essentials" : "Fast Food & Meals")}
               </Text>
             </View>
-          </View>
+          </Pressable>
 
           {/* Rating badge */}
           <View
@@ -1445,7 +1449,19 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 style={{ paddingBottom: spacing.sm }}
               >
                 {/* Inline Section Title */}
-                <View style={{ paddingHorizontal: spacing.lg, marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, marginBottom: 12, gap: 10 }}>
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 11,
+                      backgroundColor: "#FFF1F2",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="sparkles" size={18} color="#F43F5E" />
+                  </View>
                   <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A", letterSpacing: -0.3 }}>
                     What's on your mind?
                   </Text>
@@ -1514,11 +1530,25 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A", letterSpacing: -0.3 }}>
-                    {foodCuisineFilter && foodCuisineFilter !== "All"
-                      ? `${foodCuisineFilter} spots near you`
-                      : "Restaurants near you"}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 11,
+                        backgroundColor: "#FFEDD5",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons name="restaurant" size={18} color="#EA580C" />
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A", letterSpacing: -0.3, flex: 1 }} numberOfLines={1}>
+                      {foodCuisineFilter && foodCuisineFilter !== "All"
+                        ? `${foodCuisineFilter} spots near you`
+                        : "Restaurants near you"}
+                    </Text>
+                  </View>
                   {foodCuisineFilter !== "All" && (
                     <Pressable
                       onPress={() => setFoodCuisineFilter("All")}
@@ -1543,8 +1573,8 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 <View
                   style={{
                     width: "90%",
-                    height: 1.5,
-                    backgroundColor: "rgba(244, 63, 94, 0.20)",
+                    height: 1,
+                    backgroundColor: "rgba(244, 63, 94, 0.08)",
                     borderRadius: 1,
                   }}
                 />

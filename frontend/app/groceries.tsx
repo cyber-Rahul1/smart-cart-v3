@@ -475,41 +475,6 @@ export default function Groceries() {
                     </View>
                 </View>
 
-                {/* 2. Feature highlights strip matching reference */}
-                <View style={s.featureStrip}>
-                    <View style={s.featureItem}>
-                        <Ionicons name="flash" size={18} color="#16A34A" />
-                        <View style={{ marginLeft: 2 }}>
-                            <Text style={s.featureItemTitle}>Quick</Text>
-                            <Text style={s.featureItemTitle}>Delivery</Text>
-                        </View>
-                    </View>
-                    <View style={s.stripDivider} />
-                    <View style={s.featureItem}>
-                        <Ionicons name="pricetag" size={18} color="#16A34A" />
-                        <View style={{ marginLeft: 2 }}>
-                            <Text style={s.featureItemTitle}>Great</Text>
-                            <Text style={s.featureItemTitle}>Offers</Text>
-                        </View>
-                    </View>
-                    <View style={s.stripDivider} />
-                    <View style={s.featureItem}>
-                        <Ionicons name="leaf" size={18} color="#16A34A" />
-                        <View style={{ marginLeft: 2 }}>
-                            <Text style={s.featureItemTitle}>Fresh</Text>
-                            <Text style={s.featureItemTitle}>& Safe</Text>
-                        </View>
-                    </View>
-                    <View style={s.stripDivider} />
-                    <View style={s.featureItem}>
-                        <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-                        <View style={{ marginLeft: 2 }}>
-                            <Text style={s.featureItemTitle}>Trusted</Text>
-                            <Text style={s.featureItemTitle}>Shops</Text>
-                        </View>
-                    </View>
-                </View>
-
                 {/* 3. Shop by category row */}
                 <View
                     onLayout={(e) => {
@@ -517,7 +482,12 @@ export default function Groceries() {
                     }}
                     style={s.categoryHeaderRow}
                 >
-                    <Text style={s.sectionTitleText}>Shop by category</Text>
+                    <View style={s.sectionTitleWithIconRow}>
+                        <View style={[s.titleIconBadge, { backgroundColor: "#DCFCE7" }]}>
+                            <Ionicons name="grid" size={17} color="#16A34A" />
+                        </View>
+                        <Text style={s.sectionTitleText}>Shop by category</Text>
+                    </View>
                 </View>
 
                 <ScrollView
@@ -563,14 +533,12 @@ export default function Groceries() {
 
                 {/* 4. Popular picks header & Grid */}
                 <View style={s.popularHeaderRow}>
-                    <Text style={s.sectionTitleText}>{aisle && aisle !== "All" ? aisle : "Popular picks"}</Text>
-                    <Pressable
-                        style={s.seeAllRow}
-                        onPress={() => setAisle(null)}
-                    >
-                        <Text style={s.seeAllText}>See all</Text>
-                        <Ionicons name="arrow-forward" size={14} color="#16A34A" />
-                    </Pressable>
+                    <View style={s.sectionTitleWithIconRow}>
+                        <View style={[s.titleIconBadge, { backgroundColor: "#FEF3C7" }]}>
+                            <Ionicons name="basket" size={17} color="#D97706" />
+                        </View>
+                        <Text style={s.sectionTitleText}>{aisle && aisle !== "All" ? aisle : "Popular picks"}</Text>
+                    </View>
                 </View>
 
                 {storeGroups.length > 0 ? (
@@ -581,7 +549,11 @@ export default function Groceries() {
                                 <View style={s.storeHeaderContainer}>
                                     <View style={s.storeHeaderRow}>
                                         {/* Avatar & Name info */}
-                                        <View style={s.storeInfoRow}>
+                                        <Pressable
+                                            onPress={() => router.push(`/seller/${seller.id}`)}
+                                            style={s.storeInfoRow}
+                                            hitSlop={6}
+                                        >
                                             <View style={s.storeAvatarBox}>
                                                 <AppImage
                                                     source={{ uri: mediaUri(seller.image) }}
@@ -605,7 +577,7 @@ export default function Groceries() {
                                                     {seller.cuisine || "Kirana & Essentials"}
                                                 </Text>
                                             </View>
-                                        </View>
+                                        </Pressable>
 
                                         {/* Rating badge */}
                                         <View style={s.ratingBadge}>
@@ -942,6 +914,18 @@ const useStyles = makeStyles((c) => ({
         marginTop: 22,
         marginBottom: 14,
     },
+    sectionTitleWithIconRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+    },
+    titleIconBadge: {
+        width: 34,
+        height: 34,
+        borderRadius: 11,
+        alignItems: "center",
+        justifyContent: "center",
+    },
     seeAllRow: {
         flexDirection: "row",
         alignItems: "center",
@@ -1064,8 +1048,8 @@ const useStyles = makeStyles((c) => ({
         color: "#EA580C",
     },
     storeGroupDivider: {
-        height: 1.5,
-        backgroundColor: "rgba(244, 63, 94, 0.20)",
+        height: 1,
+        backgroundColor: "rgba(244, 63, 94, 0.08)",
         marginHorizontal: spacing.lg,
         marginTop: spacing.md,
         borderRadius: 1,
