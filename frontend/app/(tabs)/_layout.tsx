@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import React, { useEffect, useState } from "react";
 import {
@@ -82,19 +82,25 @@ function TabsContent() {
     setIsBottomNavHidden(false);
   }, [activeTabIndex]);
 
-  // Handle hardware / mobile back button on Android: if on Food or Groceries, navigate back to Home (tab 0)
+  const segments = useSegments();
+
+  // Handle hardware / mobile back button on Android:
+  // If the user is on child screens (like /seller/[id], /cart, etc.), let router.back() handle it.
+  // Only intercept when inside the (tabs) container itself.
   useEffect(() => {
     const onBackPress = () => {
-      if (activeTabIndex !== 0) {
+      // Check if current route is within (tabs) or if a sub-route is active
+      const isInsideTabs = segments[0] === "(tabs)" && segments.length <= 2;
+      if (isInsideTabs && activeTabIndex !== 0) {
         setActiveTabIndex(0);
         return true; // Prevent default closing of the app
       }
-      return false; // On Home page, let default back button behavior occur
+      return false; // Let router.back() or system back handle child screens
     };
 
     const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => subscription.remove();
-  }, [activeTabIndex, setActiveTabIndex]);
+  }, [activeTabIndex, setActiveTabIndex, segments]);
 
   const tabWidth = pageWidth / TABS.length;
 

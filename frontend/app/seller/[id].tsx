@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  BackHandler,
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -61,6 +62,24 @@ export default function SellerScreen() {
   const sectionListRef = useRef<any>(null);
   const bannerScrollRef = useRef<any>(null);
   const { user } = useAuth();
+
+  // Explicitly handle hardware back button to return to the previous screen (e.g. food or groceries)
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectedProduct) {
+        setSelectedProduct(null);
+        return true;
+      }
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [selectedProduct]);
 
   const toggleSection = (title: string) => {
     setCollapsedSections((prev) => ({ ...prev, [title]: !prev[title] }));
