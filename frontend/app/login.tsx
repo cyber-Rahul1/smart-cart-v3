@@ -179,7 +179,7 @@ export default function Login() {
       />
 
       <KeyboardAwareScrollView
-        bottomOffset={24}
+        bottomOffset={96}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           s.scrollContent,
