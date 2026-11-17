@@ -1502,6 +1502,34 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                     );
                   })}
                 </ScrollView>
+
+                {/* Section Title below Filters */}
+                <View
+                  style={{
+                    paddingHorizontal: spacing.lg,
+                    marginTop: 24,
+                    marginBottom: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A", letterSpacing: -0.3 }}>
+                    {foodCuisineFilter && foodCuisineFilter !== "All"
+                      ? `${foodCuisineFilter} spots near you`
+                      : "Restaurants near you"}
+                  </Text>
+                  {foodCuisineFilter !== "All" && (
+                    <Pressable
+                      onPress={() => setFoodCuisineFilter("All")}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                      hitSlop={8}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#F43F5E" }}>See all</Text>
+                      <Ionicons name="arrow-forward" size={14} color="#F43F5E" />
+                    </Pressable>
+                  )}
+                </View>
               </View>
             }
             ItemSeparatorComponent={() => (
@@ -1509,15 +1537,14 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 style={{
                   alignItems: "center",
                   justifyContent: "center",
-                  marginVertical: spacing.xl,
+                  marginVertical: spacing.lg,
                 }}
               >
                 <View
                   style={{
-                    width: "82%",
-                    height: 1,
-                    backgroundColor: colors.border,
-                    opacity: 0.45,
+                    width: "90%",
+                    height: 1.5,
+                    backgroundColor: "rgba(244, 63, 94, 0.20)",
                     borderRadius: 1,
                   }}
                 />

@@ -1064,10 +1064,11 @@ const useStyles = makeStyles((c) => ({
         color: "#EA580C",
     },
     storeGroupDivider: {
-        height: 1,
-        backgroundColor: "#F1F5F9",
+        height: 1.5,
+        backgroundColor: "rgba(244, 63, 94, 0.20)",
         marginHorizontal: spacing.lg,
         marginTop: spacing.md,
+        borderRadius: 1,
     },
     storesScrollContent: {
         paddingHorizontal: spacing.lg,
