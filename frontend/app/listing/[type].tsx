@@ -1809,64 +1809,8 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
           viewabilityConfig={viewabilityConfig}
           ListHeaderComponent={
             <View style={{ paddingHorizontal: 16 }}>
-              {/* Rose Liquid Glass Promo Card */}
-              <View style={s.promoBannerCard}>
-                <BlurView
-                  intensity={25}
-                  tint="light"
-                  style={StyleSheet.absoluteFill}
-                />
-                <LinearGradient
-                  colors={["rgba(255, 255, 255, 0.85)", "rgba(255, 228, 235, 0.55)", "rgba(254, 205, 211, 0.40)"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 14,
-                    right: 14,
-                    height: 1,
-                    backgroundColor: "rgba(255, 255, 255, 0.95)",
-                  }}
-                />
-                {/* Left Promo Text */}
-                <View style={s.promoContentLeft}>
-                  <View style={s.promoOverlineWrap}>
-                    <Text style={s.promoOverline}>EXPLORE</Text>
-                  </View>
-                  <Text style={s.promoHeadline}>
-                    Newly Opened{"\n"}
-                    <Text style={{ color: "#F43F5E" }}>Shops </Text>
-                    <Text style={{ color: "#F43F5E" }}>Near You</Text>
-                  </Text>
-                  <Text style={s.promoSubtext}>
-                    Fresh listings, local favorites & cloud kitchens in your area.
-                  </Text>
-
-                  {/* Carousel pagination indicators */}
-                  <View style={s.promoDotsRow}>
-                    <View style={s.promoDotActive} />
-                    <View style={s.promoDotInactive} />
-                    <View style={s.promoDotInactive} />
-                  </View>
-                </View>
-
-                {/* Right Biryani Bowl Image */}
-                <View style={s.promoImageWrap}>
-                  <Image
-                    source={{ uri: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=70" }}
-                    style={s.promoBowlImage}
-                    contentFit="cover"
-                  />
-                </View>
-              </View>
-
               {/* Newly Added Shops Section Header Row */}
-              <View style={s.sectionHeaderRow}>
+              <View style={[s.sectionHeaderRow, { marginTop: 12 }]}>
                 <Text style={s.sectionHeaderTitle}>Newly Added Shops</Text>
                 <Pressable style={s.viewAllRow} onPress={() => setSelectedCat("all")}>
                   <Text style={s.viewAllText}>View All ({totalShopsCount})</Text>
@@ -2490,6 +2434,8 @@ const discoverCardStyles = StyleSheet.create({
     marginHorizontal: 14,
     marginTop: 10,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     padding: 10,
     gap: 8,
   },

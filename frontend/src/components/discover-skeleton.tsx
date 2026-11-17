@@ -7,18 +7,13 @@ import { SkeletonBlock } from "@/src/ui";
 export function DiscoverSkeleton() {
   return (
     <View style={styles.container}>
-      {/* 1. Header Hero Banner Skeleton */}
-      <View style={styles.bannerSkeleton}>
-        <SkeletonBlock width="100%" height={150} borderRadius={20} />
-      </View>
-
-      {/* 2. Newly Added Shops Title Skeleton */}
+      {/* 1. Newly Added Shops Title Skeleton */}
       <View style={styles.titleRowSkeleton}>
         <SkeletonBlock width={180} height={20} borderRadius={6} />
         <SkeletonBlock width={80} height={16} borderRadius={6} />
       </View>
 
-      {/* 3. Shop Card Skeleton */}
+      {/* 2. Shop Card Skeleton */}
       <View style={styles.cardSkeleton}>
         <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
         <LinearGradient
@@ -140,10 +135,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginHorizontal: 16,
     padding: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.45)",
+    borderRadius: 14,
+    backgroundColor: "#FAFAFA",
     borderWidth: 1,
-    borderColor: "rgba(255, 220, 230, 0.35)",
+    borderColor: "#E5E7EB",
     gap: 10,
   },
   ambienceRowSkeleton: {
