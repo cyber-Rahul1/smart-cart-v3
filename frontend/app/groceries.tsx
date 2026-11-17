@@ -6,11 +6,11 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BackHandler, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-  interpolate,
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    Easing,
+    interpolate,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,16 +25,17 @@ import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 import { BrandFooter } from "@/src/components/brand-footer";
 import { GroceriesSkeleton } from "@/src/components/groceries-skeleton";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
+import ProductDetailModal from "@/src/components/product-detail-modal";
 import { applyOptimisticCartItem } from "@/src/cart";
 import { mediaUri } from "@/src/format";
 
 const GROCERY_CATEGORIES = [
-  { key: "All", label: "All" },
-  { key: "Dairy", label: "Dairy" },
-  { key: "Bakery", label: "Bakery" },
-  { key: "Beverages", label: "Beverages" },
-  { key: "Snacks", label: "Snacks" },
-  { key: "Staples", label: "Staples" },
+    { key: "All", label: "All" },
+    { key: "Dairy", label: "Dairy" },
+    { key: "Bakery", label: "Bakery" },
+    { key: "Beverages", label: "Beverages" },
+    { key: "Snacks", label: "Snacks" },
+    { key: "Staples", label: "Staples" },
 ];
 
 export default function Groceries() {
@@ -47,6 +48,8 @@ export default function Groceries() {
     const [aisle, setAisle] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [conflict, setConflict] = useState<{ p: Product; qty: number } | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
     const { tabBarTranslateY, setActiveTabIndex } = useTabBarVisibility();
 
     // Handle hardware / mobile back button: return to Home tab if no stack to pop
@@ -170,7 +173,7 @@ export default function Groceries() {
     const products = useMemo(() => menus.flatMap((m) => (m.data ? m.data.products.map((p) => ({ ...p, seller_name: m.data!.seller.name })) : [])),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [menus.map((m) => m.dataUpdatedAt).join()]);
-    
+
     // Sort products so bread, milk, eggs, paneer come first for the Popular picks section
     const priority = ["Brown Bread", "Toned Milk 1L", "Farm Eggs (6)", "Paneer 200g", "Curd 500g"];
     const sortProducts = (list: Product[]) => {
@@ -532,17 +535,28 @@ export default function Groceries() {
                 </ScrollView>
 
                 {/* 4. Popular picks header & Grid */}
-                <View style={s.popularHeaderRow}>
-                    <View style={s.sectionTitleWithIconRow}>
-                        <View style={[s.titleIconBadge, { backgroundColor: "#FEF3C7" }]}>
-                            <Ionicons name="basket" size={17} color="#D97706" />
+                {Boolean(aisle && aisle !== "All") && (
+                    <View style={s.popularHeaderRow}>
+                        <View style={s.sectionTitleWithIconRow}>
+                            {/* <View style={[s.titleIconBadge, { backgroundColor: "#FEF3C7" }]}>
+                                <Ionicons name="filter" size={16} color="#D97706" />
+                            </View> */}
+                            <Text style={s.sectionTitleText}>Showing filters for {aisle}</Text>
                         </View>
-                        <Text style={s.sectionTitleText}>{aisle && aisle !== "All" ? aisle : "Popular picks"}</Text>
+                        <Pressable
+                            onPress={() => setAisle(null)}
+                            style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                            hitSlop={8}
+                        >
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: "#F43F5E" }}>See all</Text>
+                            <Ionicons name="arrow-forward" size={14} color="#F43F5E" />
+                        </Pressable>
                     </View>
-                </View>
+                )}
+
 
                 {storeGroups.length > 0 ? (
-                    <View style={{ gap: spacing.lg }}>
+                    <View style={{ gap: spacing.lg, paddingTop: aisle && aisle !== "All" ? 8 : 20 }}>
                         {storeGroups.map(({ seller, products: storeProducts }, gIdx) => (
                             <View key={seller.id} style={{ gap: spacing.sm }}>
                                 {/* Clean Shop Header like Food page */}
@@ -635,7 +649,10 @@ export default function Groceries() {
                                             qty={qtyOf(p.id)}
                                             busy={busy === p.id}
                                             onChange={(n) => change(p, n)}
-                                            onOpen={() => router.push(`/seller/${p.seller_id}`)}
+                                            onOpen={() => {
+                                                setSelectedProduct(p);
+                                                setSelectedSeller(seller);
+                                            }}
                                         />
                                     ))}
                                 </View>
@@ -670,6 +687,21 @@ export default function Groceries() {
             <FloatingCartBar
                 bottomOffset={insets.bottom > 0 ? insets.bottom + 52 : 60}
                 dockSide="left"
+            />
+
+            {/* Product Detail Bottom Sheet Modal */}
+            <ProductDetailModal
+                visible={!!selectedProduct}
+                product={selectedProduct}
+                seller={selectedSeller}
+                currentQty={selectedProduct ? qtyOf(selectedProduct.id) : 0}
+                onClose={() => {
+                    setSelectedProduct(null);
+                    setSelectedSeller(null);
+                }}
+                onAddToCart={(p, qty) => {
+                    change(p, qty);
+                }}
             />
         </View>
     );
@@ -849,9 +881,11 @@ const useStyles = makeStyles((c) => ({
         marginBottom: 12,
     },
     sectionTitleText: {
-        fontSize: 18,
-        fontWeight: "900",
+        fontSize: 15,
+        fontWeight: "700",
         color: "#0F172A",
+        opacity: 0.7,
+
         letterSpacing: -0.3,
     },
     stickyChipsContainer: {
@@ -909,10 +943,14 @@ const useStyles = makeStyles((c) => ({
     popularHeaderRow: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
+        justifyContent: "flex-start",
         paddingHorizontal: spacing.lg,
         marginTop: 22,
-        marginBottom: 14,
+        gap: 10,
+        marginBottom: 4,
+        opacity: 0.5,
+        fontSize: 12,
+        fontWeight: 500
     },
     sectionTitleWithIconRow: {
         flexDirection: "row",

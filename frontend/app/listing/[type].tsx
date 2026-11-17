@@ -398,11 +398,11 @@ function ShopWithItemsCard({
                             minWidth: 68,
                             alignItems: "center",
                             justifyContent: "center",
-                            shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.15,
-                            shadowRadius: 4,
-                            elevation: 3,
+                            // shadowColor: "#00000027",
+                            // shadowOffset: { width: 0, height: 2 },
+                            // shadowOpacity: 0.15,
+                            // shadowRadius: 2,
+                            // elevation: 1,
                           },
                           pressed && { transform: [{ scale: 0.94 }] },
                         ]}
@@ -1523,14 +1523,14 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                 <View
                   style={{
                     paddingHorizontal: spacing.lg,
-                    marginTop: 24,
+                    marginTop: 10,
                     marginBottom: 10,
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
                   }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                  {/* <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                     <View
                       style={{
                         width: 34,
@@ -1548,16 +1548,19 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                         ? `${foodCuisineFilter} spots near you`
                         : "Restaurants near you"}
                     </Text>
-                  </View>
+                  </View> */}
                   {foodCuisineFilter !== "All" && (
-                    <Pressable
-                      onPress={() => setFoodCuisineFilter("All")}
-                      style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-                      hitSlop={8}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#F43F5E" }}>See all</Text>
-                      <Ionicons name="arrow-forward" size={14} color="#F43F5E" />
-                    </Pressable>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 20 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", opacity: 0.3 }}>Showing results for {foodCuisineFilter}</Text>
+                      <Pressable
+                        onPress={() => setFoodCuisineFilter("All")}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: 0.5 }}
+                        hitSlop={8}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#F43F5E" }}>See all</Text>
+                        <Ionicons name="arrow-forward" size={14} color="#F43F5E" />
+                      </Pressable>
+                    </View>
                   )}
                 </View>
               </View>
