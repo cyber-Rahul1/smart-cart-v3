@@ -2155,7 +2155,7 @@ const useStyles = makeStyles((c) => ({
     marginHorizontal: spacing.lg,
     marginTop: spacing.xs,
     height: 170,
-    borderRadius: 24,
+    borderRadius: 14,
     overflow: "hidden",
     position: "relative",
     paddingLeft: 20,
