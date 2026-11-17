@@ -20,12 +20,13 @@ import { GroceryCard } from "@/src/components/grocery-card";
 import { SellerTile } from "@/src/components/seller-card";
 import { font, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
-import { Button, EmptyState, ErrorState, IconName, Ionicons, Loader, SectionTitle, Sheet, useToast } from "@/src/ui";
+import { AppImage, Button, EmptyState, ErrorState, IconName, Ionicons, Loader, SectionTitle, Sheet, useToast } from "@/src/ui";
 import { useTabBarVisibility } from "@/src/context/tab-bar-visibility";
 import { BrandFooter } from "@/src/components/brand-footer";
 import { GroceriesSkeleton } from "@/src/components/groceries-skeleton";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
 import { applyOptimisticCartItem } from "@/src/cart";
+import { mediaUri } from "@/src/format";
 
 const GROCERY_CATEGORIES = [
   { key: "All", label: "All" },
@@ -171,9 +172,9 @@ export default function Groceries() {
         [menus.map((m) => m.dataUpdatedAt).join()]);
     
     // Sort products so bread, milk, eggs, paneer come first for the Popular picks section
-    const sortedProducts = useMemo(() => {
-        const priority = ["Brown Bread", "Toned Milk 1L", "Farm Eggs (6)", "Paneer 200g", "Curd 500g"];
-        return [...products].sort((a, b) => {
+    const priority = ["Brown Bread", "Toned Milk 1L", "Farm Eggs (6)", "Paneer 200g", "Curd 500g"];
+    const sortProducts = (list: Product[]) => {
+        return [...list].sort((a, b) => {
             const idxA = priority.indexOf(a.name);
             const idxB = priority.indexOf(b.name);
             if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -181,7 +182,32 @@ export default function Groceries() {
             if (idxB !== -1) return 1;
             return 0;
         });
+    };
+
+    const sortedProducts = useMemo(() => {
+        return sortProducts(products);
     }, [products]);
+
+    // Group items by store like in food section
+    const storeGroups = useMemo(() => {
+        const groups: { seller: Seller; products: Product[] }[] = [];
+        for (const m of menus) {
+            if (!m.data) continue;
+            const seller = m.data.seller;
+            const storeProducts = m.data.products.map((p) => ({ ...p, seller_name: seller.name }));
+            const filtered = aisle && aisle !== "All"
+                ? storeProducts.filter((p) => p.category.toLowerCase() === aisle.toLowerCase())
+                : storeProducts.filter((p) => p.available);
+            if (filtered.length > 0) {
+                groups.push({
+                    seller,
+                    products: sortProducts(filtered),
+                });
+            }
+        }
+        return groups;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [menus.map((m) => m.dataUpdatedAt).join(), aisle]);
 
     const shown = aisle && aisle !== "All"
         ? sortedProducts.filter((p) => p.category.toLowerCase() === aisle.toLowerCase())
@@ -547,18 +573,105 @@ export default function Groceries() {
                     </Pressable>
                 </View>
 
-                {shown.length ? (
-                    <View testID="groceries-product-grid" style={s.productsGrid}>
-                        {shown.map((p) => (
-                            <GroceryCard
-                                key={p.id}
-                                p={p}
-                                width={cardW}
-                                qty={qtyOf(p.id)}
-                                busy={busy === p.id}
-                                onChange={(n) => change(p, n)}
-                                onOpen={() => router.push(`/seller/${p.seller_id}`)}
-                            />
+                {storeGroups.length > 0 ? (
+                    <View style={{ gap: spacing.lg }}>
+                        {storeGroups.map(({ seller, products: storeProducts }, gIdx) => (
+                            <View key={seller.id} style={{ gap: spacing.sm }}>
+                                {/* Clean Shop Header like Food page */}
+                                <View style={s.storeHeaderContainer}>
+                                    <View style={s.storeHeaderRow}>
+                                        {/* Avatar & Name info */}
+                                        <View style={s.storeInfoRow}>
+                                            <View style={s.storeAvatarBox}>
+                                                <AppImage
+                                                    source={{ uri: mediaUri(seller.image) }}
+                                                    fallbackType="groceries"
+                                                    style={StyleSheet.absoluteFill}
+                                                    contentFit="cover"
+                                                />
+                                            </View>
+                                            <View style={{ marginLeft: 10, flex: 1 }}>
+                                                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                                    <Text style={s.storeNameText} numberOfLines={1}>
+                                                        {seller.name}
+                                                    </Text>
+                                                    {seller.is_new && (
+                                                        <View style={s.newBadge}>
+                                                            <Text style={s.newBadgeText}>NEW</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <Text style={s.storeCategorySub} numberOfLines={1}>
+                                                    {seller.cuisine || "Kirana & Essentials"}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Rating badge */}
+                                        <View style={s.ratingBadge}>
+                                            <Ionicons name="star" size={11} color="#FFFFFF" />
+                                            <Text style={s.ratingBadgeText}>
+                                                {seller.rating ? seller.rating.toFixed(1) : "4.2"}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Delivery / Distance snippet & View store */}
+                                    <View style={s.storeSnippetRow}>
+                                        <View style={s.storeSnippetItem}>
+                                            <Ionicons name="time-outline" size={12} color="#64748B" />
+                                            <Text style={s.storeSnippetText}>
+                                                {seller.eta_min || 25} mins
+                                            </Text>
+                                        </View>
+                                        <Text style={s.storeSnippetDot}>•</Text>
+                                        <View style={s.storeSnippetItem}>
+                                            <Ionicons name="location-outline" size={12} color="#64748B" />
+                                            <Text style={s.storeSnippetText}>
+                                                {seller.distance_km || 1.8} km
+                                            </Text>
+                                        </View>
+                                        {seller.offer && (
+                                            <>
+                                                <Text style={s.storeSnippetDot}>•</Text>
+                                                <View style={s.storeSnippetItem}>
+                                                    <Ionicons name="pricetag" size={11} color="#E65100" />
+                                                    <Text style={s.storeOfferText}>
+                                                        {seller.offer}
+                                                    </Text>
+                                                </View>
+                                            </>
+                                        )}
+                                        <Pressable
+                                            onPress={() => router.push(`/seller/${seller.id}`)}
+                                            style={s.viewStoreBtn}
+                                            hitSlop={8}
+                                        >
+                                            <Text style={s.viewStoreText}>View store</Text>
+                                            <Ionicons name="chevron-forward" size={14} color="#EA580C" />
+                                        </Pressable>
+                                    </View>
+                                </View>
+
+                                {/* Product Grid for this Store */}
+                                <View testID={`groceries-product-grid-${seller.id}`} style={s.productsGrid}>
+                                    {storeProducts.map((p) => (
+                                        <GroceryCard
+                                            key={p.id}
+                                            p={p}
+                                            width={cardW}
+                                            qty={qtyOf(p.id)}
+                                            busy={busy === p.id}
+                                            onChange={(n) => change(p, n)}
+                                            onOpen={() => router.push(`/seller/${p.seller_id}`)}
+                                        />
+                                    ))}
+                                </View>
+
+                                {gIdx < storeGroups.length - 1 && (
+                                    <View style={s.storeGroupDivider} />
+                                )}
+                            </View>
                         ))}
                     </View>
                 ) : loadingMenus ? <Loader /> : (
@@ -844,6 +957,117 @@ const useStyles = makeStyles((c) => ({
         flexWrap: "wrap",
         gap: 12,
         paddingHorizontal: spacing.lg,
+    },
+
+    // Store Section Header (matching food page style)
+    storeHeaderContainer: {
+        paddingHorizontal: spacing.lg,
+        backgroundColor: "transparent",
+    },
+    storeHeaderRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingTop: spacing.xs,
+        paddingBottom: 4,
+    },
+    storeInfoRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        flex: 1,
+        marginRight: spacing.sm,
+    },
+    storeAvatarBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        overflow: "hidden",
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#F8FAFC",
+    },
+    storeNameText: {
+        fontSize: font.lg + 1,
+        fontWeight: "900",
+        color: "#0F172A",
+        letterSpacing: -0.2,
+    },
+    newBadge: {
+        backgroundColor: "#FFF8E1",
+        borderWidth: 1,
+        borderColor: "#FFE082",
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 6,
+    },
+    newBadgeText: {
+        fontSize: 9,
+        fontWeight: "800",
+        color: "#FF8F00",
+        letterSpacing: 0.3,
+    },
+    storeCategorySub: {
+        fontSize: font.sm,
+        color: "#64748B",
+        marginTop: 1,
+        fontWeight: "500",
+    },
+    ratingBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#2E7D32",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        gap: 3,
+    },
+    ratingBadgeText: {
+        color: "#FFFFFF",
+        fontWeight: "900",
+        fontSize: 11,
+    },
+    storeSnippetRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 4,
+    },
+    storeSnippetItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
+    },
+    storeSnippetText: {
+        fontSize: font.sm - 1,
+        color: "#64748B",
+        fontWeight: "600",
+    },
+    storeSnippetDot: {
+        color: "#CBD5E1",
+        fontSize: font.sm - 2,
+    },
+    storeOfferText: {
+        fontSize: font.sm - 1,
+        color: "#E65100",
+        fontWeight: "800",
+    },
+    viewStoreBtn: {
+        marginLeft: "auto",
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 2,
+        paddingHorizontal: 4,
+    },
+    viewStoreText: {
+        fontSize: font.sm,
+        fontWeight: "800",
+        color: "#EA580C",
+    },
+    storeGroupDivider: {
+        height: 1,
+        backgroundColor: "#F1F5F9",
+        marginHorizontal: spacing.lg,
+        marginTop: spacing.md,
     },
     storesScrollContent: {
         paddingHorizontal: spacing.lg,
