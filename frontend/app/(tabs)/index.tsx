@@ -531,6 +531,9 @@ export default function HomeScreen() {
   const [activeMindPill, setActiveMindPill] = useState<string>("cuisines");
   const railCollapseAnim = useSharedValue(0); // 0: expanded, 1: collapsed
   const railProgress = useSharedValue(0); // 0: outside nearby, 1: inside nearby
+  const scrollYShared = useSharedValue(0); // Tracks real-time vertical scroll for strict section confinement
+  const nearbySectionYShared = useSharedValue(9999);
+  const nearbySectionHeightShared = useSharedValue(0);
 
   // Track position of "All shops nearby"
   const nearbySectionY = useRef<number>(9999);
@@ -609,6 +612,7 @@ export default function HomeScreen() {
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const currentY = e.nativeEvent.contentOffset.y;
+    scrollYShared.value = currentY;
     const diff = currentY - lastScrollY.current;
 
     // Ignore microscopic noise (< 1px) or micro-trembles while holding finger
@@ -623,7 +627,9 @@ export default function HomeScreen() {
       }
     }
 
-    // Trigger vertical rail ONLY when scrolled into the "All shops nearby" card list and hide when scrolled out
+    // Keep vertical rail mounted on Home tab once nearby section is available.
+    // Confinement within "All shops nearby" is handled strictly on the UI thread via scrollYShared
+    // so it never slides/pops open or closed when entering/leaving the section.
     const nearbyTop = nearbySectionY.current;
     const nearbyBottom = nearbySectionHeight.current > 0
       ? nearbyTop + nearbySectionHeight.current
@@ -633,15 +639,9 @@ export default function HomeScreen() {
       if (!showVerticalRail) {
         setShowVerticalRail(true);
       }
-      railProgress.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
+      railProgress.value = 1;
     } else {
-      if (railProgress.value > 0) {
-        railProgress.value = withTiming(0, { duration: 200, easing: Easing.in(Easing.cubic) }, (finished) => {
-          if (finished) {
-            runOnJS(setShowVerticalRail)(false);
-          }
-        });
-      }
+      railProgress.value = 0;
     }
 
     // Show sticky horizontal chips only when user scrolls down past the main top options grid (tiles section)
@@ -798,33 +798,51 @@ export default function HomeScreen() {
     const computedBottom = (bottomChrome || insets.bottom) + currentTabVisibleOffset + 28;
 
     const directionMultiplier = railSide === "left" ? -1 : 1;
-    const baseOffset = (1 - railProgress.value) * 140 * directionMultiplier;
     const collapseOffset = railCollapseAnim.value * 110 * directionMultiplier;
+
+    // Strict section confinement:
+    // Only visible when scroll offset is within the "All shops nearby" section.
+    // When outside, opacity is 0 and it does not overlay any other section.
+    // Crucially, it does NOT animate opening/closing or sliding in/out on enter/exit — it remains in whatever
+    // collapse/expanded state the user selected!
+    const nearbyTop = nearbySectionYShared.value;
+    const nearbyH = nearbySectionHeightShared.value;
+    const nearbyBottom = nearbyH > 0 ? nearbyTop + nearbyH : nearbyTop + 5000;
+    const curY = scrollYShared.value;
+    const isInsideSection = curY >= nearbyTop - 80 && curY <= nearbyBottom;
+
+    const isVisible = isInsideSection ? 1 : 0;
 
     return {
       top: computedTop,
       bottom: computedBottom,
-      opacity: railProgress.value,
+      opacity: isVisible,
       transform: [
-        { translateX: baseOffset + collapseOffset },
+        { translateX: collapseOffset },
       ],
-      pointerEvents: railProgress.value > 0.3 && railCollapseAnim.value < 0.8 ? ("auto" as const) : ("none" as const),
+      pointerEvents: isInsideSection && railCollapseAnim.value < 0.8 ? ("auto" as const) : ("none" as const),
     };
   }, [railSide, bottomChrome, insets.bottom, insets.top]);
 
   const reopenPillAnimStyle = useAnimatedStyle(() => {
-    const isShown = railProgress.value * railCollapseAnim.value;
     const tabHeight = 62;
     const currentTabVisibleOffset = Math.max(0, tabHeight - tabBarTranslateY.value);
     const computedBottom = (bottomChrome || insets.bottom) + currentTabVisibleOffset + 28;
 
+    const nearbyTop = nearbySectionYShared.value;
+    const nearbyH = nearbySectionHeightShared.value;
+    const nearbyBottom = nearbyH > 0 ? nearbyTop + nearbyH : nearbyTop + 5000;
+    const curY = scrollYShared.value;
+    const isInsideSection = curY >= nearbyTop - 80 && curY <= nearbyBottom;
+
+    const isShown = isInsideSection ? railCollapseAnim.value : 0;
     const offscreenDistance = railSide === "left" ? -40 : 40;
 
     return {
       bottom: computedBottom,
       opacity: isShown,
       transform: [
-        { translateX: interpolate(isShown, [0, 1], [offscreenDistance, 0]) },
+        { translateX: interpolate(railCollapseAnim.value, [0, 1], [offscreenDistance, 0]) },
       ],
       pointerEvents: isShown > 0.5 ? ("auto" as const) : ("none" as const),
     };
@@ -832,9 +850,10 @@ export default function HomeScreen() {
 
 
   const nearbyContainerAnimStyle = useAnimatedStyle(() => {
-    // Shrunk state: railProgress is 1 and railCollapseAnim is 0
-    const activeOpen = railProgress.value * (1 - railCollapseAnim.value);
-    // When rail is active, animate the side padding from 0 to 92 (86px rail width + 6px gap)
+    // When user collapses the rail, railCollapseAnim goes to 1.
+    // When expanded, railCollapseAnim is 0.
+    // Target side padding: 92px when open, 0 when collapsed.
+    const activeOpen = 1 - railCollapseAnim.value;
     const targetPadding = interpolate(activeOpen, [0, 1], [0, 92]);
 
     return {
@@ -1641,6 +1660,8 @@ export default function HomeScreen() {
             onLayout={(e) => {
               nearbySectionY.current = e.nativeEvent.layout.y;
               nearbySectionHeight.current = e.nativeEvent.layout.height;
+              nearbySectionYShared.value = e.nativeEvent.layout.y;
+              nearbySectionHeightShared.value = e.nativeEvent.layout.height;
             }}
           >
             <SectionTitle
