@@ -12,6 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 from core import client, db, iso, notify, now
 from seed import seed
 from services import admin, cart, catalog, community, customer, delivery, geo, group_ordering, identity, media, orders, payments, rider, seller
+from services.async_event_service import cache_manager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("gathrcart")
@@ -82,12 +83,51 @@ app = FastAPI(title="GathrCart API", version="0.1.0")
 @app.middleware("http")
 async def correlation(request: Request, call_next):
     cid = request.headers.get("x-correlation-id") or str(uuid.uuid4())
+    path = request.url.path
+
+    # Security check: Max payload size guard (1MB limit for mutating requests)
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > 1024 * 1024:
+            return JSONResponse({"detail": "Payload too large. Maximum 1MB allowed."}, status_code=413)
+
+    # Multi-dimensional Rate Limiting:
+    # Identify client by user_id from Authorization header if present, else client IP
+    auth_header = request.headers.get("authorization", "")
+    client_id = auth_header[-16:] if len(auth_header) > 20 else (request.client.host if request.client else "unknown")
+
+    # Rate limits per endpoint tier
+    rate_limit = 120  # default 120 req/min for general API calls
+    if path.startswith("/api/orders/checkout"):
+        rate_limit = 15  # Strict 15 checkouts/min to prevent brute-forcing & lock contention
+    elif path.startswith("/api/cart"):
+        rate_limit = 60  # 60 cart mutations/min
+    elif path.startswith("/api/auth") or path.startswith("/api/identity"):
+        rate_limit = 20  # 20 auth calls/min to prevent OTP / credential brute force
+
+    rate_key = f"rl:{client_id}:{path.split('/')[2] if len(path.split('/')) > 2 else 'root'}"
+    allowed, remaining = cache_manager.check_rate_limit(rate_key, limit=rate_limit, window_seconds=60)
+    if not allowed:
+        return JSONResponse(
+            {"detail": "Too many requests. Please slow down and try again."},
+            status_code=429,
+            headers={"Retry-After": "60", "X-RateLimit-Limit": str(rate_limit), "X-RateLimit-Remaining": "0"},
+        )
+
     try:
         resp = await call_next(request)
     except Exception:
         logger.exception("unhandled error cid=%s", cid)
         resp = JSONResponse({"detail": "Something went wrong"}, status_code=500)
+
+    # Add security and telemetry headers
     resp.headers["x-correlation-id"] = cid
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-XSS-Protection"] = "1; mode=block"
+    resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    resp.headers["X-RateLimit-Limit"] = str(rate_limit)
+    resp.headers["X-RateLimit-Remaining"] = str(remaining)
     return resp
 
 

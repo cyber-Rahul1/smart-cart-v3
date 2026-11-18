@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from core import APP_ENV, current_user, db, iso, new_id, notify, now, short_code
 
 from database.service import record_payment_and_ledger, sync_order_to_relational
+from services.async_event_service import sqs_service
 from services.razorpay_provider import razorpay_client
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -128,14 +129,74 @@ async def apply_success(payment: dict, provider_payment_id: str):
 
 async def confirm_order(o: dict, payment_id: str, payment_status: str) -> bool:
     """Shared by online capture and cash on delivery: reserve stock, confirm, book commission, alert the shop."""
-    res = await db.orders.update_one({"id": o["id"], "status": "pending_payment"},
-                                     {"$set": {"payment_status": payment_status, "status": "confirmed", "payment_id": payment_id,
-                                               "payment_method": "cod" if payment_status == "cod" else "online"},
-                                      "$push": {"history": {"status": "confirmed", "at": iso(now())}}})
+    res = await db.orders.update_one(
+        {"id": o["id"], "status": "pending_payment"},
+        {
+            "$set": {
+                "payment_status": payment_status,
+                "status": "confirmed",
+                "payment_id": payment_id,
+                "payment_method": "cod" if payment_status == "cod" else "online",
+            },
+            "$push": {"history": {"status": "confirmed", "at": iso(now())}},
+        },
+    )
     if not res.modified_count:
         return False
+
+    # ATOMIC INVENTORY DEDUCTION (Swiggy / high-concurrency pattern):
+    # Conditionally decrement stock only if stock >= qty and product is available.
+    # If any item fails, rollback all successfully reserved items and cancel the order.
+    reserved_items = []
+    reservation_failed = False
+    failed_reason = ""
+
     for i in o["items"]:
-        await db.products.update_one({"id": i["product_id"]}, [{"$set": {"stock": {"$max": [0, {"$subtract": ["$stock", i["qty"]]}]}}}])
+        pid = i["product_id"]
+        qty = i["qty"]
+        upd = await db.products.update_one(
+            {"id": pid, "stock": {"$gte": qty}, "available": True},
+            {"$inc": {"stock": -qty}}
+        )
+        if upd.modified_count == 1:
+            reserved_items.append((pid, qty))
+        else:
+            reservation_failed = True
+            failed_reason = f"Item {i.get('name', pid)} ran out of stock during checkout confirmation"
+            break
+
+    if reservation_failed:
+        # Atomic rollback of all items reserved so far
+        for r_pid, r_qty in reserved_items:
+            await db.products.update_one({"id": r_pid}, {"$inc": {"stock": r_qty}})
+
+        # Fail order and mark payment for immediate refund
+        await db.orders.update_one(
+            {"id": o["id"]},
+            {
+                "$set": {
+                    "status": "cancelled",
+                    "cancel_reason": "stock_exhausted",
+                    "stock_restored": True,
+                },
+                "$push": {"history": {"status": "cancelled", "reason": failed_reason, "at": iso(now())}},
+            },
+        )
+        if payment_status == "paid":
+            await db.refunds.insert_one({
+                "id": new_id(),
+                "order_id": o["id"],
+                "payment_id": payment_id,
+                "amount": o["bill"]["total"],
+                "status": "processed",
+                "provider": "demo",
+                "reason": "stock_exhausted",
+                "created_at": iso(now()),
+            })
+            await db.payments.update_one({"id": payment_id}, {"$set": {"status": "refunded"}})
+        sqs_service.send_event("order.failed_stock_exhausted", {"order_id": o["id"], "reason": failed_reason})
+        return False
+
     await db.commissions.insert_one({"id": new_id(), "order_id": o["id"], "seller_id": o["seller_id"], "amount": o["bill"]["commission"],
                                      "created_at": iso(now())})
     if o["bill"].get("credit_used"):

@@ -15,6 +15,18 @@ class CartItemIn(BaseModel):
     product_id: str
     qty: int = Field(ge=0, le=50)
     replace: bool = False  # retained for backward compatibility
+    expected_revision: Optional[int] = None
+
+
+class BatchCartItem(BaseModel):
+    product_id: str
+    qty: int = Field(ge=0, le=50)
+
+
+class BatchCartIn(BaseModel):
+    items: list[BatchCartItem]
+    expected_revision: Optional[int] = None
+    idempotency_key: Optional[str] = None
 
 
 class QuoteIn(BaseModel):
@@ -23,7 +35,12 @@ class QuoteIn(BaseModel):
 
 
 async def load_cart(user_id: str) -> dict:
-    return await db.carts.find_one({"user_id": user_id}, {"_id": 0}) or {"user_id": user_id, "seller_id": None, "items": []}
+    return await db.carts.find_one({"user_id": user_id}, {"_id": 0}) or {
+        "user_id": user_id,
+        "seller_id": None,
+        "items": [],
+        "revision": 0,
+    }
 
 
 async def cart_view(user: dict, coupon=None, use_credit=False) -> dict:
@@ -146,6 +163,7 @@ async def cart_view(user: dict, coupon=None, use_credit=False) -> dict:
         "total_items": sum(i.get("qty", 0) for i in all_lines),
         "total_price": round(combined_total, 2),
         "is_multi_store": len(groups) > 1,
+        "revision": cart.get("revision", 0),
     }
 
 
@@ -173,6 +191,10 @@ async def set_item(body: CartItemIn, user=Depends(require("customer"))):
         raise HTTPException(400, f"Only {p['stock']} left" if p["available"] else "Item unavailable")
 
     cart = await load_cart(user["id"])
+    current_rev = cart.get("revision", 0)
+    if body.expected_revision is not None and body.expected_revision < current_rev:
+        raise HTTPException(409, f"Cart was modified concurrently (expected revision {body.expected_revision}, current {current_rev})")
+
     # Multi-store cart enabled: we NO LONGER reject or wipe items from other shops!
     items = [i for i in cart.get("items", []) if i["product_id"] != body.product_id]
     if body.qty > 0:
@@ -183,9 +205,84 @@ async def set_item(body: CartItemIn, user=Depends(require("customer"))):
     # Update seller_id: keep primary or set current
     primary_seller_id = p["seller_id"] if not items else cart.get("seller_id") or p["seller_id"]
 
+    new_rev = current_rev + 1
     await db.carts.update_one(
         {"user_id": user["id"]},
-        {"$set": {"seller_id": primary_seller_id if items else None, "items": items, "updated_at": iso(now())}},
+        {
+            "$set": {
+                "seller_id": primary_seller_id if items else None,
+                "items": items,
+                "revision": new_rev,
+                "updated_at": iso(now()),
+            }
+        },
+        upsert=True,
+    )
+    return await cart_view(user)
+
+
+@router.post("/batch")
+async def batch_update(body: BatchCartIn, user=Depends(require("customer"))):
+    """
+    Swiggy-style batched cart mutation:
+    Accepts desired target quantities for multiple items, checks revision sequence and inventory availability,
+    and applies all changes atomically with monotonic revision bumping.
+    """
+    cart = await load_cart(user["id"])
+    current_rev = cart.get("revision", 0)
+    if body.expected_revision is not None and body.expected_revision < current_rev:
+        raise HTTPException(409, f"Cart was modified concurrently (expected revision {body.expected_revision}, current {current_rev})")
+
+    if not body.items:
+        return await cart_view(user)
+
+    target_pids = [item.product_id for item in body.items]
+    prods_cursor = db.products.find({"id": {"$in": target_pids}}, {"_id": 0})
+    prods = await prods_cursor.to_list(len(target_pids))
+    prods_map = {p["id"]: p for p in prods}
+
+    # Validate all requested items
+    for item in body.items:
+        p = prods_map.get(item.product_id)
+        if not p:
+            raise HTTPException(404, f"Product {item.product_id} not found")
+        shop = await db.sellers.find_one({"id": p["seller_id"]}, {"_id": 0, "approved": 1, "open": 1})
+        if not shop or not shop.get("approved"):
+            raise HTTPException(404, f"Product {p.get('name', item.product_id)} seller is not approved")
+        if item.qty > 0 and not shop.get("open", True):
+            raise HTTPException(400, f"Shop for {p.get('name')} is closed right now")
+        if item.qty > 0 and (not p.get("available") or p.get("stock", 0) < item.qty):
+            raise HTTPException(400, f"Only {p.get('stock', 0)} left for {p.get('name')}")
+
+    # Build new items map from existing cart
+    item_dict = {i["product_id"]: i["qty"] for i in cart.get("items", [])}
+    for item in body.items:
+        if item.qty <= 0:
+            item_dict.pop(item.product_id, None)
+        else:
+            item_dict[item.product_id] = item.qty
+
+    new_items = [{"product_id": pid, "qty": qty} for pid, qty in item_dict.items()]
+
+    # Re-evaluate primary seller
+    primary_seller_id = None
+    if new_items:
+        first_p = prods_map.get(new_items[0]["product_id"])
+        if not first_p:
+            first_p = await db.products.find_one({"id": new_items[0]["product_id"]}, {"_id": 0})
+        primary_seller_id = (first_p or {}).get("seller_id") or cart.get("seller_id")
+
+    new_rev = current_rev + 1
+    await db.carts.update_one(
+        {"user_id": user["id"]},
+        {
+            "$set": {
+                "seller_id": primary_seller_id,
+                "items": new_items,
+                "revision": new_rev,
+                "updated_at": iso(now()),
+            }
+        },
         upsert=True,
     )
     return await cart_view(user)

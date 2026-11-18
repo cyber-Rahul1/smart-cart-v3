@@ -48,6 +48,39 @@ class RedisCacheManager:
         except Exception:
             return False
 
+    def incr(self, key: str) -> int:
+        try:
+            return int(self.client.incr(key))
+        except Exception:
+            return 1
+
+    def expire(self, key: str, seconds: int) -> bool:
+        try:
+            return bool(self.client.expire(key, seconds))
+        except Exception:
+            return False
+
+    def check_rate_limit(self, key: str, limit: int, window_seconds: int = 60) -> tuple[bool, int]:
+        """
+        Sliding / Fixed-window rate limiter using Redis INCR + EXPIRE.
+        Returns: (allowed: bool, remaining: int)
+        """
+        try:
+            client = self.client
+            # If using InMemoryCacheFallback or real redis
+            if hasattr(client, "check_rate_limit"):
+                return client.check_rate_limit(key, limit, window_seconds)
+            
+            current = client.incr(key)
+            if current == 1:
+                client.expire(key, window_seconds)
+            allowed = current <= limit
+            remaining = max(0, limit - current)
+            return allowed, remaining
+        except Exception as exc:
+            logger.warning("Rate limiter fallback allow: %s", exc)
+            return True, limit
+
     def geoadd(self, name: str, lng: float, lat: float, member: str) -> bool:
         try:
             return bool(self.client.geoadd(name, (lng, lat, member)))
@@ -69,6 +102,7 @@ class InMemoryCacheFallback:
     def __init__(self):
         self._store = {}
         self._geo = {}
+        self._limits = {}
 
     def ping(self):
         return True
@@ -85,6 +119,25 @@ class InMemoryCacheFallback:
     def delete(self, key: str) -> bool:
         self._store.pop(key, None)
         return True
+
+    def incr(self, key: str) -> int:
+        val = int(self._store.get(key, 0)) + 1
+        self._store[key] = str(val)
+        return val
+
+    def expire(self, key: str, seconds: int) -> bool:
+        return True
+
+    def check_rate_limit(self, key: str, limit: int, window_seconds: int = 60) -> tuple[bool, int]:
+        now_ts = datetime.now(timezone.utc).timestamp()
+        record = self._limits.get(key)
+        if not record or now_ts >= record["reset_at"]:
+            self._limits[key] = {"count": 1, "reset_at": now_ts + window_seconds}
+            return True, limit - 1
+        record["count"] += 1
+        allowed = record["count"] <= limit
+        remaining = max(0, limit - record["count"])
+        return allowed, remaining
 
     def geoadd(self, name: str, *values) -> bool:
         # values can be (lng, lat, member) tuples or flat

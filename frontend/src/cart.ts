@@ -181,3 +181,86 @@ export function useCartSummary() {
     hasItems: totalCount > 0,
   };
 }
+
+/**
+ * High-Concurrency Client-side Cart Mutation Coalescer (Swiggy-inspired).
+ * When rapid clicks (+/-) happen on an item stepper within a short debounce window (200ms),
+ * optimistic UI updates immediately, but network requests are coalesced into a single
+ * desired absolute quantity update sent to `/cart/items` or `/cart/batch`.
+ * If server rejects (e.g. 400 Out of Stock or 409 Conflict), state cleanly rolls back.
+ */
+type QueuedItemMutation = {
+  productId: string;
+  targetQty: number;
+  replace?: boolean;
+  rollback: () => void;
+  resolve: (res: any) => void;
+  reject: (err: any) => void;
+};
+
+const mutationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingItemMutations = new Map<string, QueuedItemMutation>();
+
+export function mutateCartItemCoalesced(
+  product: Product,
+  targetQty: number,
+  options?: { replace?: boolean; seller?: Seller; debounceMs?: number }
+): Promise<CartQuoteResponse> {
+  const debounceMs = options?.debounceMs ?? 200;
+  const rollback = applyOptimisticCartItem(product, targetQty, options?.seller);
+
+  // Clear pending timer for this product
+  if (mutationTimers.has(product.id)) {
+    clearTimeout(mutationTimers.get(product.id)!);
+    mutationTimers.delete(product.id);
+  }
+
+  return new Promise((resolve, reject) => {
+    // If there was an earlier pending mutation for this product, chain its promise
+    const existing = pendingItemMutations.get(product.id);
+    const combinedResolve = (res: any) => {
+      existing?.resolve(res);
+      resolve(res);
+    };
+    const combinedReject = (err: any) => {
+      existing?.reject(err);
+      reject(err);
+    };
+
+    pendingItemMutations.set(product.id, {
+      productId: product.id,
+      targetQty,
+      replace: options?.replace,
+      rollback,
+      resolve: combinedResolve,
+      reject: combinedReject,
+    });
+
+    const timer = setTimeout(async () => {
+      mutationTimers.delete(product.id);
+      const pending = pendingItemMutations.get(product.id);
+      pendingItemMutations.delete(product.id);
+      if (!pending) return;
+
+      try {
+        const response = await api<CartQuoteResponse>("/cart/items", {
+          method: "POST",
+          body: {
+            product_id: pending.productId,
+            qty: pending.targetQty,
+            replace: pending.replace ?? false,
+          },
+        });
+        queryClient.setQueryData(["cart"], response);
+        queryClient.invalidateQueries({ queryKey: ["cart"] });
+        pending.resolve(response);
+      } catch (err) {
+        pending.rollback();
+        queryClient.invalidateQueries({ queryKey: ["cart"] });
+        pending.reject(err);
+      }
+    }, debounceMs);
+
+    mutationTimers.set(product.id, timer);
+  });
+}
