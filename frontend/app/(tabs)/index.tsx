@@ -524,7 +524,7 @@ export default function HomeScreen() {
   const [activeCategoryPill, setActiveCategoryPill] = useState<string>("all");
 
   // Vertical side filter rail state & animations
-  const [showVerticalRail, setShowVerticalRail] = useState(false);
+  const [showVerticalRail, setShowVerticalRail] = useState(true);
   const [isRailCollapsed, setIsRailCollapsed] = useState(false);
   const [railSide, setRailSide] = useState<"right" | "left">("right");
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
@@ -551,6 +551,8 @@ export default function HomeScreen() {
     if (activeTabIndex !== 0) {
       setShowVerticalRail(false);
       railProgress.value = 0;
+    } else {
+      setShowVerticalRail(true);
     }
   }, [activeTabIndex]);
 
@@ -625,23 +627,6 @@ export default function HomeScreen() {
         lastScrollTimestampRef.current = now;
         setScrollTimestamp(now);
       }
-    }
-
-    // Keep vertical rail mounted on Home tab once nearby section is available.
-    // Confinement within "All shops nearby" is handled strictly on the UI thread via scrollYShared
-    // so it never slides/pops open or closed when entering/leaving the section.
-    const nearbyTop = nearbySectionY.current;
-    const nearbyBottom = nearbySectionHeight.current > 0
-      ? nearbyTop + nearbySectionHeight.current
-      : nearbyTop + 5000;
-    const inNearby = currentY >= nearbyTop - 80 && currentY <= nearbyBottom;
-    if (inNearby) {
-      if (!showVerticalRail) {
-        setShowVerticalRail(true);
-      }
-      railProgress.value = 1;
-    } else {
-      railProgress.value = 0;
     }
 
     // Show sticky horizontal chips only when user scrolls down past the main top options grid (tiles section)
@@ -786,67 +771,66 @@ export default function HomeScreen() {
   });
 
   const verticalRailAnimStyle = useAnimatedStyle(() => {
-    // 60fps UI-thread calculation: header top padding + search row (46) + sticky chips (up to 48) + top branding (interpolated 95 to 0)
+    // Top offset so the rail stays sticky below the fixed top headers (search bar, top row, chips)
     const headerTopPadding = insets.top + spacing.xs;
     const topRowH = interpolate(collapseProgress.value, [0, 1], [95, 0]);
     const searchH = 46 + 4; // search height + marginTop
     const chipsH = stickyChipsProgress.value * 48;
-    const computedTop = headerTopPadding + topRowH + searchH + chipsH + 12;
-
-    const tabHeight = 62;
-    const currentTabVisibleOffset = Math.max(0, tabHeight - tabBarTranslateY.value);
-    const computedBottom = (bottomChrome || insets.bottom) + currentTabVisibleOffset + 28;
+    const stickyTopOffset = headerTopPadding + topRowH + searchH + chipsH + 12;
 
     const directionMultiplier = railSide === "left" ? -1 : 1;
     const collapseOffset = railCollapseAnim.value * 110 * directionMultiplier;
 
-    // Strict section confinement:
-    // Only visible when scroll offset is within the "All shops nearby" section.
-    // When outside, opacity is 0 and it does not overlay any other section.
-    // Crucially, it does NOT animate opening/closing or sliding in/out on enter/exit — it remains in whatever
-    // collapse/expanded state the user selected!
+    // Strict section boundary positioning:
+    // Rail lives directly inside "All shops nearby".
+    // When scrollY exceeds nearbyTop, it sticks to the top with translateY.
+    // When scrolling past the section bottom, translateY stops advancing so it naturally scrolls away with the section!
+    // No appearing/disappearing animations — rail remains fully visible and intact.
     const nearbyTop = nearbySectionYShared.value;
     const nearbyH = nearbySectionHeightShared.value;
-    const nearbyBottom = nearbyH > 0 ? nearbyTop + nearbyH : nearbyTop + 5000;
     const curY = scrollYShared.value;
-    const isInsideSection = curY >= nearbyTop - 80 && curY <= nearbyBottom;
 
-    const isVisible = isInsideSection ? 1 : 0;
+    const railHeight = 440; // Approx rail height
+    const maxTranslate = Math.max(0, nearbyH - railHeight - 60);
+    const desiredTranslate = Math.max(0, curY - nearbyTop + stickyTopOffset);
+    const clampedTranslateY = Math.min(maxTranslate, desiredTranslate);
 
     return {
-      top: computedTop,
-      bottom: computedBottom,
-      opacity: isVisible,
       transform: [
+        { translateY: clampedTranslateY },
         { translateX: collapseOffset },
       ],
-      pointerEvents: isInsideSection && railCollapseAnim.value < 0.8 ? ("auto" as const) : ("none" as const),
+      pointerEvents: railCollapseAnim.value < 0.8 ? ("auto" as const) : ("none" as const),
     };
-  }, [railSide, bottomChrome, insets.bottom, insets.top]);
+  }, [railSide, insets.top]);
 
   const reopenPillAnimStyle = useAnimatedStyle(() => {
-    const tabHeight = 62;
-    const currentTabVisibleOffset = Math.max(0, tabHeight - tabBarTranslateY.value);
-    const computedBottom = (bottomChrome || insets.bottom) + currentTabVisibleOffset + 28;
+    const headerTopPadding = insets.top + spacing.xs;
+    const topRowH = interpolate(collapseProgress.value, [0, 1], [95, 0]);
+    const searchH = 46 + 4;
+    const chipsH = stickyChipsProgress.value * 48;
+    const stickyTopOffset = headerTopPadding + topRowH + searchH + chipsH + 12;
 
     const nearbyTop = nearbySectionYShared.value;
     const nearbyH = nearbySectionHeightShared.value;
-    const nearbyBottom = nearbyH > 0 ? nearbyTop + nearbyH : nearbyTop + 5000;
     const curY = scrollYShared.value;
-    const isInsideSection = curY >= nearbyTop - 80 && curY <= nearbyBottom;
 
-    const isShown = isInsideSection ? railCollapseAnim.value : 0;
+    const maxTranslate = Math.max(0, nearbyH - 120);
+    const desiredTranslate = Math.max(0, curY - nearbyTop + stickyTopOffset + 180);
+    const clampedTranslateY = Math.min(maxTranslate, desiredTranslate);
+
+    const isShown = railCollapseAnim.value;
     const offscreenDistance = railSide === "left" ? -40 : 40;
 
     return {
-      bottom: computedBottom,
       opacity: isShown,
       transform: [
+        { translateY: clampedTranslateY },
         { translateX: interpolate(railCollapseAnim.value, [0, 1], [offscreenDistance, 0]) },
       ],
       pointerEvents: isShown > 0.5 ? ("auto" as const) : ("none" as const),
     };
-  }, [railSide]);
+  }, [railSide, insets.top]);
 
 
   const nearbyContainerAnimStyle = useAnimatedStyle(() => {
@@ -1657,6 +1641,7 @@ export default function HomeScreen() {
           </ScrollView>
 
           <View
+            style={{ position: "relative" }}
             onLayout={(e) => {
               nearbySectionY.current = e.nativeEvent.layout.y;
               nearbySectionHeight.current = e.nativeEvent.layout.height;
@@ -1671,6 +1656,191 @@ export default function HomeScreen() {
               iconBg="#FCE7F3"
               iconColor="#F43F5E"
             />
+
+            {/* Vertical Food Category Rail (Part of All shops nearby section, sticky at top while scrolling) */}
+            {showVerticalRail && activeTabIndex === 0 && (
+              <Animated.View
+                style={[
+                  s.verticalRailWrapper,
+                  railSide === "left" ? s.railLeftWrapper : s.railRightWrapper,
+                  verticalRailAnimStyle,
+                ]}
+              >
+                {/* Main vertical rail card matching screenshot design */}
+                <View style={s.verticalRailCard}>
+                  <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
+                  <LinearGradient
+                    colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.45)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  {/* 1. TOP: Left / Right place adjustment button */}
+                  <Pressable
+                    testID="rail-switch-side-button"
+                    onPress={toggleRailSide}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      s.railSideAdjustCard,
+                      pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+                    ]}
+                  >
+                    <Ionicons
+                      name={railSide === "right" ? "arrow-back" : "arrow-forward"}
+                      size={14}
+                      color="#374151"
+                    />
+                    <Text style={s.railSideAdjustText}>
+                      {railSide === "right" ? "Left" : "Right"}
+                    </Text>
+                  </Pressable>
+
+                  {/* Scrollable Items Container */}
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled
+                    contentContainerStyle={s.verticalRailScroll}
+                  >
+                    {/* 2. "All" item with light green background and dark green indicator bar */}
+                    <Pressable
+                      testID="rail-filter-all"
+                      onPress={() => setSelectedFilter(null)}
+                      style={({ pressed }) => [
+                        s.railItemBox,
+                        selectedFilter === null ? s.railItemAllActive : s.railItemInactive,
+                        pressed && { transform: [{ scale: 0.95 }] },
+                      ]}
+                    >
+                      {selectedFilter === null && (
+                        <View
+                          style={[
+                            s.railActiveIndicatorBar,
+                            railSide === "right" ? { left: 0 } : { right: 0 },
+                          ]}
+                        />
+                      )}
+                      <Ionicons
+                        name="grid-outline"
+                        size={20}
+                        color={selectedFilter === null ? "#166534" : "#4B5563"}
+                      />
+                      <Text
+                        style={[
+                          s.railItemLabel,
+                          selectedFilter === null ? s.railItemAllLabelActive : s.railItemLabelInactive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        All
+                      </Text>
+                    </Pressable>
+
+                    {/* 3. Food Category Items */}
+                    {VERTICAL_RAIL_CATEGORIES.map((cat) => {
+                      const isSelected = selectedFilter === cat.key;
+                      return (
+                        <Pressable
+                          key={cat.key}
+                          testID={`rail-filter-${cat.key}`}
+                          onPress={() => {
+                            if (selectedFilter === cat.key) {
+                              setSelectedFilter(null);
+                            } else {
+                              setSelectedFilter(cat.key);
+                              router.push(`/search?q=${encodeURIComponent(cat.query)}${vegOnly ? "&veg=1" : ""}`);
+                            }
+                          }}
+                          style={({ pressed }) => [
+                            s.railItemBox,
+                            isSelected ? s.railItemBoxSelected : s.railItemInactive,
+                            pressed && { transform: [{ scale: 0.95 }] },
+                          ]}
+                        >
+                          {isSelected && (
+                            <View
+                              style={[
+                                s.railActiveIndicatorBar,
+                                { backgroundColor: "#F43F5E" },
+                                railSide === "right" ? { left: 0 } : { right: 0 },
+                              ]}
+                            />
+                          )}
+                          <Image
+                            source={cat.image}
+                            style={s.railFoodIconImg}
+                            contentFit="contain"
+                            transition={150}
+                          />
+                          <Text
+                            style={[
+                              s.railItemLabel,
+                              isSelected ? s.railItemLabelSelected : s.railItemLabelInactive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {cat.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                {/* 4. Separate Fixed Bottom Card with chevron arrow and "Close" text */}
+                <Pressable
+                  testID="rail-toggle-bottom-button"
+                  onPress={toggleRailCollapse}
+                  hitSlop={10}
+                  style={({ pressed }) => [
+                    s.railCloseCard,
+                    pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
+                  ]}
+                >
+                  <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
+                  <LinearGradient
+                    colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.40)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <Ionicons
+                    name={railSide === "right" ? "chevron-forward" : "chevron-back"}
+                    size={15}
+                    color={colors.onSurface}
+                  />
+                  <Text style={s.railCloseText}>Close</Text>
+                </Pressable>
+              </Animated.View>
+            )}
+
+            {/* Reopen Button at screen edge when collapsed */}
+            {showVerticalRail && activeTabIndex === 0 && (
+              <Animated.View
+                style={[
+                  s.reopenPillContainer,
+                  railSide === "left" ? s.reopenPillLeft : s.reopenPillRight,
+                  reopenPillAnimStyle,
+                ]}
+              >
+                <Pressable
+                  testID="rail-reopen-pill-button"
+                  onPress={toggleRailCollapse}
+                  hitSlop={10}
+                  style={({ pressed }) => [
+                    s.reopenPill,
+                    railSide === "left" ? s.reopenPillShapeLeft : s.reopenPillShapeRight,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Ionicons
+                    name={railSide === "right" ? "chevron-back" : "chevron-forward"}
+                    size={18}
+                    color={colors.onSurface}
+                  />
+                </Pressable>
+              </Animated.View>
+            )}
+
           <Animated.View
             style={nearbyContainerAnimStyle}
           >
@@ -1698,190 +1868,6 @@ export default function HomeScreen() {
           </Animated.View>
           </View>
         </ScrollView>
-      )}
-
-      {/* Floating Vertical Food Category Rail (shows only on Home tab when in "All shops nearby" section) */}
-      {showVerticalRail && activeTabIndex === 0 && (
-        <Animated.View
-          style={[
-            s.verticalRailWrapper,
-            railSide === "left" ? s.railLeftWrapper : s.railRightWrapper,
-            verticalRailAnimStyle,
-          ]}
-        >
-          {/* Main vertical rail card matching screenshot design */}
-          <View style={s.verticalRailCard}>
-            <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
-            <LinearGradient
-              colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.45)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            {/* 1. TOP: Left / Right place adjustment button */}
-            <Pressable
-              testID="rail-switch-side-button"
-              onPress={toggleRailSide}
-              hitSlop={8}
-              style={({ pressed }) => [
-                s.railSideAdjustCard,
-                pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
-              ]}
-            >
-              <Ionicons
-                name={railSide === "right" ? "arrow-back" : "arrow-forward"}
-                size={14}
-                color="#374151"
-              />
-              <Text style={s.railSideAdjustText}>
-                {railSide === "right" ? "Left" : "Right"}
-              </Text>
-            </Pressable>
-
-            {/* Scrollable Items Container */}
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-              contentContainerStyle={s.verticalRailScroll}
-            >
-              {/* 2. "All" item with light green background and dark green indicator bar */}
-              <Pressable
-                testID="rail-filter-all"
-                onPress={() => setSelectedFilter(null)}
-                style={({ pressed }) => [
-                  s.railItemBox,
-                  selectedFilter === null ? s.railItemAllActive : s.railItemInactive,
-                  pressed && { transform: [{ scale: 0.95 }] },
-                ]}
-              >
-                {selectedFilter === null && (
-                  <View
-                    style={[
-                      s.railActiveIndicatorBar,
-                      railSide === "right" ? { left: 0 } : { right: 0 },
-                    ]}
-                  />
-                )}
-                <Ionicons
-                  name="grid-outline"
-                  size={20}
-                  color={selectedFilter === null ? "#166534" : "#4B5563"}
-                />
-                <Text
-                  style={[
-                    s.railItemLabel,
-                    selectedFilter === null ? s.railItemAllLabelActive : s.railItemLabelInactive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  All
-                </Text>
-              </Pressable>
-
-              {/* 3. Food Category Items */}
-              {VERTICAL_RAIL_CATEGORIES.map((cat) => {
-                const isSelected = selectedFilter === cat.key;
-                return (
-                  <Pressable
-                    key={cat.key}
-                    testID={`rail-filter-${cat.key}`}
-                    onPress={() => {
-                      if (selectedFilter === cat.key) {
-                        setSelectedFilter(null);
-                      } else {
-                        setSelectedFilter(cat.key);
-                        router.push(`/search?q=${encodeURIComponent(cat.query)}${vegOnly ? "&veg=1" : ""}`);
-                      }
-                    }}
-                    style={({ pressed }) => [
-                      s.railItemBox,
-                      isSelected ? s.railItemBoxSelected : s.railItemInactive,
-                      pressed && { transform: [{ scale: 0.95 }] },
-                    ]}
-                  >
-                    {isSelected && (
-                      <View
-                        style={[
-                          s.railActiveIndicatorBar,
-                          { backgroundColor: "#F43F5E" },
-                          railSide === "right" ? { left: 0 } : { right: 0 },
-                        ]}
-                      />
-                    )}
-                    <Image
-                      source={cat.image}
-                      style={s.railFoodIconImg}
-                      contentFit="contain"
-                      transition={150}
-                    />
-                    <Text
-                      style={[
-                        s.railItemLabel,
-                        isSelected ? s.railItemLabelSelected : s.railItemLabelInactive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {cat.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* 4. Separate Fixed Bottom Card with chevron arrow and "Close" text */}
-          <Pressable
-            testID="rail-toggle-bottom-button"
-            onPress={toggleRailCollapse}
-            hitSlop={10}
-            style={({ pressed }) => [
-              s.railCloseCard,
-              pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
-            <LinearGradient
-              colors={["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.40)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <Ionicons
-              name={railSide === "right" ? "chevron-forward" : "chevron-back"}
-              size={15}
-              color={colors.onSurface}
-            />
-            <Text style={s.railCloseText}>Close</Text>
-          </Pressable>
-        </Animated.View>
-      )}
-
-      {/* Floating Reopen Button at screen edge when collapsed (only on Home tab) */}
-      {showVerticalRail && activeTabIndex === 0 && (
-        <Animated.View
-          style={[
-            s.reopenPillContainer,
-            railSide === "left" ? s.reopenPillLeft : s.reopenPillRight,
-            reopenPillAnimStyle,
-          ]}
-        >
-          <Pressable
-            testID="rail-reopen-pill-button"
-            onPress={toggleRailCollapse}
-            hitSlop={10}
-            style={({ pressed }) => [
-              s.reopenPill,
-              railSide === "left" ? s.reopenPillShapeLeft : s.reopenPillShapeRight,
-              pressed && { opacity: 0.8 },
-            ]}
-          >
-            <Ionicons
-              name={railSide === "right" ? "chevron-back" : "chevron-forward"}
-              size={18}
-              color={colors.onSurface}
-            />
-          </Pressable>
-        </Animated.View>
       )}
 
       {/* Floating Collapsible Cart Status Bar on Home (docks opposite to the vertical filter rail) */}
@@ -3287,9 +3273,11 @@ const useStyles = makeStyles((c) => ({
     fontWeight: "800",
   },
 
-  // Floating Vertical Rail styles matching reference screenshot
+  // Vertical Rail styles matching reference screenshot
   verticalRailWrapper: {
     position: "absolute",
+    top: 56, // Starts right below the section title
+    bottom: 24,
     zIndex: 90,
     gap: 8,
   },
