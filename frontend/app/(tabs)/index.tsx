@@ -534,6 +534,7 @@ export default function HomeScreen() {
 
   // Track position of "All shops nearby"
   const nearbySectionY = useRef<number>(9999);
+  const nearbySectionHeight = useRef<number>(0);
 
   const [topHeaderHeight, setTopHeaderHeight] = useState(150);
   const headerHeightShared = useSharedValue(150);
@@ -622,8 +623,12 @@ export default function HomeScreen() {
       }
     }
 
-    // Trigger vertical rail ONLY when scrolled into the "All shops nearby" card list
-    const inNearby = currentY >= nearbySectionY.current + 20;
+    // Trigger vertical rail ONLY when scrolled into the "All shops nearby" card list and hide when scrolled out
+    const nearbyTop = nearbySectionY.current;
+    const nearbyBottom = nearbySectionHeight.current > 0
+      ? nearbyTop + nearbySectionHeight.current
+      : nearbyTop + 5000;
+    const inNearby = currentY >= nearbyTop - 80 && currentY <= nearbyBottom;
     if (inNearby) {
       if (!showVerticalRail) {
         setShowVerticalRail(true);
@@ -1635,6 +1640,7 @@ export default function HomeScreen() {
           <View
             onLayout={(e) => {
               nearbySectionY.current = e.nativeEvent.layout.y;
+              nearbySectionHeight.current = e.nativeEvent.layout.height;
             }}
           >
             <SectionTitle
@@ -1644,7 +1650,6 @@ export default function HomeScreen() {
               iconBg="#FCE7F3"
               iconColor="#F43F5E"
             />
-          </View>
           <Animated.View
             style={nearbyContainerAnimStyle}
           >
@@ -1670,6 +1675,7 @@ export default function HomeScreen() {
             ))}
             <BrandFooter />
           </Animated.View>
+          </View>
         </ScrollView>
       )}
 
