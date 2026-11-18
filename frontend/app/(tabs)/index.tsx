@@ -38,6 +38,7 @@ import { VegToggle } from "@/src/components/veg-toggle";
 import { VoiceSearchModal } from "@/src/components/voice-search-modal";
 import { FloatingCartBar } from "@/src/components/floating-cart-bar";
 import { BrandFooter } from "@/src/components/brand-footer";
+import { InfiniteBannerCarousel } from "@/src/components/infinite-banner-carousel";
 import { HomeSkeleton } from "@/src/components/home-skeleton";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, softShadow, spacing, ThemeColors, tileGradient, useTheme } from "@/src/theme";
@@ -731,20 +732,6 @@ export default function HomeScreen() {
       return nextActiveIds;
     });
   };
-
-  // Auto-scroll animation for advertisement cards carousel (only runs when Home tab is active)
-  useEffect(() => {
-    if (activeTabIndex !== 0) return;
-    const timer = setInterval(() => {
-      setActiveAdBannerIdx((prev) => {
-        const next = (prev + 1) % AD_BANNERS.length;
-        const bannerCardWidth = 300 + 12; // card width + gap
-        adBannerScrollRef.current?.scrollTo({ x: next * bannerCardWidth, animated: true });
-        return next;
-      });
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [activeTabIndex]);
 
   const locRowAnimStyle = useAnimatedStyle(() => {
     // Smoothly collapses the top brand and greeting row upwards
@@ -1485,53 +1472,12 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
-          {/* Advertisement Banners Carousel with Auto-Scroll Animation (Moved in place of What's on your mind) */}
-          <ScrollView
-            ref={adBannerScrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            onTouchStart={() => setPagerScrollEnabled(false)}
-            onTouchEnd={() => setPagerScrollEnabled(true)}
-            onScrollBeginDrag={() => setPagerScrollEnabled(false)}
-            onScrollEndDrag={() => setPagerScrollEnabled(true)}
-            onMomentumScrollEnd={(e) => {
-              setPagerScrollEnabled(true);
-              const x = e.nativeEvent.contentOffset.x;
-              const w = 300 + 12;
-              if (w > 0) setActiveAdBannerIdx(Math.round(x / w));
-            }}
-            contentContainerStyle={s.adBannersScrollContent}
-            style={{ marginTop: 14, marginBottom: 12 }}
-          >
-            {AD_BANNERS.map((banner, idx) => (
-              <Pressable
-                key={banner.key}
-                testID={`home-ad-banner-${banner.key}`}
-                onPress={() => router.push(banner.href as any)}
-                style={s.adBannerCard}
-              >
-                <Image
-                  source={{ uri: banner.image }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  transition={200}
-                />
-                <LinearGradient
-                  colors={banner.gradColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={s.bannerInner}
-                >
-                  <Text style={s.bannerTitle}>{banner.title}</Text>
-                  <View style={s.bannerCta}>
-                    <Text style={s.bannerCtaText}>{banner.cta}</Text>
-                    <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
-                  </View>
-                </LinearGradient>
-              </Pressable>
-            ))}
-          </ScrollView>
+          {/* Advertisement Banners Seamless Centered Infinite Carousel */}
+          <InfiniteBannerCarousel
+            banners={AD_BANNERS}
+            isActive={activeTabIndex === 0}
+            setPagerScrollEnabled={setPagerScrollEnabled}
+          />
 
           {/* Horizontal "What's on your mind?" Section (Commented out for now) */}
           {/*
