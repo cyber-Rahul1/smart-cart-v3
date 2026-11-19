@@ -8,8 +8,13 @@ export type SellerOrder = {
 };
 export type Shop = {
   id: string; name: string; owner_name: string; category: "food" | "grocery"; business_type: string; cuisine: string; image: string;
+  logo_url?: string | null; banner_url?: string | null; gallery?: string[]; description?: string | null; short_intro?: string | null;
+  highlights?: string[]; is_pure_veg?: boolean; contact_phone?: string | null; contact_email?: string | null;
   approved: boolean; approval_status: string; open: boolean; prep_time_min: number; min_order: number; offer: string | null;
-  fssai_status: string; fssai_number?: string; address: string; opens_at: string; closes_at: string;
+  fssai_status: string; fssai_number?: string; fssai_doc_url?: string; gstin?: string; pan?: string;
+  bank_account_no?: string; bank_ifsc?: string; bank_beneficiary?: string;
+  address: string; location?: { type: string; coordinates: [number, number] }; service_radius_km?: number;
+  opens_at: string; closes_at: string; review_note?: string;
 };
 export type Batch = { basket_id: string; community_name: string; scheduled_for: string | null; packages: SellerOrder[]; ready_count: number; items_total: { name: string; qty: number }[] };
 

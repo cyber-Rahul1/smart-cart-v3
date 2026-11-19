@@ -590,19 +590,18 @@ function ExactDiscoverShopCard({
     ? `${(seller.reviews_count / 1000).toFixed(1)}k`
     : "1.2k";
 
-  // Formatted address lines matching screenshot:
-  // line 1: "Koramangala 5th block,"
-  // line 2: "Visakhapatnam, Andhra Pradesh - 530017"
-  const addressLine1 = (seller.address || "Koramangala 5th block").split(",")[0].trim() + ",";
-  const addressLine2 = "Visakhapatnam, Andhra Pradesh - 530017";
+  // Formatted address lines:
+  const addressParts = (seller.address || "Koramangala, Bengaluru").split(",").map((p) => p.trim()).filter(Boolean);
+  const addressLine1 = (addressParts[0] || "Koramangala") + ",";
+  const addressLine2 = addressParts.slice(1).join(", ") || "Bengaluru, Karnataka - 560034";
 
+  const storePhone = seller.contact_phone || seller.phone || "+91 98765 43210";
   const handleCall = () => {
-    const phone = seller.phone || "+919876543210";
-    Linking.openURL(`tel:${phone}`).catch(() => toast("Unable to open dialer", "err"));
+    Linking.openURL(`tel:${storePhone}`).catch(() => toast("Unable to open dialer", "err"));
   };
 
   const handleDirections = () => {
-    const query = encodeURIComponent(`${seller.name}, ${seller.address || "Visakhapatnam"}`);
+    const query = encodeURIComponent(`${seller.name}, ${seller.address || "Bengaluru"}`);
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() =>
       toast("Unable to open Google Maps", "err")
     );
@@ -679,15 +678,25 @@ function ExactDiscoverShopCard({
         <View style={discoverCardStyles.heroTopBadges}>
           <View style={discoverCardStyles.heroTopLeftBadges}>
             {/* New Badge */}
-            <View style={discoverCardStyles.badgeNew}>
-              <Ionicons name="sparkles" size={11} color="#FFFFFF" />
-              <Text style={discoverCardStyles.badgeNewText}>New</Text>
-            </View>
+            {seller.is_new ? (
+              <View style={discoverCardStyles.badgeNew}>
+                <Ionicons name="sparkles" size={11} color="#FFFFFF" />
+                <Text style={discoverCardStyles.badgeNewText}>New</Text>
+              </View>
+            ) : null}
 
-            {/* Cloud Kitchen Badge */}
+            {/* Business Type Badge */}
             <View style={discoverCardStyles.badgeCloudKitchen}>
-              <Ionicons name="restaurant-outline" size={13} color="#6D28D9" />
-              <Text style={discoverCardStyles.badgeCloudKitchenText}>Cloud Kitchen</Text>
+              <Ionicons
+                name={seller.category === "grocery" ? "basket-outline" : "restaurant-outline"}
+                size={13}
+                color="#6D28D9"
+              />
+              <Text style={discoverCardStyles.badgeCloudKitchenText}>
+                {seller.business_type
+                  ? seller.business_type.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())
+                  : "Restaurant"}
+              </Text>
             </View>
           </View>
 
@@ -751,11 +760,19 @@ function ExactDiscoverShopCard({
 
       {/* 2. IDENTITY HEADER ROW: Logo, Name, FSSAI Verified, Cuisines, Rating, View Menu Button */}
       <View style={discoverCardStyles.identityRow}>
-        {/* Black Square Logo */}
-        <View style={discoverCardStyles.shopLogoBox}>
-          <Ionicons name="restaurant-outline" size={24} color="#FFFFFF" />
-          <Text style={discoverCardStyles.shopLogoText}>Test{"\n"}Kitchen</Text>
-        </View>
+        {/* Dynamic Logo Box or Monogram */}
+        {seller.logo_url ? (
+          <View style={[discoverCardStyles.shopLogoBox, { overflow: "hidden" }]}>
+            <Image source={{ uri: mediaUri(seller.logo_url) }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          </View>
+        ) : (
+          <View style={discoverCardStyles.shopLogoBox}>
+            <Ionicons name={seller.category === "grocery" ? "basket-outline" : "restaurant-outline"} size={22} color="#FFFFFF" />
+            <Text style={discoverCardStyles.shopLogoText} numberOfLines={2}>
+              {seller.name.slice(0, 12)}
+            </Text>
+          </View>
+        )}
 
         {/* Shop Name, Verified badge & Cuisines */}
         <View style={discoverCardStyles.identityInfoCol}>
@@ -763,10 +780,17 @@ function ExactDiscoverShopCard({
             <Text style={discoverCardStyles.shopNameTitle} numberOfLines={1}>
               {seller.name}
             </Text>
-            <View style={discoverCardStyles.fssaiVerifiedBadge}>
-              <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-              <Text style={discoverCardStyles.fssaiVerifiedText}>FSSAI Verified</Text>
-            </View>
+            {seller.fssai_status === "verified" ? (
+              <View style={discoverCardStyles.fssaiVerifiedBadge}>
+                <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                <Text style={discoverCardStyles.fssaiVerifiedText}>FSSAI Verified</Text>
+              </View>
+            ) : seller.is_pure_veg ? (
+              <View style={[discoverCardStyles.fssaiVerifiedBadge, { backgroundColor: "rgba(34, 197, 94, 0.12)", borderColor: "rgba(34, 197, 94, 0.25)" }]}>
+                <Ionicons name="leaf" size={11} color="#15803D" />
+                <Text style={discoverCardStyles.fssaiVerifiedText}>Pure Veg</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Cuisines */}
@@ -848,7 +872,7 @@ function ExactDiscoverShopCard({
             <Ionicons name="call-outline" size={14} color="#4B5563" />
             <View>
               <Text style={discoverCardStyles.callLabel}>Call</Text>
-              <Text style={discoverCardStyles.callNumber}>+91 98765 43210</Text>
+              <Text style={discoverCardStyles.callNumber} numberOfLines={1}>{storePhone}</Text>
             </View>
           </Pressable>
 
@@ -946,6 +970,9 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
     const currentY = e.nativeEvent.contentOffset.y;
     const diff = currentY - lastScrollY.current;
 
+    // Ignore tiny jitter/micro-drags
+    if (Math.abs(diff) < 1) return;
+
     // Reveal sticky category chips when scrolling down past the inline category section
     const triggerY = Math.max(100, foodCategorySectionY.current - 60);
     if (currentY >= triggerY) {
@@ -962,7 +989,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
     if (currentY <= 15) {
       accumulatedDiff.current = 0;
       // At the very top, always show header and tab bar smoothly
-      if (isHiddenRef.current) {
+      if (isHiddenRef.current || collapseProgress.value > 0) {
         isHiddenRef.current = false;
         collapseProgress.value = withTiming(0, TIMING_CONFIG);
         tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
@@ -974,15 +1001,15 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
       }
       accumulatedDiff.current += diff;
 
-      // Hysteresis threshold: requires intentional, sustained drag (>= 50px) before flipping
-      if (accumulatedDiff.current > 50 && currentY > 80) {
+      // Hysteresis threshold: requires intentional, sustained drag (>= 40px) before flipping
+      if (accumulatedDiff.current > 40 && currentY > 60) {
         // User is intentionally scrolling content UP -> hide header & bottom tab bar
         if (!isHiddenRef.current) {
           isHiddenRef.current = true;
           collapseProgress.value = withTiming(1, TIMING_CONFIG);
           tabBarTranslateY.value = withTiming(100, TIMING_CONFIG);
         }
-      } else if (accumulatedDiff.current < -50) {
+      } else if (accumulatedDiff.current < -40) {
         // User is intentionally scrolling content DOWN -> reveal both smoothly from bottom
         if (isHiddenRef.current) {
           isHiddenRef.current = false;
@@ -996,16 +1023,16 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   };
 
   const titleRowAnimStyle = useAnimatedStyle(() => {
-    const totalShift = titleRowHeight + spacing.xs;
     return {
-      marginTop: -collapseProgress.value * totalShift,
-      opacity: 1 - collapseProgress.value,
+      maxHeight: interpolate(collapseProgress.value, [0, 1], [60, 0]),
+      opacity: interpolate(collapseProgress.value, [0, 0.7, 1], [1, 0.2, 0]),
+      overflow: "hidden",
     };
   });
 
   const stickyChipsAnimStyle = useAnimatedStyle(() => {
     return {
-      maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 48]),
+      maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 56]),
       opacity: stickyChipsProgress.value,
       transform: [
         { translateY: interpolate(stickyChipsProgress.value, [0, 1], [-20, 0]) },
@@ -1133,14 +1160,6 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   if (isListViewMode) {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-        {/* Background Graphic matching Home Screen */}
-        <Image
-          source={require("@/assets/images/gathr_home_bg.jpg")}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          priority="high"
-        />
-
         {/* Sticky Top Header */}
         <View
           style={{
@@ -1149,19 +1168,13 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
             overflow: "hidden",
             borderBottomWidth: 0,
             backgroundColor: "transparent",
+            paddingTop: insets.top + spacing.xs,
           }}
         >
           {/* Collapsible Section ABOVE search: Back button, Title & Subtitle */}
           <Animated.View
-            onLayout={(e) => {
-              const h = e.nativeEvent.layout.height;
-              if (h > 0 && Math.abs(h - titleRowHeight) > 2) {
-                setTitleRowHeight(h);
-              }
-            }}
             style={[
               {
-                paddingTop: insets.top + spacing.xs,
                 paddingHorizontal: spacing.lg,
                 paddingBottom: spacing.xs,
                 flexDirection: "row",
@@ -1249,59 +1262,26 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
           >
             <Pressable
               testID="listing-search-bar"
-              onPress={() => router.push(`/search?${vegOnly ? "veg=1" : ""}`)}
+              onPress={() => router.push(`/search?type=${activeType || "food"}${vegOnly ? "&veg=1" : ""}`)}
               style={{
                 flex: 1,
-                height: 46,
+                height: 48,
                 borderRadius: 24,
-                borderWidth: 1.2,
-                borderColor: "rgba(255, 255, 255, 0.85)",
-                backgroundColor: "rgba(255, 255, 255, 0.55)",
                 overflow: "hidden",
                 position: "relative",
+                backgroundColor: "#FFFFFF",
                 flexDirection: "row",
                 alignItems: "center",
                 gap: spacing.sm,
                 paddingHorizontal: 16,
-                shadowColor: "#F43F5E",
-                shadowOpacity: 0.07,
+                shadowColor: "#000000",
+                shadowOpacity: 0.08,
                 shadowRadius: 10,
                 shadowOffset: { width: 0, height: 3 },
                 elevation: 3,
               }}
             >
-              {/* Backdrop blur layer for liquid glass */}
-              <BlurView
-                intensity={20}
-                tint="light"
-                style={StyleSheet.absoluteFill}
-              />
-
-              {/* Blush-pink liquid glass gradient tint */}
-              <LinearGradient
-                colors={[
-                  "rgba(255, 255, 255, 0.65)",
-                  "rgba(255, 228, 235, 0.35)",
-                ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-
-              {/* Specular glass highlight reflection along top edge */}
-              <View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 16,
-                  right: 16,
-                  height: 1,
-                  backgroundColor: "rgba(255, 255, 255, 0.85)",
-                }}
-              />
-
-              <Ionicons name="search" size={17} color="#F43F5E" />
+              <Ionicons name="search" size={19} color="#E11D48" />
               <View style={{ flex: 1, height: 38, justifyContent: "center", position: "relative" }}>
                 <AnimatedPlaceholder
                   placeholders={[
@@ -1326,7 +1306,7 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                   borderRadius: radius.pill,
                 }}
               >
-                <Ionicons name="mic" size={19} color="#F43F5E" />
+                <Ionicons name="mic" size={20} color="#E11D48" />
               </Pressable>
             </Pressable>
 
@@ -1368,17 +1348,6 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                       pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                     ]}
                   >
-                    {!isSelected && (
-                      <>
-                        <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
-                        <LinearGradient
-                          colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      </>
-                    )}
                     <Text
                       style={[
                         s.categoryPillText,
@@ -1495,17 +1464,6 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
                           pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                         ]}
                       >
-                        {!isSelected && (
-                          <>
-                            <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
-                            <LinearGradient
-                              colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={StyleSheet.absoluteFill}
-                            />
-                          </>
-                        )}
                         <Text
                           style={[
                             s.categoryPillText,
@@ -1650,14 +1608,6 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
   /* ---------------- DISCOVER PAGE EXACT REDESIGN ---------------- */
   return (
     <View style={s.root}>
-      {/* Background Graphic matching Home Screen */}
-      <Image
-        source={require("@/assets/images/gathr_home_bg.jpg")}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        priority="high"
-      />
-
       {/* 1. TOP HEADER & SEARCH & CATEGORY CHIPS */}
       <View style={[s.headerContainer, { paddingTop: insets.top + spacing.xs }]}>
         {/* Title row with Back button on top left & Location Selector on top right */}
@@ -1694,44 +1644,13 @@ export default function DiscoverScreen({ forcedType }: { forcedType?: string } =
           </Pressable>
         </View>
 
-        {/* Pill Search Bar with Filters Sliders Icon (Home Page Liquid Glass Style) */}
+        {/* Pill Search Bar with Filters Sliders Icon (Home Page Style) */}
         <View style={s.pillSearchBar}>
-          {/* Backdrop blur layer for liquid glass */}
-          <BlurView
-            intensity={20}
-            tint="light"
-            style={StyleSheet.absoluteFill}
-          />
-
-          {/* Blush-pink liquid glass gradient tint */}
-          <LinearGradient
-            colors={[
-              "rgba(255, 255, 255, 0.65)",
-              "rgba(255, 228, 235, 0.35)",
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          {/* Specular glass highlight reflection along top edge */}
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 16,
-              right: 16,
-              height: 1,
-              backgroundColor: "rgba(255, 255, 255, 0.85)",
-            }}
-          />
-
-          <Ionicons name="search" size={17} color="#F43F5E" />
+          <Ionicons name="search" size={19} color="#E11D48" />
           <TextInput
             style={s.pillSearchInput}
             placeholder="Search for shops, cuisines, dishes..."
-            placeholderTextColor="#8C8C8C"
+            placeholderTextColor="#64748B"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearchSubmit}
@@ -1941,17 +1860,15 @@ const useStyles = makeStyles(() => ({
   pillSearchBar: {
     flexDirection: "row",
     alignItems: "center",
-    height: 46,
+    height: 48,
     borderRadius: 24,
-    borderWidth: 1.2,
-    borderColor: "rgba(255, 255, 255, 0.85)",
-    backgroundColor: "rgba(255, 255, 255, 0.55)",
+    backgroundColor: "#FFFFFF",
     overflow: "hidden",
     position: "relative",
     paddingHorizontal: 16,
     gap: 10,
-    shadowColor: "#F43F5E",
-    shadowOpacity: 0.07,
+    shadowColor: "#000000",
+    shadowOpacity: 0.08,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
@@ -2134,7 +2051,8 @@ const useStyles = makeStyles(() => ({
     zIndex: 5,
     overflow: "hidden",
     backgroundColor: "transparent",
-    paddingBottom: spacing.xs,
+    paddingTop: 2,
+    paddingBottom: spacing.sm,
   },
   categoryPillsScroll: {
     paddingHorizontal: spacing.lg,
@@ -2148,24 +2066,21 @@ const useStyles = makeStyles(() => ({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.8)",
+    borderColor: "#E2E8F0",
     overflow: "hidden",
     position: "relative",
-    shadowColor: "#F43F5E",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 1.5 },
   },
   categoryPillActive: {
-    backgroundColor: "#F43F5E",
-    borderColor: "#F43F5E",
-    shadowColor: "#F43F5E",
+    backgroundColor: "#E11D48",
+    borderColor: "#E11D48",
+    shadowColor: "#E11D48",
     shadowOpacity: 0.25,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
   categoryPillInactive: {
     backgroundColor: "transparent",
+    borderColor: "#E2E8F0",
   },
   categoryPillText: {
     fontSize: 12.5,
@@ -2176,8 +2091,8 @@ const useStyles = makeStyles(() => ({
     fontWeight: "800",
   },
   categoryPillTextInactive: {
-    color: "#334155",
-    fontWeight: "700",
+    color: "#475569",
+    fontWeight: "600",
   },
 }));
 

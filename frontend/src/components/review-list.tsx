@@ -72,19 +72,25 @@ export function ReviewList<T extends { id: string; image?: string }>({ kind, tit
   );
 }
 
-type ShopRow = { id: string; image: string; name: string; owner_name?: string; business_type: string; category: string; cuisine: string; address: string;
-  fssai_status: string; fssai_number?: string; approval_status: string; review_note?: string };
+type ShopRow = { id: string; image: string; logo_url?: string; name: string; owner_name?: string; business_type: string; category: string; cuisine: string; address: string;
+  contact_phone?: string; contact_email?: string; fssai_status: string; fssai_number?: string; fssai_doc_url?: string; gstin?: string; pan?: string;
+  approval_status: string; review_note?: string; is_pure_veg?: boolean };
 
 export default function AdminShops() {
   const { colors } = useTheme();
   return (
     <ReviewList<ShopRow> kind="sellers" title="Shop approvals" render={(s) => (
       <>
-        <Text style={{ fontWeight: "800", color: colors.onSurface, fontSize: font.base + 1 }}>{s.name}</Text>
-        <Text style={{ color: colors.muted, fontSize: font.sm }}>{s.business_type.replace("_", " ")} · {s.cuisine}{s.owner_name ? ` · Owner ${s.owner_name}` : ""}</Text>
+        <Text style={{ fontWeight: "800", color: colors.onSurface, fontSize: font.base + 1 }}>{s.name}{s.is_pure_veg ? " (Pure Veg)" : ""}</Text>
+        <Text style={{ color: colors.muted, fontSize: font.sm }}>{s.business_type.replace("_", " ").toUpperCase()} · {s.cuisine}{s.owner_name ? ` · Owner ${s.owner_name}` : ""}</Text>
+        {s.contact_phone ? <Text style={{ color: colors.muted, fontSize: font.sm }}>Phone: {s.contact_phone}{s.contact_email ? ` · ${s.contact_email}` : ""}</Text> : null}
         <Text style={{ color: colors.muted, fontSize: font.sm }}>{s.address}</Text>
-        <Text testID={`admin-fssai-${s.id}`} style={{ color: s.fssai_status === "verified" ? colors.success : colors.onPastelLemon, fontWeight: "700", fontSize: font.sm }}>
-          FSSAI: {s.fssai_status.replace("_", " ")}{s.fssai_number ? ` · ${s.fssai_number}` : ""}</Text>
+        {s.category === "food" ? (
+          <Text testID={`admin-fssai-${s.id}`} style={{ color: s.fssai_status === "verified" ? colors.success : colors.onPastelLemon, fontWeight: "700", fontSize: font.sm }}>
+            FSSAI: {s.fssai_status.replace("_", " ")}{s.fssai_number ? ` · ${s.fssai_number}` : ""}{s.fssai_doc_url ? " [Doc Uploaded]" : ""}</Text>
+        ) : (
+          <Text style={{ color: colors.muted, fontSize: font.sm }}>{s.gstin ? `GSTIN: ${s.gstin}` : "Grocery Store"}{s.pan ? ` · PAN: ${s.pan}` : ""}</Text>
+        )}
         {s.review_note ? <Text style={{ color: colors.error, fontSize: font.sm }}>Note: {s.review_note}</Text> : null}
       </>
     )} />

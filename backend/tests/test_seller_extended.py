@@ -103,6 +103,7 @@ class TestShopAndMenu:
 class TestLifecycle:
     def test_ready_then_rider_and_otp(self, ctx):
         sh = ctx["sh"]
+        requests.post(f"{BASE}/seller/shop/demo-approve", headers=sh)
         ch = login(f"+91966{SFX}1", "customer", "TEST_Buyer3")
         a = requests.post(f"{BASE}/addresses", headers=ch, json={"label": "Home", "line": "Flat 9, Koramangala"}).json()
         requests.delete(f"{BASE}/cart", headers=ch)

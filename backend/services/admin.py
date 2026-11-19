@@ -68,6 +68,9 @@ async def review_seller(sid: str, body: ReviewIn, user=Depends(admin_only)):
     if s.get("approval_status") == ("approved" if ok else "rejected"):
         raise HTTPException(400, f"Shop is already {'approved' if ok else 'rejected'}")
     upd = {"approved": ok, "approval_status": "approved" if ok else "rejected", "review_note": body.note.strip(), "reviewed_at": iso(now())}
+    if ok:
+        upd["opened_on"] = iso(now())
+        upd["is_new"] = True
     if s["category"] == "food":
         upd["fssai_status"] = "verified" if ok else "rejected"
     await db.sellers.update_one({"id": sid}, {"$set": upd})

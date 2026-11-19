@@ -153,9 +153,11 @@ async def discover_feed(
         gallery = s.get("gallery") or ([s.get("image")] + prod_images)[:4]
         highlights = s.get("highlights") or [p["name"] for p in shop_prods[:3]]
 
+        # Ensure seller object exposes all profile fields
         showcases.append({
             "seller": s,
             "banner_url": s.get("banner_url") or s.get("image"),
+            "logo_url": s.get("logo_url"),
             "gallery": gallery,
             "highlights": highlights,
             "description": s.get("description") or f"{s['name']} · authentic {s.get('cuisine', s['category'])}",

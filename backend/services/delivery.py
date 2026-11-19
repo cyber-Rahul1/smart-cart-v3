@@ -267,8 +267,9 @@ async def demo_advance(oid: str, body: AdvanceIn, user=Depends(current_user)):
     nxt = FLOW[FLOW.index(o["status"]) + 1]
     if (o.get("rider") or {}).get("user_id"):
         raise HTTPException(400, "Your delivery partner will update this order")
-    shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1})
-    if shop and shop.get("owner_id") and o["status"] in ("confirmed", "preparing"):
+    shop = await db.sellers.find_one({"id": o["seller_id"]}, {"_id": 0, "owner_id": 1, "is_demo": 1})
+    # If shop has an active owner or is not a demo fixture, enforce strict seller acceptance and packing workflow
+    if shop and (shop.get("owner_id") or not shop.get("is_demo")) and o["status"] in ("confirmed", "preparing"):
         raise HTTPException(400, "Waiting for the shop to accept and pack this order")
     update: dict = {"status": nxt}
     if nxt == "out_for_delivery" and not o.get("rider"):

@@ -24,10 +24,8 @@ export default function PartnerMenu() {
   const imgs = useQuery({ queryKey: ["seller-images"], queryFn: () => api<Record<string, string>>("/seller/images") });
 
   const toggle = async (p: P, available: boolean) => {
-    const key = Object.entries(imgs.data ?? {}).find(([, u]) => u === p.image)?.[0] ?? "store";
     try {
-      await api(`/seller/products/${p.id}`, { method: "PUT", body: { name: p.name, price: p.price, category: p.category, veg: p.veg, stock: p.stock, available,
-        description: p.description, image_key: key, weight_kg: p.weight_kg ?? 0.5 } });
+      await api(`/seller/products/${p.id}/availability`, { method: "PATCH", body: { available } });
       qc.invalidateQueries({ queryKey: ["seller-products"] });
     } catch (e: any) {
       toast(e.message, "err");

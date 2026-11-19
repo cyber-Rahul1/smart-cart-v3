@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   BackHandler,
   Dimensions,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -290,14 +291,6 @@ export default function SellerScreen() {
 
   return (
     <View style={s.root}>
-      {/* Background Graphic matching Home and Listing pages */}
-      <Image
-        source={require("@/assets/images/gathr_home_bg.jpg")}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        priority="high"
-      />
-
       {/* 1. SCROLLABLE STORE HERO CAROUSEL */}
       <Animated.View style={[s.fixedHeroContainer, bgImageAnimStyle]}>
         <View style={StyleSheet.absoluteFill}>
@@ -737,19 +730,31 @@ export default function SellerScreen() {
               {seller.cuisine ? seller.cuisine.replace(/,/g, ", ") : (seller.category === "grocery" ? "Grocery, Staples" : "North Indian, Continental")} | {rupee(seller.min_order || 49)} min order
             </Text>
 
-            {/* Row 4: Action pills (Open till 11PM, Directions, Call) themed with rose/pastel tones */}
+            {/* Row 4: Action pills (Open till XX, Directions, Call) themed with rose/pastel tones */}
             <View style={s.actionPillsRow}>
               <View style={s.openTillPill}>
                 <Ionicons name="time-outline" size={13} color="#E11D48" style={{ marginRight: 4 }} />
                 <Text style={s.openTillPillText}>
-                  <Text style={{ color: "#E11D48", fontWeight: "800" }}>Open</Text> till 11PM
+                  {seller.open !== false ? (
+                    <>
+                      <Text style={{ color: "#E11D48", fontWeight: "800" }}>Open</Text>{" "}
+                      {seller.closes_at ? `till ${seller.closes_at}` : "now"}
+                    </>
+                  ) : (
+                    <Text style={{ color: "#DC2626", fontWeight: "800" }}>Closed</Text>
+                  )}
                 </Text>
                 <Ionicons name="chevron-down" size={13} color="#FB7185" style={{ marginLeft: 3 }} />
               </View>
 
               {/* Directions Icon Circle */}
               <Pressable
-                onPress={() => toast("Opening directions...")}
+                onPress={() => {
+                  const query = encodeURIComponent(`${seller.name}, ${seller.address || "Bengaluru"}`);
+                  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`).catch(() =>
+                    toast("Unable to open Google Maps", "err")
+                  );
+                }}
                 style={s.actionCircleBtn}
                 hitSlop={6}
               >
@@ -758,7 +763,10 @@ export default function SellerScreen() {
 
               {/* Call Icon Circle */}
               <Pressable
-                onPress={() => toast("Calling restaurant...")}
+                onPress={() => {
+                  const phone = seller.contact_phone || seller.phone || "+919876543210";
+                  Linking.openURL(`tel:${phone}`).catch(() => toast("Unable to open dialer", "err"));
+                }}
                 style={s.actionCircleBtn}
                 hitSlop={6}
               >

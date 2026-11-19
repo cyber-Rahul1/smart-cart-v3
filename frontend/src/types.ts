@@ -2,9 +2,10 @@ export type Seller = {
   id: string; name: string; category: "food" | "grocery"; business_type: string; cuisine: string; image: string; rating: number;
   distance_km: number; eta_min: number; prep_time_min: number; is_new: boolean; offer?: string | null; min_order: number;
   fssai_status: string; address: string; opened_on: string; trend_score?: number;
-  banner_url?: string; description?: string; gallery?: string[]; highlights?: string[]; open?: boolean;
-  reviews_count?: number; phone?: string;
+  logo_url?: string; banner_url?: string; description?: string; short_intro?: string; gallery?: string[]; highlights?: string[]; open?: boolean;
+  reviews_count?: number; phone?: string; contact_phone?: string; contact_email?: string; is_pure_veg?: boolean;
   fssai_number?: string; registration_no?: string; legal_entity_name?: string; outlet_name?: string;
+  opens_at?: string; closes_at?: string; is_demo?: boolean;
 };
 export type ShowcaseItem = {
   seller: Seller;

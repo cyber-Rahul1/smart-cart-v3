@@ -118,6 +118,8 @@ async def seed():
         doc = {"id": sid, "name": name, "category": cat, "business_type": btype, "cuisine": cuisine, "image": IMG[img], "rating": rating,
                "distance_km": dist, "eta_min": eta + int(dist * 4), "prep_time_min": eta, "is_new": is_new, "offer": offer, "min_order": min_order,
                "approved": True, "open": True, "fssai_status": "verified" if cat == "food" else "not_required",
+               "is_demo": True,
+               "contact_phone": "+919876543210",
                "fssai_number": {
                    "s-greens": "11222334000963",
                    "s-paradise": "11221333000542",
