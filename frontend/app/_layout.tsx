@@ -1,8 +1,8 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { router, Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import { StatusBar as RNStatusBar, LogBox, Platform, StyleSheet } from "react-native";
+import { useEffect, useState } from "react";
+import { LogBox, StyleSheet, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { colors } from "@/src/theme";
 import { ToastProvider } from "@/src/ui";
+import { AppSplashScreen } from "@/src/components/app-splash-screen";
 
 LogBox.ignoreAllLogs(true);
 
@@ -33,29 +34,30 @@ function RoleGuard() {
 }
 
 export default function RootLayout() {
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      (RNStatusBar as any).setTranslucent?.(true);
-      (RNStatusBar as any).setBackgroundColor?.("transparent", true);
-    }
-  }, []);
+  const colorScheme = useColorScheme();
+  const [showSplash, setShowSplash] = useState(true);
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <ErrorBoundary>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
-            <KeyboardProvider>
+            <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
               <AuthProvider>
                 <ToastProvider>
-                  <StatusBar style="dark" />
+                  <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
                   <RoleGuard />
                   <Stack
                     screenOptions={{
                       headerShown: false,
-                      contentStyle: { backgroundColor: colors.surface },
+                      contentStyle: { backgroundColor: "transparent" },
                     }}
                   />
+                  {showSplash && (
+                    <AppSplashScreen
+                      onAnimationComplete={() => setShowSplash(false)}
+                    />
+                  )}
                 </ToastProvider>
               </AuthProvider>
             </KeyboardProvider>

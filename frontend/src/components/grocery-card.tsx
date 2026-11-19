@@ -23,20 +23,6 @@ export const GroceryCard = React.memo(function GroceryCard({ p, qty, busy, onCha
             onPress={onOpen}
             style={({ pressed }) => [s.card, { width }, pressed && { opacity: 0.95 }]}
         >
-            {/* Liquid Glass Frosted Base Layer */}
-            {Platform.OS === "ios" && (
-                <BlurView
-                    intensity={18}
-                    tint="light"
-                    style={StyleSheet.absoluteFill}
-                />
-            )}
-            <LinearGradient
-                colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.78)", "rgba(255, 238, 244, 0.40)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-            />
             <View style={s.imgWrap}>
                 <Image
                     source={{ uri: mediaUri(p.image) }}
@@ -107,15 +93,17 @@ export const GroceryCard = React.memo(function GroceryCard({ p, qty, busy, onCha
 
 const useStyles = makeStyles((c) => ({
     card: {
-        borderRadius: 12,
-        borderWidth: 1.2,
-        borderColor: "rgba(255, 255, 255, 0.85)",
+        borderRadius: 14,
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "#F1F5F9",
         overflow: "hidden",
         position: "relative",
-        shadowColor: "#F43F5E",
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
+        shadowColor: "#000000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.015,
+        shadowRadius: 3,
+        elevation: 0.8,
         marginBottom: 12,
         padding: 6,
     },
@@ -191,11 +179,6 @@ const useStyles = makeStyles((c) => ({
         minWidth: 64,
         alignItems: "center",
         justifyContent: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1.5 },
-        shadowOpacity: 0.12,
-        shadowRadius: 3,
-        elevation: 2,
     },
     addBtnText: {
         color: "#EA580C",
@@ -214,11 +197,6 @@ const useStyles = makeStyles((c) => ({
         paddingHorizontal: 4,
         height: 28,
         minWidth: 72,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1.5 },
-        shadowOpacity: 0.12,
-        shadowRadius: 3,
-        elevation: 2,
     },
     stepBtn: {
         width: 22,

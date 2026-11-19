@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import React, { useRef, useState, useEffect } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   Dimensions,
   Keyboard,
@@ -546,6 +546,13 @@ export default function HomeScreen() {
   const stickyChipsProgress = useSharedValue(0); // 0: hidden behind search bar, 1: revealed below search bar
   const tilesSectionY = useRef<number>(240); // Track position of top options section
 
+  // When returning/focusing on Home screen, ensure active category returns to "all"
+  useFocusEffect(
+    useCallback(() => {
+      setActiveCategoryPill("all");
+    }, [])
+  );
+
   // When navigating away from Home tab (activeTabIndex !== 0), automatically dismiss the vertical rail and reopen pill
   useEffect(() => {
     if (activeTabIndex !== 0) {
@@ -553,6 +560,7 @@ export default function HomeScreen() {
       railProgress.value = 0;
     } else {
       setShowVerticalRail(true);
+      setActiveCategoryPill("all");
     }
   }, [activeTabIndex]);
 
@@ -733,14 +741,27 @@ export default function HomeScreen() {
     };
   });
 
-  const stickyChipsAnimStyle = useAnimatedStyle(() => {
+  const bigFiltersAnimStyle = useAnimatedStyle(() => {
+    // Big filters below search bar collapse with collapseProgress when user scrolls down
     return {
-      maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 48]),
-      opacity: stickyChipsProgress.value,
+      maxHeight: interpolate(collapseProgress.value, [0, 1], [80, 0]),
+      opacity: interpolate(collapseProgress.value, [0, 0.6, 1], [1, 0.2, 0]),
       transform: [
-        { translateY: interpolate(stickyChipsProgress.value, [0, 1], [-38, 0]) },
+        { scale: interpolate(collapseProgress.value, [0, 1], [1, 0.88]) },
       ],
-      pointerEvents: stickyChipsProgress.value > 0.6 ? ("auto" as const) : ("none" as const),
+      overflow: "hidden",
+    };
+  });
+
+  const stickyChipsAnimStyle = useAnimatedStyle(() => {
+    // In place of the big filters, small horizontal chips come into place when collapsed
+    return {
+      maxHeight: interpolate(collapseProgress.value, [0, 1], [0, 48]),
+      opacity: interpolate(collapseProgress.value, [0, 0.4, 1], [0, 0.2, 1]),
+      transform: [
+        { translateY: interpolate(collapseProgress.value, [0, 1], [-20, 0]) },
+      ],
+      pointerEvents: collapseProgress.value > 0.6 ? ("auto" as const) : ("none" as const),
     };
   });
 
@@ -782,17 +803,19 @@ export default function HomeScreen() {
     const collapseOffset = railCollapseAnim.value * 110 * directionMultiplier;
 
     // Strict section boundary positioning:
-    // Rail lives directly inside "All shops nearby".
-    // When scrollY exceeds nearbyTop, it sticks to the top with translateY.
-    // When scrolling past the section bottom, translateY stops advancing so it naturally scrolls away with the section!
-    // No appearing/disappearing animations — rail remains fully visible and intact.
+    // Rail lives directly inside "All shops nearby" with CSS `top: 56` (right below section title).
+    // In container coordinates, when scrollY reaches (nearbyTop + 56 - stickyTopOffset),
+    // the rail hits the top sticky threshold and starts translating downwards with the scroll
+    // to remain pinned at `stickyTopOffset` in the viewport.
+    // When reaching the bottom of the section, translateY is clamped so it naturally scrolls away with the section.
     const nearbyTop = nearbySectionYShared.value;
     const nearbyH = nearbySectionHeightShared.value;
     const curY = scrollYShared.value;
 
-    const railHeight = 440; // Approx rail height
-    const maxTranslate = Math.max(0, nearbyH - railHeight - 60);
-    const desiredTranslate = Math.max(0, curY - nearbyTop + stickyTopOffset);
+    const totalRailHeight = 440 + 8 + 38; // card height (440) + gap (8) + close button (38)
+    const startStickingScroll = nearbyTop + 56 - stickyTopOffset;
+    const desiredTranslate = Math.max(0, curY - startStickingScroll);
+    const maxTranslate = Math.max(0, nearbyH - totalRailHeight - 56 - 24);
     const clampedTranslateY = Math.min(maxTranslate, desiredTranslate);
 
     return {
@@ -815,8 +838,9 @@ export default function HomeScreen() {
     const nearbyH = nearbySectionHeightShared.value;
     const curY = scrollYShared.value;
 
-    const maxTranslate = Math.max(0, nearbyH - 120);
-    const desiredTranslate = Math.max(0, curY - nearbyTop + stickyTopOffset + 180);
+    const startStickingScroll = nearbyTop + 56 - stickyTopOffset;
+    const desiredTranslate = Math.max(0, curY - startStickingScroll + 120);
+    const maxTranslate = Math.max(0, nearbyH - 120 - 56);
     const clampedTranslateY = Math.min(maxTranslate, desiredTranslate);
 
     const isShown = railCollapseAnim.value;
@@ -834,15 +858,10 @@ export default function HomeScreen() {
 
 
   const nearbyContainerAnimStyle = useAnimatedStyle(() => {
-    // When user collapses the rail, railCollapseAnim goes to 1.
-    // When expanded, railCollapseAnim is 0.
-    // Target side padding: 92px when open, 0 when collapsed.
-    const activeOpen = 1 - railCollapseAnim.value;
-    const targetPadding = interpolate(activeOpen, [0, 1], [0, 92]);
-
+    // When vertical rail is commented out, keep padding at 0 so cards span full width normally
     return {
-      paddingLeft: railSide === "left" ? targetPadding : 0,
-      paddingRight: railSide === "right" ? targetPadding : 0,
+      paddingLeft: 0,
+      paddingRight: 0,
     };
   }, [railSide]);
 
@@ -855,14 +874,6 @@ export default function HomeScreen() {
 
   return (
     <View style={s.root}>
-      {/* Background Graphic matching supplied image */}
-      <Image
-        source={require("@/assets/images/gathr_home_bg.jpg")}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        priority="high"
-      />
-
       {/* Sticky Top Header */}
       <View
         onLayout={(e) => {
@@ -874,9 +885,17 @@ export default function HomeScreen() {
         }}
         style={[s.header, { paddingTop: insets.top + spacing.xs }]}
       >
+        {/* Background Graphic strictly confined to the header container */}
+        <Image
+          source={require("@/assets/images/header-bg.jpg")}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          priority="high"
+        />
+
         {/* Top Header Section: Logo + Greeting (smoothly collapsed without pushing search bar into negative margin) */}
         <Animated.View style={locRowAnimStyle}>
-          {/* Top Header Row: Gathr Logo on left, Notification & Menu on right */}
+          {/* Top Header Row: Gathr Logo on left, Notification & Profile on right */}
           <View style={s.locRow}>
             {/* Official Gathr Logo on extreme left with "Gathr" brand text */}
             <Pressable
@@ -891,7 +910,7 @@ export default function HomeScreen() {
               <Text style={s.brandNameText}>Gathr</Text>
             </Pressable>
 
-            {/* Right Header Controls: Notification Bell + 3-line Menu Button */}
+            {/* Right Header Controls: Notification Bell + Account Profile Button */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               {/* Notification Button */}
               <Pressable
@@ -902,18 +921,7 @@ export default function HomeScreen() {
                   pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
                 ]}
               >
-                <BlurView
-                  intensity={18}
-                  tint="light"
-                  style={StyleSheet.absoluteFill}
-                />
-                <LinearGradient
-                  colors={["rgba(255, 255, 255, 0.70)", "rgba(255, 230, 238, 0.40)"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <Ionicons name="notifications-outline" size={20} color="#475569" />
+                <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
                 {notif.data?.unread ? (
                   <View style={s.dot}>
                     <Text style={s.dotText}>{Math.min(notif.data.unread, 9)}</Text>
@@ -930,24 +938,13 @@ export default function HomeScreen() {
                   pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
                 ]}
               >
-                <BlurView
-                  intensity={18}
-                  tint="light"
-                  style={StyleSheet.absoluteFill}
-                />
-                <LinearGradient
-                  colors={["rgba(255, 255, 255, 0.70)", "rgba(255, 230, 238, 0.40)"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <Ionicons name="person-outline" size={20} color="#475569" />
+                <Ionicons name="person-outline" size={20} color="#FFFFFF" />
               </Pressable>
             </View>
           </View>
 
           {/* Greeting Text below logo: "Good evening, Rahul! 👋" and "What are you craving today?" */}
-          <View style={{ paddingHorizontal: 2, paddingTop: 4, paddingBottom: 2 }}>
+          <View style={{ paddingHorizontal: 2, paddingTop: 4, paddingBottom: 6 }}>
             <Text style={s.greetingTitle}>
               Good evening, {user?.name?.split(" ")[0] || "Rahul"}! 👋
             </Text>
@@ -964,41 +961,11 @@ export default function HomeScreen() {
             onPress={openSearchHighlight}
             style={[s.search, { flex: 1 }]}
           >
-            {/* Backdrop blur layer for liquid glass */}
-            <BlurView
-              intensity={20}
-              tint="light"
-              style={StyleSheet.absoluteFill}
-            />
-
-            {/* Blush-pink liquid glass gradient tint */}
-            <LinearGradient
-              colors={[
-                "rgba(255, 255, 255, 0.65)",
-                "rgba(255, 228, 235, 0.35)",
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-
-            {/* Specular glass highlight reflection along top edge */}
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 16,
-                right: 16,
-                height: 1,
-                backgroundColor: "rgba(255, 255, 255, 0.85)",
-              }}
-            />
-
-            <Ionicons name="search" size={17} color="#F43F5E" />
+            <Ionicons name="search" size={19} color="#E11D48" />
             <View style={{ flex: 1, height: 38, justifyContent: "center", position: "relative" }}>
               <AnimatedPlaceholder
                 placeholders={[
+                  "Search for food, groceries, restaurants...",
                   "Try 'Biryani'",
                   "Try 'Pizza'",
                   "Try 'Milk'",
@@ -1022,7 +989,7 @@ export default function HomeScreen() {
                 pressed && { opacity: 0.7 },
               ]}
             >
-              <Ionicons name="mic" size={19} color="#F43F5E" />
+              <Ionicons name="mic" size={20} color="#E11D48" />
             </Pressable>
           </Pressable>
 
@@ -1038,7 +1005,75 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Collapsible Horizontal Options List: Appears when scrolled down past main options grid, tucks behind search */}
+        {/* Big Filters Section in Header (Collapses when scrolling down) */}
+        <Animated.View style={[s.bigFiltersContainer, bigFiltersAnimStyle]}>
+          {[
+            {
+              key: "discover",
+              title: "Discover",
+              icon: "compass" as const,
+              href: "/listing/new",
+            },
+            {
+              key: "groceries",
+              title: "Groceries",
+              icon: "basket" as const,
+              href: "/groceries",
+            },
+            {
+              key: "group",
+              title: "Group Orders",
+              icon: "people" as const,
+              href: "/groups",
+            },
+            {
+              key: "apartment",
+              title: "Apartments",
+              icon: "business" as const,
+              href: "/community",
+            },
+            {
+              key: "bites",
+              title: "Bites",
+              icon: "apps" as const,
+              href: "/reels",
+            },
+          ].map((item) => {
+            const isSelected = activeCategoryPill === item.key;
+            return (
+              <Pressable
+                key={item.key}
+                testID={`home-big-filter-${item.key}`}
+                onPress={() => {
+                  setActiveCategoryPill(item.key);
+                  if (item.href) router.push(item.href as any);
+                }}
+                style={({ pressed }) => [
+                  s.bigFilterCard,
+                  isSelected ? s.bigFilterCardSelected : s.bigFilterCardUnselected,
+                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
+                ]}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={24}
+                  color={isSelected ? "#E11D48" : "#FFFFFF"}
+                />
+                <Text
+                  style={[
+                    s.bigFilterCardText,
+                    isSelected ? s.bigFilterCardTextSelected : s.bigFilterCardTextUnselected,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </Animated.View>
+
+        {/* Collapsible Horizontal Options List: Appears when big filters hide on scroll */}
         <Animated.View style={[s.stickyChipsContainer, stickyChipsAnimStyle]}>
           <ScrollView
             horizontal
@@ -1048,10 +1083,10 @@ export default function HomeScreen() {
           >
             {[
               { key: "all", label: "All" },
-              { key: "food", label: "Food", href: "/listing/food" },
+              { key: "discover", label: "Discover", href: "/listing/new" },
               { key: "groceries", label: "Groceries", href: "/groceries" },
-              { key: "group", label: "Group", href: "/groups" },
-              { key: "apartment", label: "Apartment", href: "/community" },
+              { key: "group", label: "Group Orders", href: "/groups" },
+              { key: "apartment", label: "Apartments", href: "/community" },
               { key: "bites", label: "Bites", href: "/reels" },
             ].map((pill) => {
               const isActive = activeCategoryPill === pill.key;
@@ -1071,17 +1106,6 @@ export default function HomeScreen() {
                     pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                   ]}
                 >
-                  {!isActive && (
-                    <>
-                      <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
-                      <LinearGradient
-                        colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                    </>
-                  )}
                   <Text
                     style={[
                       s.categoryPillText,
@@ -1118,127 +1142,23 @@ export default function HomeScreen() {
           contentContainerStyle={{ paddingBottom: bottomChrome + 80 }}
           refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => { q.refetch(); notif.refetch(); }} tintColor={colors.brandPrimary} />}
         >
-          {/* 1. Hero Food & Cloud Kitchens Banner matching Reference */}
-          <View style={s.heroCardV3}>
-            {/* Background Image: Biryani bowl photography on dark table */}
-            <Image
-              source={
-                q.data?.home_banner?.image_url && !q.data.home_banner.image_url.startsWith("/assets")
-                  ? { uri: mediaUri(q.data.home_banner.image_url) }
-                  : require("@/assets/images/home_v2/hero_banner.jpg")
-              }
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              transition={200}
-            />
-
-            {/* Left banner content */}
-            <View style={s.heroTextColV3}>
-              {/* Eyebrow: GOOD FOOD, GOOD MOOD with underline */}
-              <View style={s.heroEyebrowWrapV3}>
-                <Text style={s.heroEyebrowTextV3}>GOOD FOOD, GOOD MOOD</Text>
-                <View style={s.heroEyebrowLineV3} />
-              </View>
-
-              <Text style={s.heroTitleCravingsV3}>
-                Cravings?{"\n"}
-                <Text style={s.heroTitleWeGotYouV3}>We've got you!</Text>
-              </Text>
-
-              {/* Order Now Pill Button */}
-              <Pressable
-                testID="hero-order-now-btn"
-                onPress={() => router.push("/listing/food")}
-                style={({ pressed }) => [
-                  s.heroOrderNowBtn,
-                  pressed && { opacity: 0.9, transform: [{ scale: 0.96 }] },
-                ]}
-              >
-                <Text style={s.heroOrderNowText}>Order Now</Text>
-                <Ionicons name="arrow-forward" size={13} color="#FFFFFF" />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* 2. Four Quick Shortcut Cards Matching Reference Screenshot */}
-          <View style={s.fourShortcutsGrid}>
-            {[
-              {
-                key: "discover",
-                title: "Discover",
-                sub: "Restaurants",
-                icon: "compass-outline" as const,
-                href: "/listing/new",
-              },
-              {
-                key: "group",
-                title: "Group",
-                sub: "Orders",
-                icon: "people-outline" as const,
-                href: "/groups",
-              },
-              {
-                key: "community",
-                title: "Apartments",
-                sub: "& Communities",
-                icon: "business-outline" as const,
-                href: "/community",
-              },
-              {
-                key: "bites",
-                title: "Bites",
-                sub: "& Reels",
-                icon: "play-circle-outline" as const,
-                href: "/reels",
-              },
-            ].map((item) => (
-              <Pressable
-                key={item.key}
-                testID={`home-shortcut-${item.key}`}
-                onPress={() => {
-                  if (item.href) router.push(item.href as any);
-                }}
-                style={({ pressed }) => [
-                  s.shortcutCard,
-                  pressed && { opacity: 0.88, transform: [{ scale: 0.96 }] },
-                ]}
-              >
-                <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
-                <LinearGradient
-                  colors={["rgba(255, 241, 245, 0.90)", "rgba(255, 222, 233, 0.65)"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={s.shortcutIconWrap}>
-                  <Ionicons name={item.icon} size={22} color="#F43F5E" />
-                </View>
-                <Text style={s.shortcutTitle}>{item.title}</Text>
-                <Text style={s.shortcutSub}>{item.sub}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* 3. Schedule for later Banner - STRICTLY PRESERVED UNCHANGED */}
+          {/* 3. Schedule for later Banner - Pink Theme matching Reference */}
           <Pressable
             testID="home-schedule-entry"
             onPress={() => router.push("/listing/food?schedule=1")}
             style={s.lightScheduleBannerV3}
           >
-            {/* Background image with faint planner/leaves illustration on right */}
+            {/* Background image with pink waves and 3D calendar illustration */}
             <Image
-              source={require("@/assets/images/home_v2/schedule_banner_light.png")}
+              source={require("@/assets/images/schedule_banner_pink.jpg")}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
             />
 
-            {/* Left Calendar Icon Box */}
+            {/* Left Red Calendar Icon Box */}
             <View style={s.lightScheduleIconBoxV3}>
-              <Ionicons name="calendar-outline" size={24} color="#1E3A2F" />
+              <Ionicons name="calendar" size={24} color="#E11D48" />
             </View>
-
-            {/* Middle Vertical Separator Line */}
-            <View style={s.lightScheduleDividerV3} />
 
             {/* Text description */}
             <View style={s.lightScheduleTextColV3}>
@@ -1248,10 +1168,9 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {/* Dark green pill button */}
+            {/* Red circle button with white arrow */}
             <View style={s.lightScheduleBtnV3}>
-              <Text style={s.lightScheduleBtnTextV3}>Schedule Order</Text>
-              <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
             </View>
           </Pressable>
 
@@ -1657,7 +1576,8 @@ export default function HomeScreen() {
               iconColor="#F43F5E"
             />
 
-            {/* Vertical Food Category Rail (Part of All shops nearby section, sticky at top while scrolling) */}
+            {/* Vertical Food Category Rail (Commented out for now) */}
+            {/*
             {showVerticalRail && activeTabIndex === 0 && (
               <Animated.View
                 style={[
@@ -1666,7 +1586,6 @@ export default function HomeScreen() {
                   verticalRailAnimStyle,
                 ]}
               >
-                {/* Main vertical rail card matching screenshot design */}
                 <View style={s.verticalRailCard}>
                   <BlurView intensity={24} tint="light" style={StyleSheet.absoluteFill} />
                   <LinearGradient
@@ -1675,7 +1594,6 @@ export default function HomeScreen() {
                     end={{ x: 1, y: 1 }}
                     style={StyleSheet.absoluteFill}
                   />
-                  {/* 1. TOP: Left / Right place adjustment button */}
                   <Pressable
                     testID="rail-switch-side-button"
                     onPress={toggleRailSide}
@@ -1695,13 +1613,11 @@ export default function HomeScreen() {
                     </Text>
                   </Pressable>
 
-                  {/* Scrollable Items Container */}
                   <ScrollView
                     showsVerticalScrollIndicator={false}
                     nestedScrollEnabled
                     contentContainerStyle={s.verticalRailScroll}
                   >
-                    {/* 2. "All" item with light green background and dark green indicator bar */}
                     <Pressable
                       testID="rail-filter-all"
                       onPress={() => setSelectedFilter(null)}
@@ -1735,7 +1651,6 @@ export default function HomeScreen() {
                       </Text>
                     </Pressable>
 
-                    {/* 3. Food Category Items */}
                     {VERTICAL_RAIL_CATEGORIES.map((cat) => {
                       const isSelected = selectedFilter === cat.key;
                       return (
@@ -1786,7 +1701,6 @@ export default function HomeScreen() {
                   </ScrollView>
                 </View>
 
-                {/* 4. Separate Fixed Bottom Card with chevron arrow and "Close" text */}
                 <Pressable
                   testID="rail-toggle-bottom-button"
                   onPress={toggleRailCollapse}
@@ -1813,7 +1727,6 @@ export default function HomeScreen() {
               </Animated.View>
             )}
 
-            {/* Reopen Button at screen edge when collapsed */}
             {showVerticalRail && activeTabIndex === 0 && (
               <Animated.View
                 style={[
@@ -1840,6 +1753,7 @@ export default function HomeScreen() {
                 </Pressable>
               </Animated.View>
             )}
+            */}
 
           <Animated.View
             style={nearbyContainerAnimStyle}
@@ -1860,7 +1774,7 @@ export default function HomeScreen() {
                   s={sl}
                   testID={`home-nearby-${sl.id}`}
                   isActive={activeCardIds.includes(sl.id)}
-                  isRailOpen={showVerticalRail && !isRailCollapsed}
+                  isRailOpen={false}
                 />
               </View>
             ))}
@@ -2009,10 +1923,12 @@ const useStyles = makeStyles((c) => ({
   root: { flex: 1, backgroundColor: "#FFFFFF" },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
     backgroundColor: "transparent",
     gap: spacing.xs,
     borderBottomWidth: 0,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     overflow: "hidden",
     zIndex: 100,
   },
@@ -2030,11 +1946,12 @@ const useStyles = makeStyles((c) => ({
   brandLogoImg: {
     width: 32,
     height: 44,
+    tintColor: "#FFFFFF",
   },
   brandNameText: {
     fontSize: 27,
     fontWeight: "900",
-    color: "#E11D48", // Theme crimson/rose matching Gathr logo
+    color: "#FFFFFF", // White brand text matching reference design
     letterSpacing: -0.5,
     includeFontPadding: false,
     lineHeight: 32,
@@ -2043,12 +1960,13 @@ const useStyles = makeStyles((c) => ({
   headerCircleBtn: {
     width: 42,
     height: 42,
-    borderRadius: 999, // perfectly round on all platforms
+    borderRadius: 999, // perfectly round
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.2,
-    borderColor: "rgba(0, 0, 0, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.22)",
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
   },
   menuIconWrap: {
     width: 18,
@@ -2060,18 +1978,18 @@ const useStyles = makeStyles((c) => ({
     width: 18,
     height: 2,
     borderRadius: 1,
-    backgroundColor: "#1E293B",
+    backgroundColor: "#FFFFFF",
   },
   greetingTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#FFFFFF",
     letterSpacing: -0.4,
   },
   greetingSubtitle: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#475569",
+    color: "rgba(255, 255, 255, 0.88)",
     marginTop: 2,
     letterSpacing: -0.1,
   },
@@ -2090,171 +2008,71 @@ const useStyles = makeStyles((c) => ({
   },
   dotText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
   search: {
-    height: 46,
+    height: 48,
     borderRadius: 24,
-    borderWidth: 1.2,
-    borderColor: "rgba(255, 255, 255, 0.85)",
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "rgba(255, 255, 255, 0.55)",
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     paddingHorizontal: 16,
-    shadowColor: "#F43F5E",
-    shadowOpacity: 0.07,
+    shadowColor: "#000000",
+    shadowOpacity: 0.08,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  searchText: { color: c.muted, fontSize: font.base + 1 },
+  searchText: { color: "#64748B", fontSize: font.base + 1 },
 
-  /* Hero Banner V3 Matching Reference Screenshot */
-  heroCardV3: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.xs,
-    height: 170,
-    borderRadius: 18,
+  /* Big 5 Filter Cards in Header (Food, Groceries, Group Orders, Apartments, Bites) */
+  bigFiltersContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
     overflow: "hidden",
-    position: "relative",
-    paddingLeft: 20,
-    paddingRight: 14,
-    paddingVertical: 18,
-    justifyContent: "center",
-    backgroundColor: "#181411",
-    shadowColor: "#000000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
   },
-  heroTextColV3: {
-    maxWidth: "68%",
-    zIndex: 2,
+  bigFilterCard: {
+    flex: 1,
+    height: 68,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 2,
     gap: 4,
   },
-  heroEyebrowWrapV3: {
-    alignSelf: "flex-start",
-    marginBottom: 2,
-  },
-  heroEyebrowTextV3: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: "#e93a60c5",
-    letterSpacing: 1.2,
-  },
-  heroEyebrowLineV3: {
-    height: 1,
-    backgroundColor: "rgba(225, 29, 71, 0.22)",
-    marginTop: 2,
-    width: 100,
-  },
-  heroTitleCravingsV3: {
-    fontSize: 32,
-    lineHeight: 37,
-    fontWeight: "900",
-    color: "#ebe7e9ff",
-    letterSpacing: -0.5,
-  },
-  heroTitleWeGotYouV3: {
-    fontSize: 35,
-    lineHeight: 37,
-    fontWeight: "900",
-    color: "#e93a60ff",
-    letterSpacing: -0.5,
-  },
-  heroOrderNowBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: "#E11D48",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    marginTop: 8,
-    shadowColor: "#E11D48",
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
+  bigFilterCardSelected: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    elevation: 3,
   },
-  heroOrderNowText: {
+  bigFilterCardUnselected: {
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.18)",
+  },
+  bigFilterCardText: {
+    fontSize: 11,
+    textAlign: "center",
+  },
+  bigFilterCardTextSelected: {
+    color: "#E11D48",
+    fontWeight: "800",
+  },
+  bigFilterCardTextUnselected: {
     color: "#FFFFFF",
-    fontSize: 12.5,
-    fontWeight: "800",
-  },
-  heroCarouselDots: {
-    position: "absolute",
-    bottom: 14,
-    right: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    zIndex: 2,
-  },
-  heroDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.4)",
-  },
-  heroDotActive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#F43F5E",
-  },
-
-  /* Four Shortcuts Grid Matching Reference Screenshot */
-  fourShortcutsGrid: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    gap: 10,
-    marginTop: 16,
-  },
-  shortcutCard: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.2,
-    borderColor: "rgba(255, 225, 233, 0.95)",
-    overflow: "hidden",
-    position: "relative",
-    shadowColor: "#F43F5E",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  shortcutIconWrap: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  shortcutTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#0F172A",
-    textAlign: "center",
-    letterSpacing: -0.2,
-  },
-  shortcutSub: {
-    fontSize: 10,
-    fontWeight: "500",
-    color: "#64748B",
-    textAlign: "center",
-    marginTop: 1,
+    fontWeight: "600",
   },
 
   // Sticky Horizontal Quick Access Chips in Header
   stickyChipsContainer: {
     overflow: "hidden",
-    marginTop: 2,
+    marginTop: 6,
     marginHorizontal: -spacing.lg,
     zIndex: 1,
   },
@@ -2303,36 +2121,33 @@ const useStyles = makeStyles((c) => ({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(226, 232, 240, 0.8)",
     overflow: "hidden",
     position: "relative",
-    shadowColor: "#F43F5E",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 1.5 },
   },
   categoryPillActive: {
-    backgroundColor: "#F43F5E",
-    borderColor: "#F43F5E",
-    shadowColor: "#F43F5E",
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   categoryPillInactive: {
-    backgroundColor: "transparent",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderColor: "rgba(255, 255, 255, 0.22)",
   },
   categoryPillText: {
     fontSize: 12.5,
     letterSpacing: -0.1,
   },
   categoryPillTextActive: {
-    color: "#FFFFFF",
+    color: "#E11D48",
     fontWeight: "800",
   },
   categoryPillTextInactive: {
-    color: "#334155",
-    fontWeight: "700",
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 
   /* 3. Section Grid (2 Big Cards + 4 Bottom Cards) */
@@ -2445,26 +2260,27 @@ const useStyles = makeStyles((c) => ({
     marginHorizontal: spacing.lg,
     marginTop: 14,
     height: 72,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 16,
     paddingVertical: 10,
-    gap: 10,
+    gap: 12,
     position: "relative",
-    backgroundColor: "#F2F5F0",
+    backgroundColor: "#FFF0F3",
     borderWidth: 1,
-    borderColor: "#E3EAE0",
-    shadowColor: "#000",
-    shadowOpacity: 0.02,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    borderColor: "rgba(255, 205, 218, 0.6)",
+    shadowColor: "#E11D48",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1.5,
   },
   lightScheduleIconBoxV3: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
@@ -2472,7 +2288,7 @@ const useStyles = makeStyles((c) => ({
   lightScheduleDividerV3: {
     width: 1,
     height: 32,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "rgba(225, 29, 72, 0.15)",
     zIndex: 2,
   },
   lightScheduleTextColV3: {
@@ -2482,25 +2298,29 @@ const useStyles = makeStyles((c) => ({
   },
   lightScheduleTitleV3: {
     color: "#0F172A",
-    fontSize: 13.5,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
     letterSpacing: -0.2,
   },
   lightScheduleSubV3: {
-    color: "#64748B",
-    fontSize: 10.5,
+    color: "#475569",
+    fontSize: 11,
     fontWeight: "500",
-    lineHeight: 13,
+    lineHeight: 14,
   },
   lightScheduleBtnV3: {
-    flexDirection: "row",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#E11D48", // Crimson red matching reference image
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "#1E3A2F", // Dark forest green matching reference screenshot button
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
+    justifyContent: "center",
     zIndex: 2,
+    shadowColor: "#E11D48",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   lightScheduleBtnTextV3: {
     color: "#FFFFFF",
@@ -3277,7 +3097,6 @@ const useStyles = makeStyles((c) => ({
   verticalRailWrapper: {
     position: "absolute",
     top: 56, // Starts right below the section title
-    bottom: 24,
     zIndex: 90,
     gap: 8,
   },
@@ -3289,7 +3108,7 @@ const useStyles = makeStyles((c) => ({
   },
   verticalRailCard: {
     width: 86,
-    flex: 1,
+    height: 440,
     borderRadius: 18,
     paddingTop: 8,
     paddingBottom: 8,
@@ -3406,6 +3225,7 @@ const useStyles = makeStyles((c) => ({
   },
   reopenPillContainer: {
     position: "absolute",
+    top: 56,
     zIndex: 90,
   },
   reopenPillRight: {

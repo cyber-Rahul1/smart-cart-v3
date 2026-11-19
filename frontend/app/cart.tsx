@@ -196,14 +196,6 @@ export default function CartScreen() {
 
   return (
     <View style={s.root}>
-      {/* Background Graphic matching Home/Groceries/Listing screens */}
-      <Image
-        source={require("@/assets/images/gathr_home_bg.jpg")}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        priority="high"
-      />
-
       {/* Redesigned Header Matching User UI */}
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
         <View style={s.headerRow}>

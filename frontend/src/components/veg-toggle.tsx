@@ -14,7 +14,7 @@ interface VegToggleProps {
   height?: number;
 }
 
-export function VegToggle({ value, onToggle, testID = "home-veg-toggle", height = 46 }: VegToggleProps) {
+export function VegToggle({ value, onToggle, testID = "home-veg-toggle", height = 48 }: VegToggleProps) {
   const { colors } = useTheme();
 
   const knobStyle = useAnimatedStyle(() => ({
@@ -36,63 +36,11 @@ export function VegToggle({ value, onToggle, testID = "home-veg-toggle", height 
         pressed && { transform: [{ scale: 0.96 }] },
       ]}
     >
-      {/* Backdrop blur layer for liquid glass */}
-      <BlurView
-        intensity={20}
-        tint="light"
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Mint green liquid glass gradient tint */}
-      <LinearGradient
-        colors={[
-          value ? "rgba(220, 252, 231, 0.55)" : "rgba(240, 253, 244, 0.45)",
-          value ? "rgba(187, 247, 208, 0.40)" : "rgba(220, 248, 228, 0.25)",
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Specular glass highlight reflection along top edge */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 12,
-          right: 12,
-          height: 1,
-          backgroundColor: "rgba(255, 255, 255, 0.8)",
-        }}
-      />
-
       <Ionicons name="leaf" size={14} color="#15803D" style={{ marginRight: 2 }} />
       <Text style={styles.vegLabelText}>VEG</Text>
       
       {/* 3D Inset / Bowl Well Track */}
       <View style={[styles.trackOuterWell, value && styles.trackOuterWellActive]}>
-        {/* Inner Top Shadow for Concave Bowl Depth */}
-        <LinearGradient
-          colors={
-            value
-              ? ["rgba(20, 83, 45, 0.45)", "rgba(22, 101, 52, 0.15)", "transparent"]
-              : ["rgba(15, 23, 42, 0.22)", "rgba(100, 116, 139, 0.08)", "transparent"]
-          }
-          style={StyleSheet.absoluteFill}
-        />
-        {/* Bottom Specular Lip Highlight */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 3,
-            right: 3,
-            height: 1,
-            backgroundColor: value ? "rgba(255, 255, 255, 0.35)" : "rgba(255, 255, 255, 0.9)",
-          }}
-        />
         <Animated.View style={[styles.knob, knobStyle]} />
       </View>
     </Pressable>
@@ -101,24 +49,26 @@ export function VegToggle({ value, onToggle, testID = "home-veg-toggle", height 
 
 const styles = StyleSheet.create({
   vegPill: {
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1.2,
-    borderColor: "rgba(34, 197, 94, 0.22)",
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.8)",
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "rgba(240, 253, 244, 0.35)",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    shadowColor: "#15803D",
+    shadowColor: "#000000",
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   vegPillActive: {
-    borderColor: "rgba(134, 239, 172, 0.9)",
+    borderColor: "#22C55E",
+    backgroundColor: "#F0FDF4",
   },
   vegLabelText: {
     fontSize: 12,
@@ -132,15 +82,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 2,
     justifyContent: "center",
-    backgroundColor: "rgba(203, 213, 225, 0.70)",
-    borderWidth: 1.2,
-    borderColor: "rgba(148, 163, 184, 0.45)",
+    backgroundColor: "#E2E8F0",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
     overflow: "hidden",
     position: "relative",
   },
   trackOuterWellActive: {
-    backgroundColor: "#15803D",
-    borderColor: "#166534",
+    backgroundColor: "#16A34A",
+    borderColor: "#15803D",
   },
   knob: {
     width: 14,
@@ -148,9 +98,9 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: "#FFFFFF",
     shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1.5 },
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
 });

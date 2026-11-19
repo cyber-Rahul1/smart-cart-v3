@@ -15,8 +15,29 @@ import { font, radius, spacing, useTheme } from "@/src/theme";
 import { Product, Seller } from "@/src/types";
 import { Chip, EmptyState, Ionicons, Loader, VegMark, AppImage } from "@/src/ui";
 
-const SUGGEST = ["Biryani", "Pizza", "Milk", "Rolls", "Dosa", "Rice", "Eggs", "Burger"];
-const SEARCH_PLACEHOLDERS = [
+const SUGGEST_FOOD = ["Biryani", "Pizza", "Burgers", "Rolls", "Dosa", "Desserts", "Chinese", "Shawarma"];
+const SUGGEST_GROCERY = ["Milk", "Bread", "Eggs", "Fresh Vegetables", "Paneer", "Butter", "Snacks & Biscuits", "Rice & Dal"];
+const SUGGEST_DEFAULT = ["Biryani", "Pizza", "Milk", "Rolls", "Dosa", "Rice", "Eggs", "Burger"];
+
+const PLACEHOLDERS_FOOD = [
+  "Try 'Biryani'",
+  "Try 'Pizza'",
+  "Try 'Dosa'",
+  "Try 'Burgers'",
+  "Try 'Noodles'",
+  "Try 'Desserts'",
+];
+
+const PLACEHOLDERS_GROCERY = [
+  "Search for milk, bread, fruits...",
+  "Try 'Fresh Vegetables'",
+  "Try 'Paneer & Butter'",
+  "Try 'Bread & Eggs'",
+  "Try 'Snacks & Biscuits'",
+  "Try 'Rice & Dal'",
+];
+
+const PLACEHOLDERS_DEFAULT = [
   "Try 'Biryani'",
   "Try 'Pizza'",
   "Try 'Milk'",
@@ -29,12 +50,17 @@ const SEARCH_PLACEHOLDERS = [
 export default function Search() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{ q?: string; veg?: string }>();
+  const params = useLocalSearchParams<{ q?: string; veg?: string; type?: string }>();
+  const isGrocery = params.type === "grocery" || params.type === "groceries";
+  const isFood = params.type === "food" || (!isGrocery && params.type !== undefined);
 
   const [text, setText] = useState(params.q ?? "");
   const [term, setTerm] = useState(params.q?.trim() ?? "");
   const [vegOnly, setVegOnly] = useState<boolean>(params.veg === "1" || params.veg === "true");
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+
+  const suggestions = isGrocery ? SUGGEST_GROCERY : isFood ? SUGGEST_FOOD : SUGGEST_DEFAULT;
+  const placeholders = isGrocery ? PLACEHOLDERS_GROCERY : isFood ? PLACEHOLDERS_FOOD : PLACEHOLDERS_DEFAULT;
 
   useEffect(() => {
     if (params.q !== undefined && params.q !== text) {
@@ -48,9 +74,9 @@ export default function Search() {
     return () => clearTimeout(t);
   }, [text]);
 
-  const queryUrl = `/search?q=${encodeURIComponent(term)}${vegOnly ? "&veg_only=true" : ""}`;
+  const queryUrl = `/search?q=${encodeURIComponent(term)}${vegOnly ? "&veg_only=true" : ""}${isGrocery ? "&category=grocery" : ""}`;
   const q = useQuery({
-    queryKey: ["search", term, vegOnly],
+    queryKey: ["search", term, vegOnly, params.type],
     queryFn: () => api<{ sellers: Seller[]; products: Product[] }>(queryUrl),
     enabled: term.length > 0,
   });
@@ -99,37 +125,35 @@ export default function Search() {
           <View
             style={{
               flex: 1,
-              height: 50,
-              borderRadius: radius.lg,
-              borderWidth: 1,
-              borderColor: "rgba(255, 255, 255, 0.9)",
-              backgroundColor: "rgba(255, 255, 255, 0.92)",
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: "#FFFFFF",
               flexDirection: "row",
               alignItems: "center",
-              paddingHorizontal: spacing.lg,
+              paddingHorizontal: 16,
               gap: spacing.sm,
-              shadowColor: colors.onSurface,
+              shadowColor: "#000000",
               shadowOpacity: 0.08,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 4 },
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 3 },
               elevation: 3,
             }}
           >
-            <Ionicons name="search" size={18} color={colors.brandPrimary} />
+            <Ionicons name="search" size={19} color="#E11D48" />
 
-            <View style={{ flex: 1, height: 46, justifyContent: "center", position: "relative" }}>
-              {!text ? <AnimatedPlaceholder placeholders={SEARCH_PLACEHOLDERS} /> : null}
+            <View style={{ flex: 1, height: 38, justifyContent: "center", position: "relative" }}>
+              {!text ? <AnimatedPlaceholder placeholders={placeholders} /> : null}
               <TextInput
                 testID="search-input"
                 autoFocus={!params.q}
                 value={text}
                 onChangeText={setText}
-                cursorColor={colors.brandPrimary}
-                selectionColor={colors.brandPrimary}
+                cursorColor="#E11D48"
+                selectionColor="#E11D48"
                 style={{
-                  fontSize: font.base + 1,
-                  color: colors.onSurface,
-                  height: 46,
+                  fontSize: 14,
+                  color: "#0F172A",
+                  height: 38,
                   padding: 0,
                 }}
                 returnKeyType="search"
@@ -141,9 +165,6 @@ export default function Search() {
                 <Ionicons name="close-circle" size={18} color={colors.muted} />
               </Pressable>
             ) : null}
-
-            {/* Vertical divider before Mic */}
-            <View style={{ width: 1, height: 20, backgroundColor: "rgba(255, 128, 25, 0.15)" }} />
 
             {/* Mic Button */}
             <Pressable
@@ -159,7 +180,7 @@ export default function Search() {
                 pressed && { opacity: 0.7 },
               ]}
             >
-              <Ionicons name="mic" size={20} color={colors.brandPrimary} />
+              <Ionicons name="mic" size={20} color="#E11D48" />
             </Pressable>
           </View>
 
@@ -209,7 +230,7 @@ export default function Search() {
             Popular searches
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-            {SUGGEST.map((s) => (
+            {suggestions.map((s) => (
               <Chip
                 key={s}
                 testID={`search-suggest-${s}`}

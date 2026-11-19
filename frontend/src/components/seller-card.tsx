@@ -95,21 +95,6 @@ export const SellerTile = React.memo(function SellerTile({
       onPress={() => router.push(`/seller/${s.id}`)}
       style={({ pressed }) => [st.modernCard, pressed && { transform: [{ scale: 0.98 }] }]}
     >
-      {/* Liquid Glass Frosted Base Layer */}
-      {Platform.OS === "ios" && (
-        <BlurView
-          intensity={20}
-          tint="light"
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-      <LinearGradient
-        colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.78)", "rgba(255, 235, 242, 0.42)"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
       {/* Top Image Box */}
       <View style={st.modernCardImageBox}>
         <AppImage
@@ -272,20 +257,6 @@ export const SellerFullCard = React.memo(function SellerFullCard({
       onPress={() => router.push(`/seller/${s.id}`)}
       style={({ pressed }) => [st.fullCard, pressed && { opacity: 0.96 }]}
     >
-      {/* Liquid Glass Frosted Base Layer */}
-      {Platform.OS === "ios" && (
-        <BlurView
-          intensity={20}
-          tint="light"
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-      <LinearGradient
-        colors={Platform.OS === "android" ? ["rgba(255, 255, 255, 0.96)", "rgba(255, 240, 246, 0.92)"] : ["rgba(255, 255, 255, 0.82)", "rgba(255, 238, 244, 0.45)"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
       <View
         style={st.imageContainer}
         onLayout={(e) => {
@@ -569,22 +540,24 @@ const useStyles = makeStyles((c) => ({
   tileName: { marginTop: spacing.sm, fontSize: font.base + 1, fontWeight: "800", color: c.onSurface },
   tileMeta: { fontSize: font.sm, color: c.muted, marginTop: 2 },
 
-  // Redesigned Modern Card Styles with Liquid Glass
+  // Redesigned Modern Card Styles with Clean White Base and Subtle Shadow
   modernCard: {
     width: 172,
     borderRadius: 14,
-    borderWidth: 1.2,
-    borderColor: "rgba(255, 255, 255, 0.85)",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
     overflow: "hidden",
     position: "relative",
-    shadowColor: "#F43F5E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.015,
+    shadowRadius: 3,
+    elevation: 0.8,
   },
   modernCardImageBox: {
     width: "100%",
-    height: 120,
+    height: 105,
     position: "relative",
   },
   popularityBadge: {
@@ -737,19 +710,21 @@ const useStyles = makeStyles((c) => ({
     color: "#64748B",
   },
 
-  // Full Card Styles with Liquid Glass
+  // Full Card Styles with Clean White Base and Minimal Shadow
   fullCard: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     borderRadius: 14,
+    backgroundColor: "#FFFFFF",
     overflow: "hidden",
     position: "relative",
-    shadowColor: "#F43F5E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    borderWidth: 1.2,
-    borderColor: "rgba(255, 255, 255, 0.85)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.015,
+    shadowRadius: 3,
+    elevation: 0.8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   imageContainer: {
     width: "100%",

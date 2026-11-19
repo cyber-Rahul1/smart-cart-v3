@@ -84,6 +84,9 @@ export default function Groceries() {
         const currentY = e.nativeEvent.contentOffset.y;
         const diff = currentY - lastScrollY.current;
 
+        // Ignore tiny jitter/micro-drags
+        if (Math.abs(diff) < 1) return;
+
         // Sticky filter pills trigger when scrolled past the category section
         const triggerY = Math.max(180, categorySectionY.current - 80);
         if (currentY >= triggerY) {
@@ -100,7 +103,7 @@ export default function Groceries() {
         if (currentY <= 15) {
             accumulatedDiff.current = 0;
             // At the very top, always show header and tab bar smoothly
-            if (isHiddenRef.current) {
+            if (isHiddenRef.current || collapseProgress.value > 0) {
                 isHiddenRef.current = false;
                 collapseProgress.value = withTiming(0, TIMING_CONFIG);
                 tabBarTranslateY.value = withTiming(0, TIMING_CONFIG);
@@ -112,15 +115,15 @@ export default function Groceries() {
             }
             accumulatedDiff.current += diff;
 
-            // Hysteresis threshold: requires intentional, sustained drag (>= 50px) before flipping
-            if (accumulatedDiff.current > 50 && currentY > 80) {
+            // Hysteresis threshold: requires intentional, sustained drag (>= 40px) before flipping
+            if (accumulatedDiff.current > 40 && currentY > 60) {
                 // User is intentionally scrolling content UP -> hide header & bottom tab bar
                 if (!isHiddenRef.current) {
                     isHiddenRef.current = true;
                     collapseProgress.value = withTiming(1, TIMING_CONFIG);
                     tabBarTranslateY.value = withTiming(100, TIMING_CONFIG);
                 }
-            } else if (accumulatedDiff.current < -50) {
+            } else if (accumulatedDiff.current < -40) {
                 // User is intentionally scrolling content DOWN -> reveal both smoothly from bottom
                 if (isHiddenRef.current) {
                     isHiddenRef.current = false;
@@ -134,16 +137,16 @@ export default function Groceries() {
     };
 
     const titleRowAnimStyle = useAnimatedStyle(() => {
-        const totalShift = titleRowHeight + spacing.xs;
         return {
-            marginTop: -collapseProgress.value * totalShift,
-            opacity: 1 - collapseProgress.value,
+            maxHeight: interpolate(collapseProgress.value, [0, 1], [60, 0]),
+            opacity: interpolate(collapseProgress.value, [0, 0.7, 1], [1, 0.2, 0]),
+            overflow: "hidden",
         };
     });
 
     const stickyChipsAnimStyle = useAnimatedStyle(() => {
         return {
-            maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 48]),
+            maxHeight: interpolate(stickyChipsProgress.value, [0, 1], [0, 56]),
             opacity: stickyChipsProgress.value,
             transform: [
                 { translateY: interpolate(stickyChipsProgress.value, [0, 1], [-20, 0]) },
@@ -244,14 +247,6 @@ export default function Groceries() {
 
     return (
         <View style={s.root}>
-            {/* Background Graphic matching Home Screen */}
-            <Image
-                source={require("@/assets/images/gathr_home_bg.jpg")}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-                priority="high"
-            />
-
             {/* Sticky Top Header */}
             <View
                 style={{
@@ -260,19 +255,13 @@ export default function Groceries() {
                     overflow: "hidden",
                     borderBottomWidth: 0,
                     backgroundColor: "transparent",
+                    paddingTop: insets.top + spacing.xs,
                 }}
             >
                 {/* Collapsible Section ABOVE search: Small back button & Title & Subtitle */}
                 <Animated.View
-                    onLayout={(e) => {
-                        const h = e.nativeEvent.layout.height;
-                        if (h > 0 && Math.abs(h - titleRowHeight) > 2) {
-                            setTitleRowHeight(h);
-                        }
-                    }}
                     style={[
                         {
-                            paddingTop: insets.top + spacing.xs,
                             paddingHorizontal: spacing.lg,
                             paddingBottom: spacing.xs,
                             flexDirection: "row",
@@ -330,41 +319,10 @@ export default function Groceries() {
                 >
                     <Pressable
                         testID="groceries-search-bar"
-                        onPress={() => router.push("/search")}
+                        onPress={() => router.push("/search?type=grocery")}
                         style={s.searchBarBox}
                     >
-                        {/* Backdrop blur layer for liquid glass */}
-                        <BlurView
-                            intensity={20}
-                            tint="light"
-                            style={StyleSheet.absoluteFill}
-                        />
-
-                        {/* Blush-pink liquid glass gradient tint */}
-                        <LinearGradient
-                            colors={[
-                                "rgba(255, 255, 255, 0.65)",
-                                "rgba(255, 228, 235, 0.35)",
-                            ]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={StyleSheet.absoluteFill}
-                        />
-
-                        {/* Specular glass highlight reflection along top edge */}
-                        <View
-                            pointerEvents="none"
-                            style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 16,
-                                right: 16,
-                                height: 1,
-                                backgroundColor: "rgba(255, 255, 255, 0.85)",
-                            }}
-                        />
-
-                        <Ionicons name="search" size={17} color="#F43F5E" />
+                        <Ionicons name="search" size={19} color="#E11D48" />
                         <View style={{ flex: 1, height: 38, justifyContent: "center", position: "relative" }}>
                             <AnimatedPlaceholder
                                 placeholders={[
@@ -377,7 +335,7 @@ export default function Groceries() {
                                 ]}
                             />
                         </View>
-                        <Ionicons name="mic-outline" size={19} color="#F43F5E" />
+                        <Ionicons name="mic" size={20} color="#E11D48" />
                     </Pressable>
                 </View>
 
@@ -402,17 +360,6 @@ export default function Groceries() {
                                         pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                                     ]}
                                 >
-                                    {!isSelected && (
-                                        <>
-                                            <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
-                                            <LinearGradient
-                                                colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
-                                                start={{ x: 0, y: 0 }}
-                                                end={{ x: 1, y: 1 }}
-                                                style={StyleSheet.absoluteFill}
-                                            />
-                                        </>
-                                    )}
                                     <Text
                                         style={[
                                             s.categoryPillText,
@@ -510,17 +457,6 @@ export default function Groceries() {
                                     pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
                                 ]}
                             >
-                                {!isSelected && (
-                                    <>
-                                        <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} />
-                                        <LinearGradient
-                                            colors={["rgba(255, 255, 255, 0.90)", "rgba(255, 241, 245, 0.65)"]}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={StyleSheet.absoluteFill}
-                                        />
-                                    </>
-                                )}
                                 <Text
                                     style={[
                                         s.categoryPillText,
@@ -738,19 +674,17 @@ const useStyles = makeStyles((c) => ({
 
     // Search bar
     searchBarBox: {
-        height: 46,
+        height: 48,
         borderRadius: 24,
-        borderWidth: 1.2,
-        borderColor: "rgba(255, 255, 255, 0.85)",
-        backgroundColor: "rgba(255, 255, 255, 0.55)",
+        backgroundColor: "#FFFFFF",
         overflow: "hidden",
         position: "relative",
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.sm,
         paddingHorizontal: 16,
-        shadowColor: "#F43F5E",
-        shadowOpacity: 0.07,
+        shadowColor: "#000000",
+        shadowOpacity: 0.08,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 3 },
         elevation: 3,
@@ -893,7 +827,8 @@ const useStyles = makeStyles((c) => ({
         zIndex: 5,
         overflow: "hidden",
         backgroundColor: "transparent",
-        paddingBottom: spacing.xs,
+        paddingTop: 2,
+        paddingBottom: spacing.sm,
     },
     categoryPillsScroll: {
         paddingHorizontal: spacing.lg,
@@ -907,24 +842,21 @@ const useStyles = makeStyles((c) => ({
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,
-        borderColor: "rgba(226, 232, 240, 0.8)",
+        borderColor: "#E2E8F0",
         overflow: "hidden",
         position: "relative",
-        shadowColor: "#F43F5E",
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        shadowOffset: { width: 0, height: 1.5 },
     },
     categoryPillActive: {
-        backgroundColor: "#F43F5E",
-        borderColor: "#F43F5E",
-        shadowColor: "#F43F5E",
+        backgroundColor: "#E11D48",
+        borderColor: "#E11D48",
+        shadowColor: "#E11D48",
         shadowOpacity: 0.25,
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 2 },
     },
     categoryPillInactive: {
         backgroundColor: "transparent",
+        borderColor: "#E2E8F0",
     },
     categoryPillText: {
         fontSize: 12.5,
@@ -935,8 +867,8 @@ const useStyles = makeStyles((c) => ({
         fontWeight: "800",
     },
     categoryPillTextInactive: {
-        color: "#334155",
-        fontWeight: "700",
+        color: "#475569",
+        fontWeight: "600",
     },
 
     // 4. Popular picks
